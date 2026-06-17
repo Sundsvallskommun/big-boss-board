@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button, FormControl, FormLabel, Input, Textarea } from "@sk-web-gui/react";
 import {
   TrendingUp,
@@ -10,6 +11,7 @@ import {
   ArrowRight,
   CheckCircle2,
   RotateCcw,
+  Save,
 } from "lucide-react";
 import type { DialogueArea } from "@/lib/api";
 import { areaIcon } from "./icons";
@@ -21,6 +23,8 @@ export interface Note {
   date: string;
 }
 
+type Feedback = { kind: "ok" | "err"; msg: string } | null;
+
 export function DetailPanel({
   item,
   index,
@@ -28,6 +32,7 @@ export function DetailPanel({
   note,
   done,
   onNoteChange,
+  onSave,
   onToggleDone,
   onNext,
 }: {
@@ -37,7 +42,8 @@ export function DetailPanel({
   note: Note;
   done: boolean;
   onNoteChange: (next: Note) => void;
-  onToggleDone: () => void;
+  onSave: () => Promise<void>;
+  onToggleDone: () => Promise<void>;
   onNext: () => void;
 }) {
   const { area, measurement: m } = item;
@@ -45,6 +51,22 @@ export function DetailPanel({
   const AreaIcon = areaIcon(area.ikon);
   const TrendIcon = m.trend_dir === "up" ? TrendingUp : TrendingDown;
   const trendColor = m.trend_good ? "text-success" : "text-error";
+
+  const [busy, setBusy] = useState<"save" | "done" | null>(null);
+  const [feedback, setFeedback] = useState<Feedback>(null);
+
+  async function run(kind: "save" | "done", action: () => Promise<void>, okMsg: string) {
+    setBusy(kind);
+    setFeedback(null);
+    try {
+      await action();
+      setFeedback({ kind: "ok", msg: okMsg });
+    } catch (e) {
+      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Något gick fel." });
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <section
@@ -188,11 +210,25 @@ export function DetailPanel({
             </FormControl>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Button
               color="vattjom"
-              variant={done ? "secondary" : "primary"}
-              onClick={onToggleDone}
+              variant="primary"
+              loading={busy === "save"}
+              disabled={busy !== null}
+              onClick={() => run("save", onSave, "Sparad.")}
+              leftIcon={<Save size={16} aria-hidden="true" />}
+            >
+              Spara
+            </Button>
+            <Button
+              color="vattjom"
+              variant="secondary"
+              loading={busy === "done"}
+              disabled={busy !== null}
+              onClick={() =>
+                run("done", onToggleDone, done ? "Ångrat." : "Markerad som genomgången.")
+              }
               leftIcon={
                 done ? (
                   <RotateCcw size={16} aria-hidden="true" />
@@ -206,12 +242,23 @@ export function DetailPanel({
             <Button
               color="vattjom"
               variant="ghost"
+              disabled={busy !== null}
               onClick={onNext}
               rightIcon={<ArrowRight size={16} aria-hidden="true" />}
             >
               Nästa område
             </Button>
           </div>
+
+          <p
+            role="status"
+            aria-live="polite"
+            className={`mt-3 min-h-[1.25rem] text-small ${
+              feedback?.kind === "err" ? "text-error" : "text-dark-secondary"
+            }`}
+          >
+            {feedback?.msg ?? ""}
+          </p>
         </div>
       </div>
     </section>

@@ -3,7 +3,12 @@
 import { useMemo, useState } from "react";
 import { Logo, Alert } from "@sk-web-gui/react";
 import { TrendingUp, TrendingDown, Check } from "lucide-react";
-import type { DialogueDetail } from "@/lib/api";
+import {
+  type DialogueDetail,
+  type AgreementInput,
+  upsertAgreement,
+  patchAreaReview,
+} from "@/lib/api";
 import { areaIcon } from "./icons";
 import { STATUS } from "./status";
 import { Gauge } from "./Gauge";
@@ -50,6 +55,24 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
 
   function scrollToDetail() {
     document.getElementById("detail")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function noteToInput(key: string): AgreementInput {
+    const n = notes[key];
+    return { text: n.text, ansvarig: n.owner, klart_senast: n.date || null };
+  }
+
+  // Persistera överenskommelsen för ett område.
+  async function saveArea(key: string, areaId: number) {
+    await upsertAgreement(dialogue.id, areaId, noteToInput(key));
+  }
+
+  // Spara ev. ändrad anteckning först (så den inte tappas), växla sedan genomgången.
+  async function toggleArea(key: string, areaId: number) {
+    await upsertAgreement(dialogue.id, areaId, noteToInput(key));
+    const next = !done[key];
+    await patchAreaReview(dialogue.id, areaId, next);
+    setDone((prev) => ({ ...prev, [key]: next }));
   }
 
   return (
@@ -245,9 +268,8 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
               onNoteChange={(next) =>
                 setNotes((prev) => ({ ...prev, [current.area.key]: next }))
               }
-              onToggleDone={() =>
-                setDone((prev) => ({ ...prev, [current.area.key]: !prev[current.area.key] }))
-              }
+              onSave={() => saveArea(current.area.key, current.area.id)}
+              onToggleDone={() => toggleArea(current.area.key, current.area.id)}
               onNext={() => {
                 const next = areas[(selectedIndex + 1) % areas.length];
                 setSelected(next.area.key);

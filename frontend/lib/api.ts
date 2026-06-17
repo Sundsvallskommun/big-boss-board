@@ -106,3 +106,43 @@ export async function getDialogue(id: number): Promise<DialogueDetail> {
   }
   return res.json();
 }
+
+export interface AgreementInput {
+  text: string;
+  ansvarig: string;
+  klart_senast: string | null;
+}
+
+/** Skapa/uppdatera överenskommelsen för ett område (anropas i webbläsaren via proxyn). */
+export async function upsertAgreement(
+  dialogueId: number,
+  areaId: number,
+  body: AgreementInput,
+): Promise<Agreement> {
+  const res = await fetch(`/api/dialogues/${dialogueId}/areas/${areaId}/agreement`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error("Kunde inte spara överenskommelsen.");
+  }
+  return res.json();
+}
+
+/** Markera ett område som genomgånget eller ångra. */
+export async function patchAreaReview(
+  dialogueId: number,
+  areaId: number,
+  genomgangen: boolean,
+): Promise<Agreement> {
+  const res = await fetch(`/api/dialogues/${dialogueId}/areas/${areaId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ genomgangen }),
+  });
+  if (!res.ok) {
+    throw new Error("Kunde inte uppdatera status.");
+  }
+  return res.json();
+}

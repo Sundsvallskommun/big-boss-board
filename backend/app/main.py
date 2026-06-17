@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.db import engine
-from app.routers import dialogues, kpi_areas
+from app.routers import agreements, dialogues, kpi_areas
 
 app = FastAPI(
     title="Big Boss Board API",
@@ -16,6 +16,7 @@ app = FastAPI(
 
 app.include_router(dialogues.router)
 app.include_router(kpi_areas.router)
+app.include_router(agreements.router)
 
 
 @app.get("/api/health", tags=["system"])

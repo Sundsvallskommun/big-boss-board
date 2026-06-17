@@ -78,6 +78,20 @@ class AgreementOut(ORMModel):
     updated_at: datetime
 
 
+class AgreementUpsert(BaseModel):
+    """Indata för att spara/uppdatera en överenskommelse."""
+
+    text: str = ""
+    ansvarig: str = ""
+    klart_senast: date | None = None
+
+
+class AreaReviewPatch(BaseModel):
+    """Indata för att markera ett område som genomgånget eller ångra."""
+
+    genomgangen: bool
+
+
 class DialogueArea(BaseModel):
     """Ett område i en dialog: referensdata + mätvärde + ev. överenskommelse.
 
