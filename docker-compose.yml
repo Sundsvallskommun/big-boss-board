@@ -1,0 +1,66 @@
+# Big Boss Board (bbb) — Docker Compose-stack.
+# Endast `frontend` exponeras publikt (Dokploy/Traefik sätter domän + TLS).
+# backend och db ligger på det interna nätverket utan publicerade portar.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bbb-internal
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      ACCESS_CODE: ${ACCESS_CODE:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health').status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - bbb-internal
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Endast denna tjänst får domän i Dokploy. Lokalt mappas porten för test.
+    ports:
+      - "3000:3000"
+    networks:
+      - bbb-internal
+
+volumes:
+  db-data:
+
+networks:
+  bbb-internal:
+    driver: bridge
