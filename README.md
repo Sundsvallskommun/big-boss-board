@@ -21,9 +21,21 @@ cp .env.example .env      # justera POSTGRES_PASSWORD och DATABASE_URL vid behov
 docker compose up --build
 ```
 
+`docker compose up` laddar automatiskt `docker-compose.override.yml` som
+publicerar frontend-porten lokalt. Är port 3000 upptagen, sätt `FRONTEND_PORT`
+i `.env` (t.ex. `FRONTEND_PORT=3399`).
+
 - Frontend: <http://localhost:3000>
 - Backend health (via proxy): <http://localhost:3000/api/health>
 - API-docs (i utveckling): backend `/api/docs`
+
+Produktionskonfigurationen (som Dokploy använder) är `docker-compose.yml` ensam —
+inga publicerade portar. Simulera den lokalt med `docker compose -f docker-compose.yml up --build`.
+
+## Deploy
+
+Driftsätts som Docker Compose-stack via Dokploy på `bbb.sundsvall.dev`.
+Se [`docs/DEPLOY.md`](docs/DEPLOY.md) för checklista.
 
 ## Struktur
 

@@ -54,9 +54,19 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    # Endast denna tjänst får domän i Dokploy. Lokalt mappas porten för test.
-    ports:
-      - "3000:3000"
+    # Endast denna tjänst exponeras publikt. Dokploy sätter domänen mot port 3000
+    # och injicerar Traefik-labels + TLS — ingen host-port publiceras här (kan
+    # krocka på Dokploy-värden). Lokalt publiceras porten via docker-compose.override.yml.
+    expose:
+      - "3000"
+    healthcheck:
+      # /login svarar 200 oavsett om ACCESS_CODE är satt (serveras av frontend själv).
+      # 127.0.0.1 (inte localhost) — servern lyssnar på IPv4, localhost provar ::1 först.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/login || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - bbb-internal
 

@@ -1,0 +1,7 @@
+# Lokala tillägg — laddas automatiskt av `docker compose up`, men INTE av Dokploy
+# (som bara använder docker-compose.yml). Publicerar frontend-porten för lokal test.
+# Sätt FRONTEND_PORT i .env om 3000 är upptagen på din maskin.
+services:
+  frontend:
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
