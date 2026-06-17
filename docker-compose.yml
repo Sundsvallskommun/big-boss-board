@@ -49,6 +49,8 @@ services:
       BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-3000}
+      # Access-kod-stub: gatar UI:t server-side. Tom = öppen tjänst.
+      ACCESS_CODE: ${ACCESS_CODE:-}
     depends_on:
       backend:
         condition: service_healthy

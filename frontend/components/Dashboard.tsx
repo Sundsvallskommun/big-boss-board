@@ -103,14 +103,22 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                 ))}
               </span>
             </div>
-            <div className="grid h-8 w-8 place-items-center rounded-full bg-vattjom-surface-primary text-small font-semibold text-white">
+            <div
+              role="img"
+              aria-label={`Ansvarig chef: ${dialogue.ansvarig_chef.namn}`}
+              className="grid h-8 w-8 place-items-center rounded-full bg-vattjom-surface-primary text-small font-semibold text-white"
+            >
               {dialogue.ansvarig_chef.initialer}
             </div>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1180px] px-6 pb-24 pt-8 md:px-8 md:pt-10">
+      <main
+        id="huvudinnehall"
+        tabIndex={-1}
+        className="mx-auto max-w-[1180px] px-6 pb-24 pt-8 outline-none md:px-8 md:pt-10"
+      >
         {/* ===== Rubrik + kontext ===== */}
         <div className="mb-8 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
           <div>
@@ -181,6 +189,12 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
             ))}
           </div>
         </div>
+
+        {areas.length === 0 && (
+          <p className="mb-8 rounded-12 border border-divider bg-background-content p-16 text-base text-dark-secondary">
+            Det finns inga ansvarsområden att visa för den här dialogen ännu.
+          </p>
+        )}
 
         <div
           className="mb-8 grid gap-3"

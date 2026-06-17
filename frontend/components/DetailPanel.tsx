@@ -69,10 +69,7 @@ export function DetailPanel({
   }
 
   return (
-    <section
-      className={`reveal overflow-hidden rounded-12 border ${s.border} bg-background-content`}
-      aria-live="polite"
-    >
+    <section className={`reveal overflow-hidden rounded-12 border ${s.border} bg-background-content`}>
       {/* Panelhuvud */}
       <div className={`border-b border-divider p-6 md:p-7 ${s.soft}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">

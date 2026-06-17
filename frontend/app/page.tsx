@@ -10,7 +10,7 @@ export default async function Home() {
     dialogue = await getDialogue(1);
   } catch {
     return (
-      <main className="mx-auto max-w-[640px] px-6 py-24">
+      <main id="huvudinnehall" tabIndex={-1} className="mx-auto max-w-[640px] px-6 py-24 outline-none">
         <h1 className="font-header text-h3 font-bold tracking-tight">Dialogen kunde inte hämtas</h1>
         <p className="mt-3 text-base leading-relaxed text-dark-secondary">
           Tjänsten svarar inte just nu. Försök igen om en stund.
