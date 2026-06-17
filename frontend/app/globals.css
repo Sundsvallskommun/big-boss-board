@@ -1,18 +1,70 @@
-/* Minimal baslinje för Fas 0. Designsystemets tokens (@sk-web-gui/core)
-   kopplas på i Fas 2 — då ersätts dessa provisoriska regler. */
-:root {
-  color-scheme: light;
+/* Sundsvalls designsystem driver all styling via Tailwind-preseten (@sk-web-gui/core).
+   Inga hårdkodade hex — färger/spacing/typografi kommer från designtokens.
+   GuiProvider injicerar CSS-variablerna i runtime. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    @apply bg-background text-dark-primary;
+  }
 }
 
-* {
-  box-sizing: border-box;
+@layer components {
+  /* Etikett-stil (bespoke ovanpå tokens): versal mono, dämpad textton. */
+  .eyebrow {
+    font-family: "Geist Mono", ui-monospace, monospace;
+    @apply uppercase text-dark-secondary;
+    font-size: 0.625rem;
+    letter-spacing: 0.16em;
+    line-height: 1.2;
+  }
+  .eyebrow-sm {
+    font-family: "Geist Mono", ui-monospace, monospace;
+    @apply uppercase text-dark-secondary;
+    font-size: 0.5625rem;
+    letter-spacing: 0.16em;
+    line-height: 1.2;
+  }
+
+  /* Mätarbar (bespoke, finns ej i SK) — byggd med tokens, värdebredd sätts inline. */
+  .meter {
+    @apply relative h-[7px] w-full overflow-visible rounded-full bg-white;
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06);
+  }
+  .meter > .meter-fill {
+    @apply h-full rounded-full;
+  }
+  .meter > .meter-target {
+    @apply absolute rounded-sm bg-dark-primary;
+    top: -3px;
+    width: 2px;
+    height: 13px;
+  }
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  font-family: Arial, system-ui, sans-serif;
-  background: #f0f0f0;
-  color: #1f1f25;
+/* Mjuk inanimering för dialogpanelen. */
+.reveal {
+  animation: reveal 0.4s ease both;
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
