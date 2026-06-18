@@ -31,3 +31,9 @@ build/
 .idea/
 .vscode/
 *.swp
+
+# Claude Code (lokala inställningar)
+.claude/settings.local.json
+
+# Lokala skärmbilder / scratch (jämförelse mot prototypen)
+.shots/

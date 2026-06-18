@@ -10,7 +10,7 @@ export function Gauge({ level, label, hint }: { level: number; label: string; hi
   const ny = cy - r * Math.sin(angle);
 
   return (
-    <div className="flex shrink-0 flex-col items-center md:border-l md:border-divider md:pl-7">
+    <div className="flex shrink-0 flex-col items-center md:border-l md:border-hairline md:pl-7">
       <svg
         viewBox="0 0 220 132"
         width="200"

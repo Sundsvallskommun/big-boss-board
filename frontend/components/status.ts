@@ -5,10 +5,14 @@ import type { Status } from "@/lib/api";
 export interface StatusTokens {
   /** Solid semantisk färg för prick/mätarfyllnad/topbar. */
   solid: string;
+  /** Solid semantisk färg som textton (KPI-kortets ikon, som prototypen). */
+  solidText: string;
   /** Mjuk bakgrundston för kort/pill. */
   soft: string;
   /** Läsbar textton mot mjuk bakgrund. */
   text: string;
+  /** Gradient-startton för panelhuvud (mjuk ton → vitt, som prototypen). */
+  gradient: string;
   border: string;
   /** SVG stroke-klass (mätare/gauge). */
   stroke: string;
@@ -21,8 +25,10 @@ export interface StatusTokens {
 export const STATUS: Record<Status, StatusTokens> = {
   good: {
     solid: "bg-success",
-    soft: "bg-success-background-100",
+    solidText: "text-success",
+    soft: "bg-success-background-200",
     text: "text-success-text",
+    gradient: "from-success-background-200",
     border: "border-success",
     stroke: "stroke-success",
     iconColor: "success",
@@ -30,8 +36,10 @@ export const STATUS: Record<Status, StatusTokens> = {
   },
   warn: {
     solid: "bg-warning",
+    solidText: "text-warning",
     soft: "bg-warning-background-100",
     text: "text-warning-text",
+    gradient: "from-warning-background-100",
     border: "border-warning",
     stroke: "stroke-warning",
     iconColor: "warning",
@@ -39,8 +47,10 @@ export const STATUS: Record<Status, StatusTokens> = {
   },
   alert: {
     solid: "bg-error",
-    soft: "bg-error-background-100",
+    solidText: "text-error",
+    soft: "bg-error-background-200",
     text: "text-error-text",
+    gradient: "from-error-background-200",
     border: "border-error",
     stroke: "stroke-error",
     iconColor: "error",

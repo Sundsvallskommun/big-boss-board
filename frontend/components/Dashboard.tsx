@@ -78,17 +78,19 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
   return (
     <>
       {/* ===== Topbar ===== */}
-      <header className="sticky top-0 z-30 border-b border-divider bg-background-content/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-hairline bg-background-content">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-4 px-6 py-4 md:px-8">
           <div className="flex min-w-0 items-center gap-3.5">
-            <span className="flex h-10 items-center [&_svg]:h-10 [&_svg]:w-auto">
+            {/* SK-logon är liggande (viewBox 164×72); .sk-logo-figure defaultas
+                stående och squashar den. Sätt rätt proportion (~48px hög). */}
+            <span className="flex items-center [&_.sk-logo-figure]:!h-12 [&_.sk-logo-figure]:!w-[6.85rem]">
               <Logo variant="logo" />
             </span>
             <span className="h-9 w-px shrink-0 bg-divider" aria-hidden="true" />
             <span className="truncate text-base font-semibold tracking-tight">Dialogstöd</span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-2.5 rounded-full border border-divider px-3 py-1.5 sm:flex">
+            <div className="hidden items-center gap-2.5 rounded-full border border-hairline px-3 py-1.5 sm:flex">
               <span className="eyebrow-sm">
                 {doneCount} av {areas.length} genomgångna
               </span>
@@ -97,7 +99,7 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                   <span
                     key={a.area.key}
                     className={`inline-block h-2 w-2 rounded-full ${
-                      done[a.area.key] ? "bg-vattjom-surface-accent" : "bg-background"
+                      done[a.area.key] ? "bg-vattjom-surface-primary" : "bg-divider"
                     }`}
                   />
                 ))}
@@ -106,7 +108,7 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
             <div
               role="img"
               aria-label={`Ansvarig chef: ${dialogue.ansvarig_chef.namn}`}
-              className="grid h-8 w-8 place-items-center rounded-full bg-vattjom-surface-primary text-small font-semibold text-white"
+              className="grid h-10 w-10 place-items-center rounded-full bg-vattjom-surface-primary text-small font-semibold text-white"
             >
               {dialogue.ansvarig_chef.initialer}
             </div>
@@ -124,14 +126,14 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
           <div>
             <div className="eyebrow mb-2">Uppföljningsdialog · chef &amp; chef</div>
             <h1 className="font-header text-h1 font-bold leading-tight tracking-tight">
-              Samlad bild för <span className="text-primary">dialog</span>
+              Samlad bild för <span className="text-vattjom-text-primary">dialog</span>
             </h1>
             <p className="mt-2 max-w-xl text-base leading-relaxed text-dark-secondary">
               Gå igenom nyckeltalen tillsammans, ett område i taget. Fånga vad ni kommer överens om
               direkt i samtalet.
             </p>
           </div>
-          <div className="flex items-center gap-4 rounded-12 border border-divider bg-background-content px-4 py-3">
+          <div className="flex items-center gap-4 rounded-12 border border-hairline bg-background-content px-4 py-3">
             <div>
               <div className="eyebrow-sm">Verksamhet</div>
               <div className="mt-0.5 text-base font-semibold leading-tight">
@@ -151,19 +153,19 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
         </div>
 
         {/* ===== Norra stjärnan ===== */}
-        <section className="mb-8 overflow-hidden rounded-12 border border-divider bg-background-content">
+        <section className="mb-8 overflow-hidden rounded-12 border border-hairline bg-background-content">
           <div className="grid items-center gap-6 p-6 md:grid-cols-[1fr_auto] md:p-7">
             <div className="space-y-4">
               <div className="flex items-start gap-3">
                 <span className="eyebrow w-[68px] shrink-0 pt-1.5">Effekt</span>
-                <p className="text-large font-semibold leading-snug tracking-tight">
-                  Sundsvalls kommun uppnår <span className="text-primary">samtliga uppdrag</span>
+                <p className="text-[19px] font-semibold leading-snug tracking-[-0.015em] md:text-[21px]">
+                  Sundsvalls kommun uppnår <span className="text-vattjom-text-primary">samtliga uppdrag</span>
                 </p>
               </div>
-              <div className="h-px bg-divider" />
+              <div className="h-px bg-hairline" />
               <div className="flex items-start gap-3">
                 <span className="eyebrow w-[68px] shrink-0 pt-1.5">Resultat</span>
-                <p className="text-large font-semibold leading-snug tracking-tight">
+                <p className="text-[19px] font-semibold leading-snug tracking-[-0.015em] md:text-[21px]">
                   Chefer säkrar resultat och måluppfyllelse
                 </p>
               </div>
@@ -191,7 +193,7 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
         </div>
 
         {areas.length === 0 && (
-          <p className="mb-8 rounded-12 border border-divider bg-background-content p-16 text-base text-dark-secondary">
+          <p className="mb-8 rounded-12 border border-hairline bg-background-content p-16 text-base text-dark-secondary">
             Det finns inga ansvarsområden att visa för den här dialogen ännu.
           </p>
         )}
@@ -220,18 +222,18 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                   setSelected(area.key);
                   scrollToDetail();
                 }}
-                className={`flex flex-col overflow-hidden rounded-12 border bg-background-content text-left transition hover:-translate-y-0.5 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
-                  isSel ? "border-primary ring-1 ring-primary" : "border-divider"
+                className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-0.5 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${s.soft} ${
+                  isSel ? "border-vattjom-surface-primary card-selected" : "border-hairline"
                 }`}
               >
                 <span className={`h-1 w-full ${s.solid}`} aria-hidden="true" />
                 <span className="flex h-full flex-col p-4">
                   <span className="mb-3 flex items-start justify-between gap-2">
-                    <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px] border border-divider bg-background-content text-primary">
+                    <span className={`icon-chip grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px] bg-background-content ${s.solidText}`}>
                       <AreaIcon size={17} strokeWidth={2} aria-hidden="true" />
                     </span>
                     {isDone ? (
-                      <span className="eyebrow-sm flex items-center gap-1 text-primary">
+                      <span className="eyebrow-sm flex items-center gap-1 text-vattjom-text-primary">
                         <Check size={12} aria-hidden="true" />
                         Klar
                       </span>

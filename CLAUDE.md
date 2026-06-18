@@ -16,6 +16,29 @@ Designreferens/prototyp: [`docs/uppfoljningsdialog.html`](docs/uppfoljningsdialo
 - Bespoke (finns ej i SK): mätaren/gauge (SVG), KPI-kortens layout, dialogpanelen —
   byggs med SK:s tokens, inte egna hex.
 - Officiell logotyp (`<Logo />`) får aldrig modifieras, lutas eller dekoreras.
+- **Typsnitt:** brödtext/fält/knappar = **Arial** (SK:s `--sk-fontFamily-sans`), rubriker =
+  **Raleway**, etiketter = **Geist Mono**. Prototypens **Inter** är en approximation och
+  används medvetet INTE — SK:s sans-token gäller (beslut bekräftat).
+
+### Fallgropar i SK-preseten (verifierat i denna kodbas)
+
+- **Root-fontstorlek = 62.5% (10px).** SK-temat sätter `html { font-size: 62.5% }`, så
+  `1rem = 10px` (inte 16px). Allt rem-baserat blir därför ~0.6× mot en 16px-root.
+  **Skriv egna font-storlekar (t.ex. `.eyebrow`) i absoluta `px`**, annars blir de för små.
+  SK:s text-tokens (`text-h1`, `text-small` …) och spacing-tokens är kalibrerade för 10px-root.
+- **Spacing-skala:** preseten mappar Tailwinds spacing till `N/10 rem` (`p-4` = 0.4rem),
+  vilket trycker ihop all layout. Vi **återställer default-Tailwinds skala** för utilities
+  i `tailwind.config.js` (`theme.extend.spacing = require("tailwindcss/defaultTheme").spacing`).
+  Skriv därför spacing/storlek med **default-Tailwind-nummer** (`p-4`=1rem, `gap-3`=0.75rem,
+  `h-12`=3rem). SK-komponenterna använder `var(--sk-spacing-*)` i egen CSS och påverkas inte.
+- **`primary` är svart ink, inte blått.** Brand-blått = `vattjom`-token: `vattjom-surface-primary`
+  (ytor/ramar), `vattjom-text-primary` (text/ikoner). Blå fokusring = `outline-ring`.
+- **`bg-background` är trasig** (preseten pekar på en felstavad variabel → transparent). Använd
+  `bg-background-200` för grå sidyta, `bg-background-content` för vita kort.
+- **Ljus hairline-ram:** `border-divider` är mörk/tung; för prototypens tunna linjer används
+  färgen `hairline` (= `--sk-colors-primitives-gray-200`), definierad i `tailwind.config.js`.
+- **Opacity-modifier funkar inte på var-färger** (`bg-white/80`, `bg-background-content/95`
+  genereras inte → transparent). Använd solid färg eller sätt värdet direkt i CSS.
 
 ## Språk och ton
 

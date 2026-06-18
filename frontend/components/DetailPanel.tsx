@@ -69,12 +69,12 @@ export function DetailPanel({
   }
 
   return (
-    <section className={`reveal overflow-hidden rounded-12 border ${s.border} bg-background-content`}>
-      {/* Panelhuvud */}
-      <div className={`border-b border-divider p-6 md:p-7 ${s.soft}`}>
+    <section className="reveal overflow-hidden rounded-12 border border-hairline bg-background-content">
+      {/* Panelhuvud — mjuk statston som tonar ut mot vitt (som prototypen) */}
+      <div className={`border-b border-hairline bg-gradient-to-b to-background-content p-6 md:p-7 ${s.gradient}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3.5">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-12 border border-divider bg-background-content text-primary">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-12 border border-hairline bg-background-content text-vattjom-text-primary">
               <AreaIcon size={24} strokeWidth={2} aria-hidden="true" />
             </span>
             <div>
@@ -119,7 +119,7 @@ export function DetailPanel({
           </div>
           <div>
             <dt className="eyebrow-sm mb-1">Status i dialog</dt>
-            <dd className={`text-base font-semibold ${done ? "text-primary" : "text-dark-secondary"}`}>
+            <dd className={`text-base font-semibold ${done ? "text-vattjom-text-primary" : "text-dark-secondary"}`}>
               {done ? "Genomgången" : "Ej genomgången"}
             </dd>
           </div>
@@ -129,16 +129,16 @@ export function DetailPanel({
       {/* Panelkropp */}
       <div className="grid lg:grid-cols-2">
         {/* Samtalsstöd + verktygslåda */}
-        <div className="border-divider p-6 md:p-7 lg:border-r">
+        <div className="border-hairline p-6 md:p-7 lg:border-r">
           <div className="mb-1 flex items-center gap-2">
-            <MessagesSquare size={16} className="text-primary" aria-hidden="true" />
+            <MessagesSquare size={16} className="text-vattjom-text-primary" aria-hidden="true" />
             <h3 className="font-header text-base font-bold tracking-tight">Samtalsstöd</h3>
           </div>
           <p className="mb-2 text-small text-dark-secondary">Frågor att utgå från i dialogen.</p>
-          <ul className="divide-y divide-divider">
+          <ul className="divide-y divide-hairline">
             {area.questions.map((q) => (
               <li key={q.id} className="flex items-start gap-2.5 py-2.5">
-                <span className="shrink-0 rounded-md bg-vattjom-background-100 px-1.5 py-0.5 font-mono text-small text-primary">
+                <span className="shrink-0 rounded-md bg-vattjom-background-100 px-1.5 py-0.5 font-mono text-small text-vattjom-text-primary">
                   ?
                 </span>
                 <p className="pt-0.5 text-base leading-snug">{q.text}</p>
@@ -148,14 +148,14 @@ export function DetailPanel({
 
           <div className="mt-5">
             <div className="mb-2.5 flex items-center gap-2">
-              <Wrench size={16} className="text-primary" aria-hidden="true" />
+              <Wrench size={16} className="text-vattjom-text-primary" aria-hidden="true" />
               <h3 className="font-header text-base font-bold tracking-tight">Verktygslåda &amp; stöd</h3>
             </div>
             <ul className="flex flex-wrap gap-2">
               {area.support_function.tools.map((t) => (
                 <li
                   key={t.id}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-divider bg-background-content px-2.5 py-1 text-small"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-background-content px-2.5 py-1 text-small"
                 >
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-vattjom-surface-accent" aria-hidden="true" />
                   {t.namn}
@@ -166,9 +166,9 @@ export function DetailPanel({
         </div>
 
         {/* Överenskommelse */}
-        <div className="bg-background p-6 md:p-7">
+        <div className="bg-background-200 p-6 md:p-7">
           <div className="mb-1 flex items-center gap-2">
-            <ClipboardCheck size={16} className="text-primary" aria-hidden="true" />
+            <ClipboardCheck size={16} className="text-vattjom-text-primary" aria-hidden="true" />
             <h3 className="font-header text-base font-bold tracking-tight">
               Överenskommelse &amp; nästa steg
             </h3>

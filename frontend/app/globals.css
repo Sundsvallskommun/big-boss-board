@@ -8,30 +8,53 @@
 @layer base {
   html,
   body {
-    @apply bg-background text-dark-primary;
+    /* Grå sidyta (token background-200 = #f0f0f0, som prototypen) så vita kort
+       (background-content) får djup. OBS: använd inte `bg-background` — SK:s
+       preset pekar den mot en felstavad variabel (--sk-colors-background-DEFUALT)
+       och den är dessutom vit i ljust tema. */
+    @apply bg-background-200 text-dark-primary;
   }
 }
 
 @layer components {
+  /* Vit ikon-bricka på tonad yta: subtil inre ring i stället för tjock ram
+     (som prototypen: box-shadow 0 0 0 1px rgba(31,31,37,0.05)). Färg = SK-token. */
+  .icon-chip {
+    box-shadow: 0 0 0 1px var(--sk-colors-primitives-overlay-darken-1);
+  }
+
+  /* Valt KPI-kort: 1px blå kant + mjuk blå glow nedåt (prototypens
+     0 10px 28px -14px rgba(0,69,149,0.45)). Blått = vattjom-token via color-mix. */
+  .card-selected {
+    box-shadow:
+      0 0 0 1px var(--sk-colors-vattjom-surface-primary-DEFAULT),
+      0 10px 28px -14px
+        color-mix(in srgb, var(--sk-colors-vattjom-surface-primary-DEFAULT) 45%, transparent);
+  }
+
   /* Etikett-stil (bespoke ovanpå tokens): versal mono, dämpad textton. */
+  /* Etiketter i absoluta px (matchar prototypen exakt). OBS: använd INTE rem här —
+     SK-temat sätter root-fontstorleken till 62.5% (10px), så rem skulle ge ~0.6×. */
   .eyebrow {
     font-family: "Geist Mono", ui-monospace, monospace;
     @apply uppercase text-dark-secondary;
-    font-size: 0.625rem;
-    letter-spacing: 0.16em;
+    font-size: 10px;
+    letter-spacing: 0.18em;
     line-height: 1.2;
   }
   .eyebrow-sm {
     font-family: "Geist Mono", ui-monospace, monospace;
     @apply uppercase text-dark-secondary;
-    font-size: 0.5625rem;
+    font-size: 9px;
     letter-spacing: 0.16em;
     line-height: 1.2;
   }
 
   /* Mätarbar (bespoke, finns ej i SK) — byggd med tokens, värdebredd sätts inline. */
   .meter {
-    @apply relative h-[7px] w-full overflow-visible rounded-full bg-white;
+    @apply relative h-[7px] w-full overflow-visible rounded-full;
+    /* Halvgenomskinlig vit så kortets ton skiner igenom (som prototypen). */
+    background-color: rgb(255 255 255 / 0.8);
     box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06);
   }
   .meter > .meter-fill {
