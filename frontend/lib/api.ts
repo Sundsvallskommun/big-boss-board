@@ -33,8 +33,31 @@ export interface KpiArea {
   ikon: string;
   lower_better: boolean;
   ordning: number;
+  info: string | null;
   support_function: SupportFunction;
   questions: Question[];
+}
+
+/** Delindex (0–100) per HME-dimension. */
+export interface HmeDelindex {
+  motivation: number;
+  styrning: number;
+  ledarskap: number;
+}
+
+export interface HmeSegment {
+  n: number;
+  hme_total: number;
+  delindex: HmeDelindex;
+}
+
+/** Nedbrytning för HME-mätvärdet (null för övriga KPI:er). */
+export interface HmeDetails {
+  typ: "hme";
+  ar: number;
+  n: number;
+  delindex: HmeDelindex;
+  segment: { chef: HmeSegment; medarbetare: HmeSegment } | null;
 }
 
 export interface Measurement {
@@ -45,10 +68,12 @@ export interface Measurement {
   target_num: number;
   bar_max: number;
   status: Status;
-  trend_dir: TrendDir;
-  trend_good: boolean;
+  /** null när jämförelseperiod saknas (visas som neutral platshållare). */
+  trend_dir: TrendDir | null;
+  trend_good: boolean | null;
   trend_text: string;
   interpretation: string;
+  details: HmeDetails | null;
 }
 
 export interface Agreement {
@@ -97,6 +122,24 @@ const SERVER_BASE = process.env.BACKEND_INTERNAL_URL ?? "http://backend:8000";
 function apiBase(): string {
   // typeof window === "undefined" => körs på servern (Node), gå direkt mot backend.
   return typeof window === "undefined" ? SERVER_BASE : "";
+}
+
+export interface DialogueSummary {
+  id: number;
+  period: string;
+  status: string;
+  organisation: Organisation;
+  ansvarig_chef: Person;
+  progress_total: number;
+  progress_done: number;
+}
+
+export async function listDialogues(): Promise<DialogueSummary[]> {
+  const res = await fetch(`${apiBase()}/api/dialogues`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Kunde inte hämta dialoger (HTTP ${res.status}).`);
+  }
+  return res.json();
 }
 
 export async function getDialogue(id: number): Promise<DialogueDetail> {

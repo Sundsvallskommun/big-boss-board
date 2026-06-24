@@ -48,6 +48,7 @@ class KpiAreaOut(ORMModel):
     ikon: str
     lower_better: bool
     ordning: int
+    info: str | None = None
     support_function: SupportFunctionOut
     questions: list[QuestionOut] = []
 
@@ -63,10 +64,11 @@ class MeasurementOut(ORMModel):
     target_num: float
     bar_max: float
     status: Status
-    trend_dir: TrendDir
-    trend_good: bool
+    trend_dir: TrendDir | None = None
+    trend_good: bool | None = None
     trend_text: str
     interpretation: str
+    details: dict | None = None
 
 
 class AgreementOut(ORMModel):

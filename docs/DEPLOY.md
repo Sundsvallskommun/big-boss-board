@@ -27,8 +27,14 @@ Operativ checklista för att driftsätta stacken. Bakgrund och motivering finns 
    - `DATABASE_URL=postgresql+asyncpg://<user>:<password>@db:5432/<db>`
    - `ACCESS_CODE` — sätt ett värde för att kräva åtkomstkod (tom = öppen tjänst).
    - `BACKEND_INTERNAL_URL=http://backend:8000` (default räcker normalt).
+   - `HME_DATA_DIR` — värdkatalog med `hme_2025.json` (se steg 5).
 4. **Persistent volym:** säkerställ att `db-data` är en bestående volym.
-5. **Deploya.** Vid start kör backend automatiskt `alembic upgrade head` → seed
+5. **HME-data (utanför git).** Aggregatet `hme_2025.json` versionshanteras inte (innehåller
+   riktiga, anonymiserade siffror). Generera det med `python3 scripts/build_hme_aggregate.py`
+   från råfilen, ladda upp det till en katalog på Dokploy-värden och sätt `HME_DATA_DIR` till
+   den sökvägen — den bind-monteras read-only till backend. Saknas filen startar appen ändå,
+   men med enbart referensdata (väljaren visar tomt läge tills datan finns på plats).
+6. **Deploya.** Vid start kör backend automatiskt `alembic upgrade head` → seed
    (idempotent) → Gunicorn.
 
 ## Verifiering efter deploy
@@ -46,5 +52,8 @@ Operativ checklista för att driftsätta stacken. Bakgrund och motivering finns 
 
 ## Dataregel
 
-Tjänsten används **endast för öppen och publik information**. All seed/dummydata är
-fiktiv. Inga personuppgifter eller känsliga uppgifter — gäller även testdata.
+Tjänsten används **endast för öppen och publik information**. Fiktiv dummydata för de KPI:er
+som saknar källa, och riktiga **anonymiserade aggregat** för HME (per förvaltning, med
+segment-suppression vid n<5). Inga personuppgifter eller känsliga uppgifter — gäller även
+testdata. Råfiler och HME-aggregat versionshanteras aldrig; aggregatet levereras via
+`HME_DATA_DIR` (se steg 5).

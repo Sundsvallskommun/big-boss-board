@@ -26,17 +26,23 @@ Designreferens/prototyp: [`docs/uppfoljningsdialog.html`](docs/uppfoljningsdialo
   `1rem = 10px` (inte 16px). Allt rem-baserat blir därför ~0.6× mot en 16px-root.
   **Skriv egna font-storlekar (t.ex. `.eyebrow`) i absoluta `px`**, annars blir de för små.
   SK:s text-tokens (`text-h1`, `text-small` …) och spacing-tokens är kalibrerade för 10px-root.
-- **Spacing-skala:** preseten mappar Tailwinds spacing till `N/10 rem` (`p-4` = 0.4rem),
-  vilket trycker ihop all layout. Vi **återställer default-Tailwinds skala** för utilities
-  i `tailwind.config.js` (`theme.extend.spacing = require("tailwindcss/defaultTheme").spacing`).
-  Skriv därför spacing/storlek med **default-Tailwind-nummer** (`p-4`=1rem, `gap-3`=0.75rem,
-  `h-12`=3rem). SK-komponenterna använder `var(--sk-spacing-*)` i egen CSS och påverkas inte.
+- **Spacing-skala = px-lik (`spacing-N` = N px).** Pga 62.5%-roten är `--sk-spacing-N`
+  = N/10 rem = **N px**. Så `p-16`=16px, `gap-12`=12px, `h-40`=40px. Skriv spacing/storlek
+  med **SK-nummer = önskad px** (prototypens default `p-4`=16px → här `p-16`; `gap-3`=12px →
+  `gap-12`; faktor ×4 från default-Tailwind-nummer). Saknas en px-nivå i skalan, använd
+  arbiträrt värde (`pb-[96px]`).
+  **Överstyr ALDRIG `theme.spacing` i config** — SK genererar sina komponenter (`.sk-btn` m.fl.)
+  via `theme('spacing')` i denna build, så en override blåser upp dem (t.ex. knappar 160px höga).
 - **`primary` är svart ink, inte blått.** Brand-blått = `vattjom`-token: `vattjom-surface-primary`
   (ytor/ramar), `vattjom-text-primary` (text/ikoner). Blå fokusring = `outline-ring`.
 - **`bg-background` är trasig** (preseten pekar på en felstavad variabel → transparent). Använd
   `bg-background-200` för grå sidyta, `bg-background-content` för vita kort.
 - **Ljus hairline-ram:** `border-divider` är mörk/tung; för prototypens tunna linjer används
   färgen `hairline` (= `--sk-colors-primitives-gray-200`), definierad i `tailwind.config.js`.
+- **Status-/trafikljusfärger:** SK:s semantiska `*-DEFAULT` är MÖRKA (`warning-DEFAULT` =
+  `#8C3B12` brun ockra → ser tegelröd ut). För ljusa funktionella trafikljus (mätare, prickar,
+  trendpilar) används `status-good/warn/alert` (= SK:s ljusare `*-surface-primary`), definierade
+  i `tailwind.config.js`. Mappning i `components/status.ts`.
 - **Opacity-modifier funkar inte på var-färger** (`bg-white/80`, `bg-background-content/95`
   genereras inte → transparent). Använd solid färg eller sätt värdet direkt i CSS.
 
@@ -59,7 +65,12 @@ Designreferens/prototyp: [`docs/uppfoljningsdialog.html`](docs/uppfoljningsdialo
 
 - Appen används **endast för öppen och publik information**. Inga personuppgifter eller
   känsliga uppgifter — gäller även dummydata. Visas som Alert i UI.
-- All seed/dummydata är **fiktiv**.
+- Dummydata för KPI:er utan källa är **fiktiv**. HME använder **riktiga anonymiserade
+  aggregat** per förvaltning (delindex + chef/medarbetare, med segment-suppression vid n<5).
+- **Råfiler och HME-aggregat versionshanteras aldrig** (`indata/` och `backend/app/data/*.json`
+  är gitignorerade). Aggregatet genereras med `scripts/build_hme_aggregate.py` och levereras
+  vid deploy via `HME_DATA_DIR` (bind-monteras read-only). Saknas filen kör seed vidare med
+  enbart referensdata.
 
 ## Faser (bygg en i taget, commit + verifiering per fas)
 

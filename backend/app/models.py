@@ -25,6 +25,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -104,6 +105,8 @@ class KpiArea(Base):
     lower_better: Mapped[bool] = mapped_column(Boolean, default=False)
     support_function_id: Mapped[int] = mapped_column(ForeignKey("support_function.id"))
     ordning: Mapped[int] = mapped_column(Integer, default=0)
+    # Valfri faktaruta om nyckeltalet (t.ex. tolkningshjälp/datakvalitet), visas i dialogpanelen.
+    info: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     support_function: Mapped[SupportFunction] = relationship(back_populates="kpi_areas")
     questions: Mapped[list[Question]] = relationship(
@@ -160,10 +163,13 @@ class Measurement(Base):
     target_num: Mapped[float] = mapped_column(Float)
     bar_max: Mapped[float] = mapped_column(Float, default=100)
     status: Mapped[Status] = mapped_column(Enum(Status, name="status"))
-    trend_dir: Mapped[TrendDir] = mapped_column(Enum(TrendDir, name="trend_dir"))
-    trend_good: Mapped[bool] = mapped_column(Boolean)
+    # Trend är null när jämförelseperiod saknas (t.ex. HME med endast ett mätår).
+    trend_dir: Mapped[TrendDir | None] = mapped_column(Enum(TrendDir, name="trend_dir"), nullable=True)
+    trend_good: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     trend_text: Mapped[str] = mapped_column(String(120))
     interpretation: Mapped[str] = mapped_column(Text)
+    # Valfri nedbrytning (t.ex. HME: delindex + chef/medarbetare-segment). Null för övriga KPI:er.
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     dialogue: Mapped[Dialogue] = relationship(back_populates="measurements")
     kpi_area: Mapped[KpiArea] = relationship()
