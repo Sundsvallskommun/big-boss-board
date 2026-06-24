@@ -10,7 +10,7 @@ export function Gauge({ level, label, hint }: { level: number; label: string; hi
   const ny = cy - r * Math.sin(angle);
 
   return (
-    <div className="flex shrink-0 flex-col items-center md:border-l md:border-hairline md:pl-7">
+    <div className="flex shrink-0 flex-col items-center md:border-l md:border-hairline md:pl-28">
       <svg
         viewBox="0 0 220 132"
         width="200"
@@ -20,19 +20,19 @@ export function Gauge({ level, label, hint }: { level: number; label: string; hi
       >
         <path
           d="M20 110 A90 90 0 0 1 52.7 40.7"
-          className="stroke-error"
+          className="stroke-status-alert"
           fill="none"
           strokeWidth={15}
         />
         <path
           d="M52.7 40.7 A90 90 0 0 1 167.3 40.7"
-          className="stroke-warning"
+          className="stroke-status-warn"
           fill="none"
           strokeWidth={15}
         />
         <path
           d="M167.3 40.7 A90 90 0 0 1 200 110"
-          className="stroke-success"
+          className="stroke-status-good"
           fill="none"
           strokeWidth={15}
         />
@@ -48,9 +48,9 @@ export function Gauge({ level, label, hint }: { level: number; label: string; hi
         <circle cx={cx} cy={cy} r={7} className="fill-dark-primary" />
         <circle cx={cx} cy={cy} r={3} className="fill-white" />
       </svg>
-      <div className="-mt-1 text-center">
+      <div className="-mt-4 text-center">
         <div className="text-small font-semibold">{label}</div>
-        <div className="eyebrow-sm mt-0.5">{hint}</div>
+        <div className="eyebrow-sm mt-2">{hint}</div>
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import { getThemeCss } from "@/lib/theme-css";
 
 export const metadata: Metadata = {
   // Internt arbetsnamn "Big Boss Board" visas aldrig i UI.
-  title: "Dialogstöd",
+  title: "Samlad bild för dialog — chefsuppföljning",
   description: "Dialogstöd för chefsuppföljning.",
 };
 
@@ -31,7 +31,7 @@ export default function RootLayout({
       <body>
         <a
           href="#huvudinnehall"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-12 focus:bg-vattjom-surface-primary focus:px-4 focus:py-2 focus:text-white"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-16 focus:top-16 focus:z-50 focus:rounded-12 focus:bg-vattjom-surface-primary focus:px-16 focus:py-8 focus:text-white"
         >
           Hoppa till innehållet
         </a>
