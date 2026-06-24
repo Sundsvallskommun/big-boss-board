@@ -26,16 +26,26 @@ Operativ checklista för att driftsätta stacken. Bakgrund och motivering finns 
    - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
    - `DATABASE_URL=postgresql+asyncpg://<user>:<password>@db:5432/<db>`
    - `ACCESS_CODE` — sätt ett värde för att kräva åtkomstkod (tom = öppen tjänst).
+   - `ADMIN_ACCESSCODE` — separat kod som visar import-GUI:t på `/admin/import`. Vanlig
+     `ACCESS_CODE` ser inte GUI:t. Sätts på frontend.
    - `BACKEND_INTERNAL_URL=http://backend:8000` (default räcker normalt).
-   - `HME_DATA_DIR` — värdkatalog med `hme_2025.json` (se steg 5).
+   - `IMPORT_TOKEN` — hemlig nyckel för HME-importen (se steg 5). Tom = endpoint avstängd.
+     Sätts på **både** backend (endpointen) och frontend (import-GUI:ts server-action).
+   - `HME_DATA_DIR` — valfri värdkatalog med `HME_totalindex.json` för bootstrap vid uppstart.
 4. **Persistent volym:** säkerställ att `db-data` är en bestående volym.
-5. **HME-data (utanför git).** Aggregatet `hme_2025.json` versionshanteras inte (innehåller
-   riktiga, anonymiserade siffror). Generera det med `python3 scripts/build_hme_aggregate.py`
-   från råfilen, ladda upp det till en katalog på Dokploy-värden och sätt `HME_DATA_DIR` till
-   den sökvägen — den bind-monteras read-only till backend. Saknas filen startar appen ändå,
-   men med enbart referensdata (väljaren visar tomt läge tills datan finns på plats).
+5. **HME-data (utanför git).** HME-siffror versionshanteras inte. Två vägar:
+   - **Admin-GUI (enklast):** logga in med `ADMIN_ACCESSCODE`, öppna `/admin/import` (länk
+     "Importera HME" syns på startsidan endast för admin) och ladda upp `HME_totalindex.json`.
+     Kräver `IMPORT_TOKEN` på frontend.
+   - **Import-endpoint/CLI (för automation):** sätt `IMPORT_TOKEN` och kör efter deploy
+     `IMPORT_TOKEN=... python3 scripts/import_hme.py --url https://bbb.sundsvall.dev` med den
+     officiella rapporten (`HME_totalindex.json`). Endpointen **upsertar** — kör om vid ny mätning
+     (t.ex. när 2027 tillkommer) utan redeploy eller DB-nollning.
+   - **Fil vid uppstart (bootstrap):** lägg `HME_totalindex.json` i en värdkatalog och peka
+     `HME_DATA_DIR` dit; seed läser den vid start. Saknas både fil och import startar appen ändå
+     med enbart referensdata (väljaren visar tomt läge tills HME importerats).
 6. **Deploya.** Vid start kör backend automatiskt `alembic upgrade head` → seed
-   (idempotent) → Gunicorn.
+   (idempotent) → Gunicorn. Kör därefter importen (steg 5) om du inte använt fil-bootstrap.
 
 ## Verifiering efter deploy
 

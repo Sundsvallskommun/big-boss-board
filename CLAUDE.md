@@ -66,11 +66,14 @@ Designreferens/prototyp: [`docs/uppfoljningsdialog.html`](docs/uppfoljningsdialo
 - Appen används **endast för öppen och publik information**. Inga personuppgifter eller
   känsliga uppgifter — gäller även dummydata. Visas som Alert i UI.
 - Dummydata för KPI:er utan källa är **fiktiv**. HME använder **riktiga anonymiserade
-  aggregat** per förvaltning (delindex + chef/medarbetare, med segment-suppression vid n<5).
-- **Råfiler och HME-aggregat versionshanteras aldrig** (`indata/` och `backend/app/data/*.json`
-  är gitignorerade). Aggregatet genereras med `scripts/build_hme_aggregate.py` och levereras
-  vid deploy via `HME_DATA_DIR` (bind-monteras read-only). Saknas filen kör seed vidare med
-  enbart referensdata.
+  aggregat** per förvaltning ur den officiella rapporten (flerårig serie → historik + trend).
+- **HME-data (rapport/rådata) versionshanteras aldrig** (`indata/` och `backend/app/data/*.json`
+  är gitignorerade). Två vägar in: (1) **import-endpoint** `POST /api/import/hme` (token-skyddad,
+  `IMPORT_TOKEN`) via `scripts/import_hme.py` — upsertar, rekommenderas i drift och vid nya år;
+  (2) **fil vid uppstart** — `backend/app/data/hme_matning.json` (monteras via `HME_DATA_DIR`)
+  läses av seed. Saknas båda kör appen vidare med enbart referensdata. Upsert-logiken delas av
+  endpoint och seed i `app/services/hme_import.py`. (`scripts/build_hme_aggregate.py` finns kvar
+  som rådata-analys: delindex + chef/medarbetare med n<5-suppression — ej primär källa.)
 
 ## Faser (bygg en i taget, commit + verifiering per fas)
 

@@ -28,6 +28,8 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       ACCESS_CODE: ${ACCESS_CODE:-}
+      # Hemlig nyckel för /api/import/hme. Tom = import-endpoint avstängd (503).
+      IMPORT_TOKEN: ${IMPORT_TOKEN:-}
     # HME-aggregatet versionshanteras inte. Lokalt monteras ./backend/app/data
     # (innehåller hme_2025.json) read-only. På Dokploy sätts HME_DATA_DIR till en
     # värdkatalog dit aggregatet laddats upp. Saknas filen kör appen vidare med
@@ -57,6 +59,10 @@ services:
       PORT: ${PORT:-3000}
       # Access-kod-stub: gatar UI:t server-side. Tom = öppen tjänst.
       ACCESS_CODE: ${ACCESS_CODE:-}
+      # Separat admin-kod: visar import-GUI:t (/admin/import). Tom = inget admin-läge.
+      ADMIN_ACCESSCODE: ${ADMIN_ACCESSCODE:-}
+      # Import-GUI:ts server-action anropar backend med detta token (hålls server-side).
+      IMPORT_TOKEN: ${IMPORT_TOKEN:-}
     depends_on:
       backend:
         condition: service_healthy
