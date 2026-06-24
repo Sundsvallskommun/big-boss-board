@@ -51,13 +51,28 @@ export interface HmeSegment {
   delindex: HmeDelindex;
 }
 
-/** Nedbrytning för HME-mätvärdet (null för övriga KPI:er). */
+export interface HmeTrendMeta {
+  from_ar: number;
+  till_ar: number;
+  diff: number;
+}
+
+/** Nedbrytning för HME-mätvärdet (null för övriga KPI:er). Fälten varierar med källa:
+ *  officiella rapporten ger flerårig serie (matningar/trend), rådata ger delindex/segment. */
 export interface HmeDetails {
   typ: "hme";
-  ar: number;
-  n: number;
-  delindex: HmeDelindex;
-  segment: { chef: HmeSegment; medarbetare: HmeSegment } | null;
+  // Officiella rapporten (flerårig serie).
+  enhet?: string;
+  kalla?: string;
+  antal_svar?: number | null;
+  senaste_ar?: number;
+  matningar?: Record<string, number>;
+  trend?: HmeTrendMeta | null;
+  // Rådata-aggregat (valfritt — delindex + chef/medarbetare).
+  ar?: number;
+  n?: number;
+  delindex?: HmeDelindex;
+  segment?: { chef: HmeSegment; medarbetare: HmeSegment } | null;
 }
 
 export interface Measurement {

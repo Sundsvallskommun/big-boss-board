@@ -16,7 +16,7 @@ import {
   CheckCircle2,
   RotateCcw,
 } from "lucide-react";
-import type { DialogueArea } from "@/lib/api";
+import type { DialogueArea, HmeDetails } from "@/lib/api";
 import { areaIcon } from "./icons";
 import { STATUS } from "./status";
 
@@ -27,6 +27,51 @@ export interface Note {
 }
 
 type Feedback = { kind: "ok" | "err"; msg: string } | null;
+
+/** Liten historik-sparkline för HME:s årsserie (form min–max-skalad, värden i klartext under). */
+function HmeHistory({ details }: { details: HmeDetails }) {
+  const m = details.matningar ?? {};
+  const pts = Object.keys(m).sort().map((year) => ({ year, value: m[year] }));
+  if (pts.length === 0) return null;
+  const vals = pts.map((p) => p.value);
+  const min = Math.min(...vals);
+  const span = Math.max(...vals) - min || 1;
+  const W = 280, H = 56, pad = 6;
+  const xy = pts.map((p, i) => ({
+    ...p,
+    x: pad + (W - 2 * pad) * (pts.length === 1 ? 0.5 : i / (pts.length - 1)),
+    y: pad + (H - 2 * pad) * (1 - (p.value - min) / span),
+  }));
+  const line = xy.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  const last = xy[xy.length - 1];
+  return (
+    <div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        height={H}
+        role="img"
+        aria-label={`HME-historik: ${pts.map((p) => `${p.year} ${p.value}`).join(", ")}`}
+        className="max-w-[320px]"
+      >
+        <path d={line} fill="none" className="stroke-vattjom-surface-primary" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={last.x} cy={last.y} r={3.5} className="fill-vattjom-surface-primary" />
+      </svg>
+      <div className="mt-8 flex flex-wrap gap-x-16 gap-y-4">
+        {pts.map((p) => (
+          <span
+            key={p.year}
+            className={`text-small tabular-nums ${
+              p.year === String(details.senaste_ar) ? "font-semibold text-dark-primary" : "text-dark-secondary"
+            }`}
+          >
+            {p.year}: {p.value}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** Svensk ordningsändelse för datum i intervallet vi bryr oss om (1:a, 2:a, annars N:e). */
 function ordningsdag(day: number): string {
@@ -203,64 +248,84 @@ export function DetailPanel({
         </div>
       )}
 
-      {/* HME-nedbrytning: delindex + chef/medarbetare (visas bara för HME) */}
-      {hme && (
+      {/* HME-nedbrytning (visas bara för HME): historik (officiella rapporten) och/eller
+          delindex + chef/medarbetare (rådata). Renderas villkorat per tillgängliga fält. */}
+      {hme && (hme.matningar || hme.delindex) && (
         <div className="border-b border-hairline bg-background-content p-24 md:p-28">
           <div className="mb-4 flex items-center gap-8">
             <BarChart3 size={16} className="text-vattjom-text-primary" aria-hidden="true" />
-            <h3 className="font-header text-base font-bold tracking-tight">HME-index {hme.ar}</h3>
-          </div>
-          <p className="mb-16 text-small text-dark-secondary">
-            Bygger på {hme.n} svar i medarbetarundersökningen. Delindex 0–100 per dimension.
-          </p>
-
-          <div className="grid gap-x-24 gap-y-12 sm:grid-cols-3">
-            {dims.map(([key, label]) => (
-              <div key={key}>
-                <div className="mb-4 flex items-baseline justify-between">
-                  <span className="text-small text-dark-secondary">{label}</span>
-                  <span className="font-header text-base font-bold tabular-nums">{fmt(hme.delindex[key])}</span>
-                </div>
-                <span className="meter block">
-                  <span
-                    className="meter-fill block bg-vattjom-surface-primary"
-                    style={{ width: `${hme.delindex[key]}%` }}
-                  />
-                </span>
-              </div>
-            ))}
+            <h3 className="font-header text-base font-bold tracking-tight">
+              HME-index {hme.senaste_ar ?? hme.ar}
+            </h3>
           </div>
 
-          <div className="mt-20">
-            <div className="eyebrow-sm mb-10">Chef jämfört med medarbetare</div>
-            {hme.segment ? (
-              <div className="grid grid-cols-2 gap-12">
-                {(["chef", "medarbetare"] as const).map((seg) => (
-                  <div key={seg} className="rounded-12 border border-hairline bg-background-200 p-16">
-                    <div className="eyebrow-sm mb-4">
-                      {seg === "chef" ? "Chefer" : "Medarbetare"} · n={hme.segment![seg].n}
+          {/* Historik (officiella rapporten) */}
+          {hme.matningar && (
+            <>
+              <p className="mb-12 text-small text-dark-secondary">
+                Officiell HME-mätning, index 0–100 per år
+                {hme.antal_svar ? ` (${hme.antal_svar} svar senaste mätningen)` : ""}.
+              </p>
+              <HmeHistory details={hme} />
+            </>
+          )}
+
+          {/* Delindex (rådata) */}
+          {hme.delindex && (
+            <div className="mt-16">
+              <p className="mb-12 text-small text-dark-secondary">
+                Delindex 0–100 per dimension
+                {hme.n ? ` (bygger på ${hme.n} svar)` : ""}.
+              </p>
+              <div className="grid gap-x-24 gap-y-12 sm:grid-cols-3">
+                {dims.map(([key, label]) => (
+                  <div key={key}>
+                    <div className="mb-4 flex items-baseline justify-between">
+                      <span className="text-small text-dark-secondary">{label}</span>
+                      <span className="font-header text-base font-bold tabular-nums">{fmt(hme.delindex![key])}</span>
                     </div>
-                    <div className="font-header text-h4 font-bold leading-none">
-                      {fmt(hme.segment![seg].hme_total)}
-                    </div>
-                    <dl className="mt-10 space-y-4 text-small text-dark-secondary">
-                      {dims.map(([key, label]) => (
-                        <div key={key} className="flex justify-between gap-8">
-                          <dt>{label}</dt>
-                          <dd className="tabular-nums">{fmt(hme.segment![seg].delindex[key])}</dd>
-                        </div>
-                      ))}
-                    </dl>
+                    <span className="meter block">
+                      <span
+                        className="meter-fill block bg-vattjom-surface-primary"
+                        style={{ width: `${hme.delindex![key]}%` }}
+                      />
+                    </span>
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-small text-dark-secondary">
-                Uppdelning på chef och medarbetare visas inte här – underlaget är för litet för att
-                skydda enskilda svar.
-              </p>
-            )}
-          </div>
+
+              <div className="mt-20">
+                <div className="eyebrow-sm mb-10">Chef jämfört med medarbetare</div>
+                {hme.segment ? (
+                  <div className="grid grid-cols-2 gap-12">
+                    {(["chef", "medarbetare"] as const).map((seg) => (
+                      <div key={seg} className="rounded-12 border border-hairline bg-background-200 p-16">
+                        <div className="eyebrow-sm mb-4">
+                          {seg === "chef" ? "Chefer" : "Medarbetare"} · n={hme.segment![seg].n}
+                        </div>
+                        <div className="font-header text-h4 font-bold leading-none">
+                          {fmt(hme.segment![seg].hme_total)}
+                        </div>
+                        <dl className="mt-10 space-y-4 text-small text-dark-secondary">
+                          {dims.map(([key, label]) => (
+                            <div key={key} className="flex justify-between gap-8">
+                              <dt>{label}</dt>
+                              <dd className="tabular-nums">{fmt(hme.segment![seg].delindex[key])}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-small text-dark-secondary">
+                    Uppdelning på chef och medarbetare visas inte här – underlaget är för litet för att
+                    skydda enskilda svar.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
