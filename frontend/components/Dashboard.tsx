@@ -81,9 +81,13 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
           <div className="flex min-w-0 items-center gap-14">
             {/* SK-logon är liggande (viewBox 164×72); .sk-logo-figure defaultas
                 stående och squashar den. Sätt rätt proportion (~48px hög). */}
-            <span className="flex items-center [&_.sk-logo-figure]:!h-[48px] [&_.sk-logo-figure]:!w-[109px]">
+            <Link
+              href="/"
+              aria-label="Till startsidan"
+              className="flex items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&_.sk-logo-figure]:!h-[48px] [&_.sk-logo-figure]:!w-[109px]"
+            >
               <Logo variant="logo" />
-            </span>
+            </Link>
             <span className="h-36 w-px shrink-0 bg-divider" aria-hidden="true" />
             <Link
               href="/"
