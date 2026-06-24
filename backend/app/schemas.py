@@ -94,6 +94,48 @@ class AreaReviewPatch(BaseModel):
     genomgangen: bool
 
 
+# ---- Dataimport ----------------------------------------------------------
+
+
+class HmeForvaltning(BaseModel):
+    """En förvaltnings HME-serie: år -> index (null = ingen mätning det året)."""
+
+    namn: str
+    matningar: dict[str, float | None]
+    antal_svar: int | None = None
+
+
+class HmeImport(BaseModel):
+    """Normaliserad importpayload för HME (flerårig, per förvaltning)."""
+
+    kpi: str = "hme"
+    enhet: str = "index"
+    kalla: str = ""
+    mal: float = 75.0
+    forvaltningar: list[HmeForvaltning]
+
+
+class ImportRad(BaseModel):
+    """En förvaltnings inlästa HME-data (för detaljerad importlogg)."""
+
+    namn: str
+    atgard: str  # "skapad" | "uppdaterad"
+    value: str
+    senaste_ar: int
+    trend: str
+    status: str
+    antal_svar: int | None = None
+    ar: list[str] = []
+
+
+class ImportResultat(BaseModel):
+    """Sammanfattning av en import, med rad per förvaltning."""
+
+    skapade: int
+    uppdaterade: int
+    forvaltningar: list[ImportRad]
+
+
 class DialogueArea(BaseModel):
     """Ett område i en dialog: referensdata + mätvärde + ev. överenskommelse.
 

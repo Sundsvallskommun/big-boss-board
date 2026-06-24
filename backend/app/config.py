@@ -10,6 +10,8 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://bbb:bbb@db:5432/bbb"
     access_code: str = ""
+    # Hemlig nyckel för dataimport-endpointen (maskin-till-maskin). Tom = endpoint avstängd.
+    import_token: str = ""
 
 
 @lru_cache
