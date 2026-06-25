@@ -96,3 +96,29 @@ export const FRAGOR: Fraga[] = [
       "Sjukfrånvaron som nyckeltal behöver dokumenteras tydligare. Det finns brister i dagens hantering som leder till risker (bl.a. ofullständig och fördröjd statistik). Underlaget kompletteras framåt.",
   },
 ];
+
+/** En daterad statusrapport (lägesrapport om arbetet). Visas i kolumnen Statusrapporter,
+ *  senaste överst. Samma disciplin som frågorna: fylls ENDAST manuellt på uttrycklig begäran,
+ *  autogenereras aldrig, och innehåller inga personuppgifter (forum/roll, inte namn).
+ *  Datum skrivs som ISO (YYYY-MM-DD) för korrekt sortering och <time>. */
+export interface Statusrapport {
+  /** Datum för rapporten (ISO). */
+  datum: string;
+  /** Kort rubrik för rapporten. */
+  rubrik: string;
+  /** Brödtext — vad som hänt/var arbetet står. */
+  text: string;
+  /** Valfria punkter som lyfter detaljer. */
+  punkter?: string[];
+}
+
+/** Statusrapporter, senaste datum först (sorteras i vyn). */
+export const STATUSRAPPORTER: Statusrapport[] = [
+  {
+    datum: "2026-06-25",
+    rubrik: "Statusrapportering införd",
+    text:
+      "Den här sidan har fått en kolumn för löpande statusrapporter. Här samlas daterade " +
+      "lägesrapporter om arbetet, med den senaste överst.",
+  },
+];

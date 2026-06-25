@@ -4,11 +4,18 @@ import {
   CheckCircle2,
   CalendarDays,
   MessageSquareReply,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 import { StatusHeader } from "./StatusHeader";
 import { Expandable } from "./Expandable";
-import { FRAGOR, SENAST_UPPDATERAD, type Fraga } from "./data";
+import {
+  FRAGOR,
+  STATUSRAPPORTER,
+  SENAST_UPPDATERAD,
+  type Fraga,
+  type Statusrapport,
+} from "./data";
 
 export const metadata: Metadata = {
   title: "Frågor och beslut",
@@ -150,6 +157,47 @@ function BesvaradKort({ q }: { q: Fraga }) {
   );
 }
 
+/** Statusrapport: daterat kort med rubrik, text och valfria punkter. Blå accent. */
+function StatusrapportKort({ r, senaste }: { r: Statusrapport; senaste: boolean }) {
+  return (
+    <li className="overflow-hidden rounded-12 border border-hairline border-l-[6px] border-l-vattjom-surface-primary bg-background-content">
+      <div className="p-20">
+        <div className="flex flex-wrap items-center gap-x-12 gap-y-6">
+          <span className="eyebrow-sm inline-flex items-center gap-4 rounded-full bg-vattjom-background-100 px-10 py-4 text-vattjom-text-primary">
+            <CalendarDays size={12} aria-hidden="true" />
+            <time dateTime={r.datum}>{visaDatum(r.datum)}</time>
+          </span>
+          {senaste && (
+            <span className="eyebrow-sm rounded-full bg-background-200 px-10 py-4 text-dark-secondary">
+              Senaste
+            </span>
+          )}
+        </div>
+        <h3 className="mt-12 font-header text-large font-bold leading-snug tracking-tight">
+          {r.rubrik}
+        </h3>
+        <p className="mt-8 text-small leading-relaxed text-dark-secondary">{r.text}</p>
+        {r.punkter && r.punkter.length > 0 && (
+          <ul className="mt-12 flex flex-col gap-6">
+            {r.punkter.map((p, i) => (
+              <li
+                key={i}
+                className="flex gap-8 text-small leading-relaxed text-dark-secondary"
+              >
+                <span
+                  className="mt-[7px] h-[5px] w-[5px] shrink-0 rounded-full bg-vattjom-surface-primary"
+                  aria-hidden="true"
+                />
+                {p}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </li>
+  );
+}
+
 function EmptyState({ children }: { children: React.ReactNode }) {
   return (
     <p className="rounded-12 border border-dashed border-hairline bg-background-content px-16 py-24 text-center text-small leading-snug text-dark-secondary">
@@ -161,6 +209,7 @@ function EmptyState({ children }: { children: React.ReactNode }) {
 export default function StatusPage() {
   const oppna = FRAGOR.filter((q) => !q.svar);
   const besvarade = FRAGOR.filter((q) => q.svar);
+  const rapporter = [...STATUSRAPPORTER].sort((a, b) => b.datum.localeCompare(a.datum));
 
   return (
     <>
@@ -247,6 +296,31 @@ export default function StatusPage() {
           )}
         </section>
         </div>
+
+        {/* ===== Statusrapporter ===== */}
+        <section aria-labelledby="rubrik-rapporter" className="mt-40">
+          <h2
+            id="rubrik-rapporter"
+            className="mb-4 flex items-center gap-10 font-header text-h4 font-bold tracking-tight"
+          >
+            <span className="text-vattjom-text-primary" aria-hidden="true">
+              <FileText size={18} strokeWidth={2.2} />
+            </span>
+            Statusrapporter
+          </h2>
+          <p className="mb-16 text-small leading-relaxed text-dark-secondary">
+            Daterade lägesrapporter om arbetet — den senaste överst.
+          </p>
+          {rapporter.length === 0 ? (
+            <EmptyState>Inga statusrapporter ännu.</EmptyState>
+          ) : (
+            <ul className="flex flex-col gap-16">
+              {rapporter.map((r, i) => (
+                <StatusrapportKort key={`${r.datum}-${i}`} r={r} senaste={i === 0} />
+              ))}
+            </ul>
+          )}
+        </section>
 
         {/* ===== Dataregel ===== */}
         <p className="mt-32 text-small leading-snug text-dark-secondary">
