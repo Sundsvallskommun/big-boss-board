@@ -18,7 +18,7 @@ export function DevBanner() {
           href="/status"
           className="inline-flex items-center gap-6 rounded-full border border-success-background-300 bg-background-content px-12 py-4 text-small font-semibold text-dark-primary transition hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          Följ arbetet med statusen
+          Följ arbetet, se status
           <ArrowRight size={14} strokeWidth={2.2} aria-hidden="true" />
         </Link>
       </div>
