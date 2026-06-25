@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
+import { DevBanner } from "@/components/DevBanner";
 import { getThemeCss } from "@/lib/theme-css";
 
 export const metadata: Metadata = {
@@ -35,7 +36,10 @@ export default function RootLayout({
         >
           Hoppa till innehållet
         </a>
-        <Providers>{children}</Providers>
+        <Providers>
+          <DevBanner />
+          {children}
+        </Providers>
       </body>
     </html>
   );
