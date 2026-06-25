@@ -23,6 +23,7 @@ import { areaIcon } from "./icons";
 import { STATUS } from "./status";
 import { HmeLineChart } from "./charts/HmeLineChart";
 import { InfoPopover } from "./InfoPopover";
+import { SjukfranvaroNivaer } from "./SjukfranvaroNivaer";
 
 type Feedback = { kind: "ok" | "err"; msg: string } | null;
 
@@ -247,6 +248,13 @@ export function DetailPanel({
               </p>
             </div>
           </div>
+
+          {/* Färgnivåer (tröskelvärden) — i-ikon med popover, för sjukfrånvaro */}
+          {area.key === "sjukfranvaro" && (
+            <InfoPopover title="Färgnivåer för sjukfrånvaro" label="Om färgnivåerna">
+              <SjukfranvaroNivaer />
+            </InfoPopover>
+          )}
         </div>
 
         {/* Nyckeltalsrad — stat-rutor: Utfall (statusfärgad) · Mål · Trend · Aktiviteter */}

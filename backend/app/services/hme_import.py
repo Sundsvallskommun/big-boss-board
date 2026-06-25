@@ -29,6 +29,28 @@ from app.schemas import HmeForvaltning, HmeImport
 
 HME_TARGET = 75.0
 
+# Sjukfrånvaro — tröskelvärden för färgnivåer (lägre är bättre). Styr status (och därmed
+# all färgsättning: kort, mätare, fördelningsstapel). Måste hållas i synk med frontendens
+# SjukfranvaroNivaer-komponent som visar samma nivåer för chefen.
+SJUK_MAL = 6.0           # Grön (följa planen): ≤ 6,0 % — på eller under målet.
+SJUK_GUL_TAK = 7.5       # Gul (reagera): 6,1–7,5 % — strax över målet eller stigande.
+SJUK_KVARTAL_LARM = 1.5  # Röd (agera) även vid ökning > 1,5 p.e. på ett kvartal.
+
+
+def sjukfranvaro_status(value: float, kvartalsokning: float | None = None) -> Status:
+    """Färgnivå för sjukfrånvaro enligt fastställda tröskelvärden (lägre är bättre).
+
+    Grön ≤ 6,0 % · Gul 6,1–7,5 % · Röd > 7,5 % eller kvartalsökning > 1,5 p.e.
+    """
+    if kvartalsokning is not None and kvartalsokning > SJUK_KVARTAL_LARM:
+        return Status.alert
+    if value <= SJUK_MAL:
+        return Status.good
+    if value <= SJUK_GUL_TAK:
+        return Status.warn
+    return Status.alert
+
+
 # Fiktiva platshållarvärden för KPI:er som ännu saknar riktig källa (QlikSense, fråga #4).
 # Skapas bara när en dialog nyskapas, så dashboarden är komplett tills källan finns.
 FICTIV_MEASUREMENTS: dict[str, dict] = {
@@ -39,10 +61,15 @@ FICTIV_MEASUREMENTS: dict[str, dict] = {
         "interpretation": "Strax under mål, men i positiv riktning. Håll i de åtgärder som börjat ge effekt.",
     },
     "sjukfranvaro": {
-        "value_text": "6,6 %", "value_num": 6.6, "unit": "", "target_text": "≤ 5,5 %",
-        "target_num": 5.5, "bar_max": 10, "status": Status.alert,
+        "value_text": "6,6 %", "value_num": 6.6, "unit": "", "target_text": "≤ 6,0 %",
+        "target_num": SJUK_MAL, "bar_max": 10,
+        # Färgnivå sätts av tröskelvärdena: 6,6 % med +0,8 p.e./kvartal → gul (reagera).
+        "status": sjukfranvaro_status(6.6, 0.8),
         "trend_dir": TrendDir.up, "trend_good": False, "trend_text": "+0,8 p.e. sedan T3",
-        "interpretation": "Över mål och ökande. Området behöver konkreta åtgärder och tätare uppföljning.",
+        "interpretation": (
+            "Strax över målet och svagt stigande (gul nivå – reagera). Analysera mönstret, "
+            "t.ex. korttids- kontra långtidsfrånvaro, och håll tätare uppföljning."
+        ),
     },
     "verksamhet": {
         "value_text": "62", "value_num": 62, "unit": "index", "target_text": "≥ 70",
