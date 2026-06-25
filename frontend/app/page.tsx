@@ -73,7 +73,6 @@ export default async function Home() {
                   className="flex h-full flex-col justify-between gap-16 rounded-12 border border-hairline bg-background-content p-20 transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   <div>
-                    <div className="eyebrow-sm mb-6">{d.period}</div>
                     <div className="font-header text-base font-bold leading-tight tracking-tight">
                       {d.organisation.namn}
                     </div>
