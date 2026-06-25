@@ -12,9 +12,11 @@ export function middleware(req: NextRequest) {
 
   const { pathname } = req.nextUrl;
   if (pathname.startsWith("/login")) return NextResponse.next();
-  // Import-endpointen är maskin-till-maskin och har egen token-auth (IMPORT_TOKEN) i
-  // backend — den ska inte gatas av UI-access-koden, så att CLI/automation kommer åt den.
-  if (pathname.startsWith("/api/import")) return NextResponse.next();
+  // Import- och admin-endpointen är maskin-till-maskin och har egen token-auth
+  // (IMPORT_TOKEN) i backend — de ska inte gatas av UI-access-koden, så att
+  // CLI/automation kommer åt dem.
+  if (pathname.startsWith("/api/import") || pathname.startsWith("/api/admin"))
+    return NextResponse.next();
 
   const value = req.cookies.get(COOKIE)?.value;
   const giltig = (!!code && value === code) || (!!admin && value === admin);

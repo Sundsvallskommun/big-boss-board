@@ -134,6 +134,38 @@ class ImportResultat(BaseModel):
     forvaltningar: list[ImportRad]
 
 
+# ---- Admin (data-administration, token-skyddad) -------------------------
+
+
+class AdminMeasurementIn(BaseModel):
+    """Upsert-rad för ett mätvärde i en förvaltning.
+
+    PATCH-semantik: endast angivna fält ändras på ett befintligt mätvärde. Vid
+    nyskapande krävs value_text, value_num, target_text, target_num och status.
+    `forvaltning` matchas mot organisationens slug eller namn.
+    """
+
+    forvaltning: str
+    value_text: str | None = None
+    value_num: float | None = None
+    unit: str | None = None
+    target_text: str | None = None
+    target_num: float | None = None
+    bar_max: float | None = None
+    status: Status | None = None
+    trend_dir: TrendDir | None = None
+    trend_good: bool | None = None
+    trend_text: str | None = None
+    interpretation: str | None = None
+    details: dict | None = None
+
+
+class AdminKpiUpsert(BaseModel):
+    """Body för upsert av ett nyckeltal: en rad per förvaltning."""
+
+    rader: list[AdminMeasurementIn]
+
+
 class DialogueArea(BaseModel):
     """Ett område i en dialog: referensdata + mätvärde + aktiviteter.
 
