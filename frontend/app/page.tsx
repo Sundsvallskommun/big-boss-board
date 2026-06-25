@@ -4,7 +4,7 @@ import { listDialogues } from "@/lib/api";
 import { BrandBar } from "@/components/BrandBar";
 import { isAdmin } from "@/lib/auth";
 
-// Alltid färsk data (progress ändras under samtalen).
+// Alltid färsk data (dialoger kan ändras).
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
@@ -80,9 +80,7 @@ export default async function Home() {
                     <div className="mt-2 text-small text-dark-secondary">Sundsvalls kommun</div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="eyebrow-sm text-dark-secondary">
-                      {d.progress_done} av {d.progress_total} genomgångna
-                    </span>
+                    <span className="eyebrow-sm text-dark-secondary">Öppna dialog</span>
                     <ArrowRight size={16} className="text-vattjom-text-primary" aria-hidden="true" />
                   </div>
                 </Link>

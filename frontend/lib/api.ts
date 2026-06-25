@@ -91,19 +91,19 @@ export interface Measurement {
   details: HmeDetails | null;
 }
 
-export interface Agreement {
+export interface Activity {
   id: number;
   text: string;
-  ansvarig: string;
-  klart_senast: string | null;
-  genomgangen: boolean;
-  updated_at: string;
+  klar: boolean;
+  klar_notering: string | null;
+  skapad_at: string;
+  klar_at: string | null;
 }
 
 export interface DialogueArea {
   area: KpiArea;
   measurement: Measurement;
-  agreement: Agreement | null;
+  activities: Activity[];
 }
 
 export interface Organisation {
@@ -127,8 +127,6 @@ export interface DialogueDetail {
   organisation: Organisation;
   ansvarig_chef: Person;
   areas: DialogueArea[];
-  progress_total: number;
-  progress_done: number;
 }
 
 /** Bas-URL för server-side anrop. I webbläsaren används relativa /api via rewrites. */
@@ -145,8 +143,6 @@ export interface DialogueSummary {
   status: string;
   organisation: Organisation;
   ansvarig_chef: Person;
-  progress_total: number;
-  progress_done: number;
 }
 
 export async function listDialogues(): Promise<DialogueSummary[]> {
@@ -165,42 +161,32 @@ export async function getDialogue(id: number): Promise<DialogueDetail> {
   return res.json();
 }
 
-export interface AgreementInput {
-  text: string;
-  ansvarig: string;
-  klart_senast: string | null;
-}
-
-/** Skapa/uppdatera överenskommelsen för ett område (anropas i webbläsaren via proxyn). */
-export async function upsertAgreement(
+/** Lägg till en aktivitet i ett område (anropas i webbläsaren via proxyn). */
+export async function createActivity(
   dialogueId: number,
   areaId: number,
-  body: AgreementInput,
-): Promise<Agreement> {
-  const res = await fetch(`/api/dialogues/${dialogueId}/areas/${areaId}/agreement`, {
+  text: string,
+): Promise<Activity> {
+  const res = await fetch(`/api/dialogues/${dialogueId}/areas/${areaId}/activities`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ text }),
   });
   if (!res.ok) {
-    throw new Error("Kunde inte spara överenskommelsen.");
+    throw new Error("Kunde inte lägga till aktiviteten.");
   }
   return res.json();
 }
 
-/** Markera ett område som genomgånget eller ångra. */
-export async function patchAreaReview(
-  dialogueId: number,
-  areaId: number,
-  genomgangen: boolean,
-): Promise<Agreement> {
-  const res = await fetch(`/api/dialogues/${dialogueId}/areas/${areaId}`, {
-    method: "PATCH",
+/** Klarrapportera en aktivitet med en kort notering. */
+export async function markActivityKlar(activityId: number, notering: string): Promise<Activity> {
+  const res = await fetch(`/api/activities/${activityId}/klar`, {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ genomgangen }),
+    body: JSON.stringify({ notering }),
   });
   if (!res.ok) {
-    throw new Error("Kunde inte uppdatera status.");
+    throw new Error("Kunde inte klarrapportera aktiviteten.");
   }
   return res.json();
 }

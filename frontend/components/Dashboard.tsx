@@ -3,48 +3,43 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@sk-web-gui/react";
-import { TrendingUp, TrendingDown, Check, ChevronLeft } from "lucide-react";
+import { TrendingUp, TrendingDown, ChevronLeft } from "lucide-react";
 import {
   type DialogueDetail,
-  type AgreementInput,
-  upsertAgreement,
-  patchAreaReview,
+  type Activity,
+  type Status,
+  createActivity,
+  markActivityKlar,
 } from "@/lib/api";
 import { areaIcon } from "./icons";
 import { STATUS } from "./status";
-import { Gauge } from "./Gauge";
-import { DetailPanel, type Note } from "./DetailPanel";
+import { StatusFordelning } from "./StatusFordelning";
+import { DetailPanel } from "./DetailPanel";
+
+// Tillfälligt dolda nyckeltal i denna version (ta bort ur setet för att visa igen).
+const DOLDA_OMRADEN = new Set(["verksamhet", "digital"]);
 
 export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
-  const areas = dialogue.areas;
+  const areas = dialogue.areas.filter((a) => !DOLDA_OMRADEN.has(a.area.key));
 
-  // Lokalt dialogtillstånd, initierat från seedad data. Persistens kopplas på i Fas 3.
   const [selected, setSelected] = useState(areas[0]?.area.key ?? "");
-  const [notes, setNotes] = useState<Record<string, Note>>(() =>
-    Object.fromEntries(
-      areas.map((a) => [
-        a.area.key,
-        {
-          text: a.agreement?.text ?? "",
-          owner: a.agreement?.ansvarig ?? "",
-          date: a.agreement?.klart_senast ?? "",
-        },
-      ]),
-    ),
-  );
-  const [done, setDone] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(areas.map((a) => [a.area.key, a.agreement?.genomgangen ?? false])),
+  // Aktiviteter per område, initierat från servern; uppdateras vid lägg-till/klarrapport.
+  const [activities, setActivities] = useState<Record<string, Activity[]>>(() =>
+    Object.fromEntries(areas.map((a) => [a.area.key, a.activities ?? []])),
   );
 
-  const doneCount = useMemo(
-    () => areas.filter((a) => done[a.area.key]).length,
-    [areas, done],
-  );
-  // Sammanvägd status: good=1, warn=0.5, alert=0. Styr mätarens nål och etikett.
+  // Sammanvägd status: good=1, warn=0.5, alert=0. Styr etiketten.
   const score = useMemo(() => {
     if (areas.length === 0) return 0;
     const w = { good: 1, warn: 0.5, alert: 0 } as const;
     return areas.reduce((sum, a) => sum + w[a.measurement.status], 0) / areas.length;
+  }, [areas]);
+
+  // Antal nyckeltal per status — driver fördelningsstapeln.
+  const counts = useMemo(() => {
+    const c: Record<Status, number> = { good: 0, warn: 0, alert: 0 };
+    for (const a of areas) c[a.measurement.status]++;
+    return c;
   }, [areas]);
 
   const selectedIndex = Math.max(
@@ -60,17 +55,17 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
     document.getElementById("detail")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
-  function noteToInput(key: string): AgreementInput {
-    const n = notes[key];
-    return { text: n.text, ansvarig: n.owner, klart_senast: n.date || null };
+  async function addActivity(key: string, areaId: number, text: string) {
+    const created = await createActivity(dialogue.id, areaId, text);
+    setActivities((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), created] }));
   }
 
-  // Spara ev. ändrad anteckning först (så den inte tappas), växla sedan genomgången.
-  async function toggleArea(key: string, areaId: number) {
-    await upsertAgreement(dialogue.id, areaId, noteToInput(key));
-    const next = !done[key];
-    await patchAreaReview(dialogue.id, areaId, next);
-    setDone((prev) => ({ ...prev, [key]: next }));
+  async function markKlar(key: string, activityId: number, notering: string) {
+    const updated = await markActivityKlar(activityId, notering);
+    setActivities((prev) => ({
+      ...prev,
+      [key]: (prev[key] ?? []).map((a) => (a.id === activityId ? updated : a)),
+    }));
   }
 
   return (
@@ -98,21 +93,6 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
             </Link>
           </div>
           <div className="flex items-center gap-12">
-            <div className="hidden items-center gap-10 rounded-full border border-hairline px-12 py-6 sm:flex">
-              <span className="eyebrow-sm">
-                {doneCount} av {areas.length} genomgångna
-              </span>
-              <span className="flex items-center gap-4" aria-hidden="true">
-                {areas.map((a) => (
-                  <span
-                    key={a.area.key}
-                    className={`inline-block h-8 w-8 rounded-full ${
-                      done[a.area.key] ? "bg-vattjom-surface-primary" : "bg-divider"
-                    }`}
-                  />
-                ))}
-              </span>
-            </div>
             <div
               role="img"
               aria-label={`Ansvarig chef: ${dialogue.ansvarig_chef.namn}`}
@@ -137,8 +117,8 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
               Samlad bild för <span className="text-vattjom-text-primary">dialog</span>
             </h1>
             <p className="mt-8 max-w-[576px] text-base leading-relaxed text-dark-secondary">
-              Gå igenom nyckeltalen tillsammans, ett område i taget. Fånga vad ni kommer överens om
-              direkt i samtalet.
+              Gå igenom nyckeltalen och fånga aktiviteter och åtgärder direkt i samtalet — hoppa
+              fritt mellan områdena.
             </p>
           </div>
           <div className="flex items-center gap-16 rounded-12 border border-hairline bg-background-content px-16 py-12">
@@ -164,21 +144,21 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
         <section className="mb-32 overflow-hidden rounded-12 border border-hairline bg-background-content">
           <div className="grid items-center gap-24 p-24 md:grid-cols-[1fr_auto] md:p-28">
             <div className="space-y-16">
-              <div className="flex items-start gap-12">
-                <span className="eyebrow w-[68px] shrink-0 pt-6">Effekt</span>
+              <div className="flex items-baseline gap-12">
+                <span className="eyebrow w-[68px] shrink-0">Effekt</span>
                 <p className="text-[19px] font-semibold leading-snug tracking-[-0.015em] md:text-[21px]">
                   Sundsvalls kommun uppnår <span className="text-vattjom-text-primary">samtliga uppdrag</span>
                 </p>
               </div>
               <div className="h-px bg-hairline" />
-              <div className="flex items-start gap-12">
-                <span className="eyebrow w-[68px] shrink-0 pt-6">Resultat</span>
+              <div className="flex items-baseline gap-12">
+                <span className="eyebrow w-[68px] shrink-0">Resultat</span>
                 <p className="text-[19px] font-semibold leading-snug tracking-[-0.015em] md:text-[21px]">
                   Chefer säkrar resultat och måluppfyllelse
                 </p>
               </div>
             </div>
-            <Gauge level={score} label={gaugeLabel} hint="Flera områden kräver åtgärd" />
+            <StatusFordelning counts={counts} total={areas.length} label={gaugeLabel} />
           </div>
         </section>
 
@@ -207,8 +187,8 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
         )}
 
         <div
-          className="mb-32 grid gap-12"
-          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}
+          className="mb-32 grid gap-16"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}
         >
           {areas.map((item) => {
             const { area, measurement: m } = item;
@@ -216,7 +196,6 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
             const AreaIcon = areaIcon(area.ikon);
             const TrendIcon = m.trend_dir === "up" ? TrendingUp : TrendingDown;
             const isSel = area.key === selected;
-            const isDone = done[area.key];
             const fillPct = Math.min(100, (m.value_num / m.bar_max) * 100);
             const targetPct = Math.min(100, (m.target_num / m.bar_max) * 100);
 
@@ -235,42 +214,52 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                 }`}
               >
                 <span className={`h-4 w-full ${s.solid}`} aria-hidden="true" />
-                <span className="flex h-full flex-col p-16">
-                  <span className="mb-12 flex items-start justify-between gap-8">
-                    <span className={`icon-chip grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px] bg-background-content ${s.solidText}`}>
-                      <AreaIcon size={17} strokeWidth={2} aria-hidden="true" />
+                <span className="flex h-full flex-col gap-16 p-20">
+                  {/* Rubrikrad: ikon + namn (får plats på bredden, bryts vid behov) */}
+                  <span className="flex items-center gap-10">
+                    <span className={`icon-chip grid h-40 w-40 shrink-0 place-items-center rounded-12 bg-background-content ${s.solidText}`}>
+                      <AreaIcon size={20} strokeWidth={2} aria-hidden="true" />
                     </span>
-                    {isDone && (
-                      <span className="eyebrow-sm flex items-center gap-4 text-vattjom-text-primary">
-                        <Check size={12} aria-hidden="true" />
-                        Klar
-                      </span>
-                    )}
+                    <span className="text-base font-semibold leading-tight tracking-tight">
+                      {area.short ? `${area.namn} (${area.short})` : area.namn}
+                    </span>
                   </span>
-                  <span className="min-h-[34px] text-small font-semibold leading-tight tracking-tight text-dark-secondary">
-                    {area.short ? `${area.namn} (${area.short})` : area.namn}
-                  </span>
-                  <span className="mb-12 mt-6 flex items-baseline gap-6">
-                    <span className="font-header text-h2 font-bold leading-none tracking-tight">
+
+                  {/* Värde + trend */}
+                  <span className="flex items-end justify-between gap-12">
+                    <span className="font-header text-h1 font-bold leading-none tracking-tight">
                       {m.value_text}
                     </span>
-                    {m.trend_dir && (
-                      <TrendIcon
-                        size={16}
-                        strokeWidth={2.4}
-                        className={m.trend_good ? "text-status-good" : "text-status-alert"}
-                        aria-hidden="true"
-                      />
-                    )}
+                    <span
+                      className={`flex items-center gap-6 pb-1 text-small font-semibold ${
+                        m.trend_dir === null
+                          ? "text-dark-secondary"
+                          : m.trend_good
+                          ? "text-status-good"
+                          : "text-status-alert"
+                      }`}
+                    >
+                      {m.trend_dir && (
+                        <TrendIcon size={16} strokeWidth={2.4} aria-hidden="true" />
+                      )}
+                      <span className="truncate">{m.trend_text}</span>
+                    </span>
                   </span>
+
+                  {/* Mätare + mål */}
                   <span className="mt-auto block">
                     <span className="meter block">
                       <span className={`meter-fill block ${s.solid}`} style={{ width: `${fillPct}%` }} />
                       <span className="meter-target" style={{ left: `calc(${targetPct}% - 1px)` }} />
                     </span>
-                    <span className="eyebrow-sm mt-6 flex justify-between">
-                      <span>{area.lower_better ? "Lägre = bättre" : `Mål ${m.target_text}`}</span>
-                      <span>{area.lower_better ? `Mål ${m.target_text}` : ""}</span>
+                    <span className="eyebrow-sm mt-8 flex items-center justify-between gap-8">
+                      <span className="truncate">
+                        {area.lower_better ? `Lägre = bättre · Mål ${m.target_text}` : `Mål ${m.target_text}`}
+                      </span>
+                      <span className={`flex shrink-0 items-center gap-6 ${s.text}`}>
+                        <span className={`inline-block h-8 w-8 rounded-full ${s.solid}`} aria-hidden="true" />
+                        {s.legend}
+                      </span>
                     </span>
                   </span>
                 </span>
@@ -287,17 +276,9 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
               item={current}
               index={selectedIndex}
               total={areas.length}
-              note={notes[current.area.key]}
-              done={!!done[current.area.key]}
-              onNoteChange={(next) =>
-                setNotes((prev) => ({ ...prev, [current.area.key]: next }))
-              }
-              onToggleDone={() => toggleArea(current.area.key, current.area.id)}
-              onNext={() => {
-                const next = areas[(selectedIndex + 1) % areas.length];
-                setSelected(next.area.key);
-                scrollToDetail();
-              }}
+              activities={activities[current.area.key] ?? []}
+              onAddActivity={(text) => addActivity(current.area.key, current.area.id, text)}
+              onMarkKlar={(activityId, notering) => markKlar(current.area.key, activityId, notering)}
             />
           )}
         </div>
