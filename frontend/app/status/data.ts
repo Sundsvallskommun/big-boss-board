@@ -33,10 +33,10 @@ export interface Fraga {
 }
 
 /** Senast uppdaterad (visas i topbaren). Sätt manuellt vid ändring. Tom = visas ej. */
-export const SENAST_UPPDATERAD = "2026-06-24";
+export const SENAST_UPPDATERAD = "2026-06-25";
 
 /** Nästa lediga id. Höj med 1 varje gång ett kort läggs till. Återanvänd aldrig. */
-export const NASTA_ID = 6;
+export const NASTA_ID = 7;
 
 /** Alla frågor. Öppna och besvarade visas i var sin sektion utifrån om `svar` finns. */
 export const FRAGOR: Fraga[] = [
@@ -88,5 +88,11 @@ export const FRAGOR: Fraga[] = [
       "Slutsatsen är att det officiella indexet bygger på ett viktningsschema (vilka undergrupper som ingår och hur de vägs) som inte går att utläsa ur den platta rådatafilen. Vi kan därför inte återskapa de officiella nyckeltalen på ett tillförlitligt sätt.",
       "Rekommendation: använd den officiella rapportens aggregerade statistik som sanningskälla för HME-rubrikvärdet, historiken (2017–2025) och den verkliga trenden. De delindex (Motivation, Styrning, Ledarskap) och den chef/medarbetare-uppdelning vi tagit fram ur rådatan kan behållas som kompletterande sammanhang i dialogen, men ska då tydligt märkas som framräknade ur rådata och kan avvika något från det officiella indexet.",
     ],
+  },
+  {
+    id: 6,
+    fraga: "Hur säkerställer vi att sjukfrånvaro-nyckeltalet dokumenteras korrekt?",
+    bakgrund:
+      "Sjukfrånvaron som nyckeltal behöver dokumenteras tydligare. Det finns brister i dagens hantering som leder till risker (bl.a. ofullständig och fördröjd statistik). Underlaget kompletteras framåt.",
   },
 ];
