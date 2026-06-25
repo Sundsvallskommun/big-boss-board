@@ -143,10 +143,11 @@ def _measurement_fields(f: HmeForvaltning, enhet: str, mal: float, kalla: str) -
             trend_text = f"Oförändrat sedan {prev}"
 
     return {
-        "value_text": _num(value),
+        # HME mäts i procent → visa %-tecken i kort/detaljpanel (value_text/target_text renderas direkt).
+        "value_text": f"{_num(value)} %",
         "value_num": value,
-        "unit": enhet,
-        "target_text": f"≥ {_num(mal)}",
+        "unit": "%",
+        "target_text": f"≥ {_num(mal)} %",
         "target_num": mal,
         "bar_max": 100.0,
         "status": status,

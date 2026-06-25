@@ -2,7 +2,7 @@
 
 Referenstabeller (organisation, person, support_function, tool, kpi_area, question)
 gör innehållet redigerbart utan kodändring. Transaktionstabeller (dialogue,
-measurement, agreement) bär själva uppföljningen.
+measurement, activity) bär själva uppföljningen.
 
 Endast öppen och publik information — inga personuppgifter (även dummydata är fiktiv).
 """
@@ -144,7 +144,7 @@ class Dialogue(Base):
     organisation: Mapped[Organisation] = relationship(back_populates="dialogues")
     ansvarig_chef: Mapped[Person] = relationship()
     measurements: Mapped[list[Measurement]] = relationship(back_populates="dialogue")
-    agreements: Mapped[list[Agreement]] = relationship(back_populates="dialogue")
+    activities: Mapped[list[Activity]] = relationship(back_populates="dialogue")
 
 
 class Measurement(Base):
@@ -175,22 +175,25 @@ class Measurement(Base):
     kpi_area: Mapped[KpiArea] = relationship()
 
 
-class Agreement(Base):
-    """Överenskommelse/nästa steg per område och dialog. Bär även genomgången-status."""
+class Activity(Base):
+    """Aktivitet/åtgärd per område och dialog. Flera per (dialog, område).
 
-    __tablename__ = "agreement"
-    __table_args__ = (UniqueConstraint("dialogue_id", "kpi_area_id", name="uq_agreement_area"),)
+    Chefen lägger till aktiviteter fritt och klarrapporterar dem med en notering.
+    Ersätter den tidigare överenskommelse-/genomgången-modellen.
+    """
+
+    __tablename__ = "activity"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     dialogue_id: Mapped[int] = mapped_column(ForeignKey("dialogue.id"))
     kpi_area_id: Mapped[int] = mapped_column(ForeignKey("kpi_area.id"))
-    text: Mapped[str] = mapped_column(Text, default="")
-    ansvarig: Mapped[str] = mapped_column(String(200), default="")
-    klart_senast: Mapped[date | None] = mapped_column(Date, nullable=True)
-    genomgangen: Mapped[bool] = mapped_column(Boolean, default=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    text: Mapped[str] = mapped_column(Text)
+    klar: Mapped[bool] = mapped_column(Boolean, default=False)
+    klar_notering: Mapped[str | None] = mapped_column(Text, nullable=True)
+    skapad_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
+    klar_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    dialogue: Mapped[Dialogue] = relationship(back_populates="agreements")
+    dialogue: Mapped[Dialogue] = relationship(back_populates="activities")
     kpi_area: Mapped[KpiArea] = relationship()

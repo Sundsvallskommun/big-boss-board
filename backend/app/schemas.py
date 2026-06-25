@@ -71,27 +71,25 @@ class MeasurementOut(ORMModel):
     details: dict | None = None
 
 
-class AgreementOut(ORMModel):
+class ActivityOut(ORMModel):
     id: int
     text: str
-    ansvarig: str
-    klart_senast: date | None
-    genomgangen: bool
-    updated_at: datetime
+    klar: bool
+    klar_notering: str | None
+    skapad_at: datetime
+    klar_at: datetime | None
 
 
-class AgreementUpsert(BaseModel):
-    """Indata för att spara/uppdatera en överenskommelse."""
+class ActivityCreate(BaseModel):
+    """Indata för att lägga till en aktivitet (endast fri text)."""
 
-    text: str = ""
-    ansvarig: str = ""
-    klart_senast: date | None = None
+    text: str
 
 
-class AreaReviewPatch(BaseModel):
-    """Indata för att markera ett område som genomgånget eller ångra."""
+class ActivityKlar(BaseModel):
+    """Indata för att klarrapportera en aktivitet med en kort notering."""
 
-    genomgangen: bool
+    notering: str = ""
 
 
 # ---- Dataimport ----------------------------------------------------------
@@ -137,14 +135,14 @@ class ImportResultat(BaseModel):
 
 
 class DialogueArea(BaseModel):
-    """Ett område i en dialog: referensdata + mätvärde + ev. överenskommelse.
+    """Ett område i en dialog: referensdata + mätvärde + aktiviteter.
 
     Allt frontend behöver för ett KPI-kort och dialogpanelen, i ett objekt.
     """
 
     area: KpiAreaOut
     measurement: MeasurementOut
-    agreement: AgreementOut | None
+    activities: list[ActivityOut] = []
 
 
 class PersonOut(ORMModel):
@@ -170,17 +168,13 @@ class DialogueDetail(BaseModel):
     organisation: OrganisationOut
     ansvarig_chef: PersonOut
     areas: list[DialogueArea]
-    progress_total: int
-    progress_done: int
 
 
 class DialogueSummary(BaseModel):
-    """Listrad: org, chef, period, status, progress."""
+    """Listrad: org, chef, period, status."""
 
     id: int
     period: str
     status: str
     organisation: OrganisationOut
     ansvarig_chef: PersonOut
-    progress_total: int
-    progress_done: int

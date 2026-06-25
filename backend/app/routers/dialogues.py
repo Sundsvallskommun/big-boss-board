@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db import get_session
-from app.models import Agreement, Dialogue, KpiArea, Measurement, SupportFunction
+from app.models import Activity, Dialogue, KpiArea, Measurement, SupportFunction
 from app.schemas import DialogueArea, DialogueDetail, DialogueSummary
 
 router = APIRouter(prefix="/api/dialogues", tags=["dialogues"])
@@ -23,15 +23,13 @@ def _kpi_area_loader():
 
 @router.get("", response_model=list[DialogueSummary])
 async def list_dialogues(session: AsyncSession = Depends(get_session)) -> list[DialogueSummary]:
-    """Lista dialoger med org, chef, period, status och progress."""
+    """Lista dialoger med org, chef, period och status."""
     dialogues = (
         (
             await session.execute(
                 select(Dialogue).options(
                     selectinload(Dialogue.organisation),
                     selectinload(Dialogue.ansvarig_chef),
-                    selectinload(Dialogue.measurements),
-                    selectinload(Dialogue.agreements),
                 )
             )
         )
@@ -46,8 +44,6 @@ async def list_dialogues(session: AsyncSession = Depends(get_session)) -> list[D
             status=d.status,
             organisation=d.organisation,
             ansvarig_chef=d.ansvarig_chef,
-            progress_total=len(d.measurements),
-            progress_done=sum(1 for a in d.agreements if a.genomgangen),
         )
         for d in dialogues
     ]
@@ -57,7 +53,7 @@ async def list_dialogues(session: AsyncSession = Depends(get_session)) -> list[D
 async def get_dialogue(
     dialogue_id: int, session: AsyncSession = Depends(get_session)
 ) -> DialogueDetail:
-    """Full dialog: områden + mätvärden + verktyg + frågor + överenskommelser.
+    """Full dialog: områden + mätvärden + verktyg + frågor + aktiviteter.
 
     Detta är det enda anrop frontend behöver för dashboarden.
     """
@@ -71,7 +67,7 @@ async def get_dialogue(
                 selectinload(Dialogue.measurements)
                 .selectinload(Measurement.kpi_area)
                 .options(*_kpi_area_loader()),
-                selectinload(Dialogue.agreements),
+                selectinload(Dialogue.activities),
             )
         )
     ).scalar_one_or_none()
@@ -79,16 +75,17 @@ async def get_dialogue(
     if dialogue is None:
         raise HTTPException(status_code=404, detail="Dialogen hittades inte.")
 
-    agreements_by_area: dict[int, Agreement] = {
-        a.kpi_area_id: a for a in dialogue.agreements
-    }
+    # Aktiviteter per område, äldst först (skapad-ordning).
+    activities_by_area: dict[int, list[Activity]] = {}
+    for act in sorted(dialogue.activities, key=lambda a: a.id):
+        activities_by_area.setdefault(act.kpi_area_id, []).append(act)
 
     measurements = sorted(dialogue.measurements, key=lambda m: m.kpi_area.ordning)
     areas = [
         DialogueArea(
             area=m.kpi_area,
             measurement=m,
-            agreement=agreements_by_area.get(m.kpi_area_id),
+            activities=activities_by_area.get(m.kpi_area_id, []),
         )
         for m in measurements
     ]
@@ -101,6 +98,4 @@ async def get_dialogue(
         organisation=dialogue.organisation,
         ansvarig_chef=dialogue.ansvarig_chef,
         areas=areas,
-        progress_total=len(measurements),
-        progress_done=sum(1 for a in dialogue.agreements if a.genomgangen),
     )
