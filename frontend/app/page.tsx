@@ -52,7 +52,7 @@ export default async function Home() {
               className="inline-flex items-center gap-8 rounded-full border border-hairline bg-background-content px-16 py-8 text-small font-semibold transition hover:border-vattjom-surface-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <Upload size={16} className="text-vattjom-text-primary" aria-hidden="true" />
-              Importera HME
+              Importera data
             </Link>
           )}
         </div>

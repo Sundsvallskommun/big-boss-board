@@ -4,13 +4,44 @@ import { useActionState, useState } from "react";
 import { Button } from "@sk-web-gui/react";
 import { UploadCloud, CheckCircle2, AlertTriangle } from "lucide-react";
 import { STATUS } from "@/components/status";
-import { importHme, type ImportState } from "./actions";
+import { importData, type ImportState } from "./actions";
 
-type Preview = { count: number; ar: string } | { error: string } | null;
+type Preview =
+  | { kind: "hme" | "ekonomi" | "sjukfranvaro"; count: number; info: string }
+  | { error: string }
+  | null;
+
+const KIND_ETIKETT: Record<"hme" | "ekonomi" | "sjukfranvaro", string> = {
+  hme: "HME",
+  ekonomi: "Ekonomi",
+  sjukfranvaro: "Sjukfrånvaro",
+};
 
 function previewOf(text: string): Preview {
+  // Ekonomi CSV (Qlik-export): Period,Enhet,Mått,Kolumn,Mätvärde (ev. BOM).
+  if (/^﻿?Period,Enhet,M/.test(text)) {
+    const lines = text.split(/\r?\n/).filter((l) => l.trim());
+    const enheter = new Set<string>();
+    let period = "";
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",");
+      const kod = (cols[1] ?? "").trim();
+      if (kod && kod !== "13") enheter.add(kod);
+      if (!period) period = (cols[0] ?? "").trim();
+    }
+    if (enheter.size === 0) return { error: "Hittar inga enheter i CSV-filen." };
+    const kind = /SK\.P\./.test(text) ? "sjukfranvaro" : "ekonomi";
+    return { kind, count: enheter.size, info: period ? `period ${period} · CSV` : "CSV" };
+  }
   try {
     const d = JSON.parse(text);
+    // Ekonomi: rå rapport med poster/dataset.
+    if (Array.isArray(d?.poster) || d?.dataset) {
+      const enheter = (d?.metadata?.enheter ?? []).filter((e: any) => e?.niva === "förvaltning");
+      const period = d?.dataset?.period ?? "";
+      return { kind: "ekonomi", count: enheter.length, info: period ? `period ${period}` : "ekonomi" };
+    }
+    // HME: dimensioner eller redan normaliserad forvaltningar.
     const forv = Array.isArray(d?.forvaltningar)
       ? d.forvaltningar
       : d?.dimensioner?.["Enhet"] ?? d?.dimensioner?.["Förvaltning"] ?? [];
@@ -19,14 +50,14 @@ function previewOf(text: string): Preview {
     for (const f of forv) for (const y of Object.keys(f.matningar ?? {})) ar.add(y);
     const sorted = [...ar].sort();
     const span = sorted.length ? `${sorted[0]}–${sorted[sorted.length - 1]}` : "–";
-    return { count: forv.length, ar: span };
+    return { kind: "hme", count: forv.length, info: `år ${span}` };
   } catch {
-    return { error: "Filen är inte giltig JSON." };
+    return { error: "Filen är varken giltig JSON eller CSV." };
   }
 }
 
 export function ImportForm() {
-  const [state, formAction, pending] = useActionState(importHme, {} as ImportState);
+  const [state, formAction, pending] = useActionState(importData, {} as ImportState);
   const [preview, setPreview] = useState<Preview>(null);
 
   return (
@@ -37,16 +68,16 @@ export function ImportForm() {
           className="flex cursor-pointer flex-col items-center gap-8 rounded-12 border border-dashed border-hairline bg-background-200 px-16 py-32 text-center transition hover:border-vattjom-surface-primary"
         >
           <UploadCloud size={28} className="text-vattjom-text-primary" aria-hidden="true" />
-          <span className="text-base font-semibold">Välj HME-fil (JSON)</span>
+          <span className="text-base font-semibold">Välj datafil (JSON eller CSV)</span>
           <span className="text-small text-dark-secondary">
-            Officiella totalindex-rapporten (HME_totalindex.json)
+            HME-totalindex (JSON) eller ekonomi (JSON/CSV) — typen känns igen automatiskt
           </span>
         </label>
         <input
           id="file"
           name="file"
           type="file"
-          accept="application/json,.json"
+          accept="application/json,.json,text/csv,.csv"
           required
           className="sr-only"
           onChange={async (e) => {
@@ -62,7 +93,7 @@ export function ImportForm() {
             <span className="text-status-alert">{preview.error}</span>
           ) : (
             <span className="text-dark-secondary">
-              {preview.count} förvaltningar · år {preview.ar}
+              {KIND_ETIKETT[preview.kind]} · {preview.count} förvaltningar · {preview.info}
             </span>
           )}
         </p>
@@ -92,31 +123,27 @@ export function ImportForm() {
                 <thead>
                   <tr className="border-b border-white">
                     <th className="eyebrow-sm px-12 py-10 text-left">Förvaltning</th>
-                    <th className="eyebrow-sm px-12 py-10 text-right">HME-index</th>
-                    <th className="eyebrow-sm px-12 py-10 text-right">Mätår</th>
-                    <th className="eyebrow-sm px-12 py-10 text-left">Trend</th>
-                    <th className="eyebrow-sm px-12 py-10 text-right">Antal svar</th>
+                    <th className="eyebrow-sm px-12 py-10 text-right">Värde</th>
                     <th className="eyebrow-sm px-12 py-10 text-left">Status</th>
                     <th className="eyebrow-sm px-12 py-10 text-left">Åtgärd</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white text-dark-primary">
                   {state.rader.map((r) => {
-                    const s = STATUS[r.status as keyof typeof STATUS] ?? STATUS.warn;
+                    const s = STATUS[r.status as keyof typeof STATUS];
                     return (
                       <tr key={r.namn}>
                         <td className="px-12 py-10 font-semibold">{r.namn}</td>
                         <td className="px-12 py-10 text-right font-header font-bold tabular-nums">{r.value}</td>
-                        <td className="px-12 py-10 text-right tabular-nums text-dark-secondary">{r.senaste_ar}</td>
-                        <td className="px-12 py-10 text-dark-secondary">{r.trend}</td>
-                        <td className="px-12 py-10 text-right tabular-nums text-dark-secondary">
-                          {r.antal_svar ?? "–"}
-                        </td>
                         <td className="px-12 py-10">
-                          <span className="inline-flex items-center gap-6 whitespace-nowrap">
-                            <span className={`inline-block h-8 w-8 shrink-0 rounded-full ${s.solid}`} aria-hidden="true" />
-                            {s.legend}
-                          </span>
+                          {s ? (
+                            <span className="inline-flex items-center gap-6 whitespace-nowrap">
+                              <span className={`inline-block h-8 w-8 shrink-0 rounded-full ${s.solid}`} aria-hidden="true" />
+                              {s.legend}
+                            </span>
+                          ) : (
+                            <span className="text-dark-secondary">–</span>
+                          )}
                         </td>
                         <td className="px-12 py-10 font-mono text-dark-secondary">{r.atgard}</td>
                       </tr>

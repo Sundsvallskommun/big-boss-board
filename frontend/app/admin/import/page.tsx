@@ -9,7 +9,7 @@ import { ImportForm } from "./ImportForm";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Importera HME",
+  title: "Importera data",
   robots: { index: false, follow: false },
 };
 
@@ -37,11 +37,11 @@ export default async function AdminImportPage() {
 
         <div className="mb-24">
           <div className="eyebrow mb-8">Admin · dataimport</div>
-          <h1 className="font-header text-h3 font-bold tracking-tight">Importera HME-data</h1>
+          <h1 className="font-header text-h3 font-bold tracking-tight">Importera data</h1>
           <p className="mt-12 text-small leading-relaxed text-dark-secondary">
-            Ladda upp den officiella HME-rapporten (JSON). Värdena uppsertas per förvaltning —
-            befintliga HME-värden ersätts med filens, medan överenskommelser och övriga nyckeltal
-            lämnas orörda. Säkert att köra om vid ny mätning.
+            Ladda upp HME-totalindex (JSON) eller ekonomirapporten (JSON eller CSV) — filtypen känns igen automatiskt.
+            Värdena uppsertas per förvaltning: det aktuella nyckeltalet ersätts med filens, medan
+            övriga nyckeltal och aktiviteter lämnas orörda. Säkert att köra om vid ny data.
           </p>
         </div>
 
