@@ -22,6 +22,8 @@ import type { Activity, DialogueArea } from "@/lib/api";
 import { areaIcon } from "./icons";
 import { STATUS } from "./status";
 import { HmeLineChart } from "./charts/HmeLineChart";
+import { EkonomiNettokostnadChart } from "./charts/EkonomiNettokostnadChart";
+import { SjukfranvaroChart } from "./charts/SjukfranvaroChart";
 import { InfoPopover } from "./InfoPopover";
 import { SjukfranvaroNivaer } from "./SjukfranvaroNivaer";
 
@@ -53,7 +55,37 @@ function kortDatum(iso: string | null): string {
   return m ? `${Number(m[3])} ${MANADER[Number(m[2]) - 1]}` : "";
 }
 
+/** Heltal mnkr med tusentalsmellanslag och minustecken (deterministiskt, ingen locale). */
+function fmtMnkr(v: number): string {
+  const r = Math.round(v);
+  const grupperad = Math.abs(r)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return (r < 0 ? "−" : "") + grupperad;
+}
+
 /** En aktivitet i listan: checklist-markör + text + Klar-rapportering med kort notering. */
+/** Periodens ISO-datum → tertial-/månadsetikett: apr→"T1", aug→"T2", dec→"År", annars månad. */
+function tertialEtikett(iso?: string): string {
+  const mm = iso ? /^(\d{4})-(\d{2})/.exec(iso) : null;
+  if (!mm) return "Period";
+  const ar = mm[1];
+  const mon = Number(mm[2]);
+  if (mon === 4) return `T1 ${ar}`;
+  if (mon === 8) return `T2 ${ar}`;
+  if (mon === 12) return `År ${ar}`;
+  const namn = MANADER[mon - 1] ?? "";
+  return `${namn.charAt(0).toUpperCase()}${namn.slice(1)} ${ar}`;
+}
+
+/** Periodens ISO-datum → månadsetikett "Maj 2026" (deterministiskt, ingen locale). */
+function ekonomiManadEtikett(period?: string): string {
+  const mm = period ? /^(\d{4})-(\d{2})/.exec(period) : null;
+  if (!mm) return "Aktuell period";
+  const namn = MANADER[Number(mm[2]) - 1] ?? "";
+  return `${namn.charAt(0).toUpperCase()}${namn.slice(1)} ${mm[1]}`;
+}
+
 function ActivityRow({
   activity,
   onMarkKlar,
@@ -180,6 +212,33 @@ export function DetailPanel({
     : "text-status-alert";
 
   const hme = m.details?.typ === "hme" ? m.details : null;
+  const ekonomi = m.details?.typ === "ekonomi" ? m.details : null;
+  const ekNetto = ekonomi?.resultatrakning?.find((r) => r.matt_kod === "SK.EK.RR.005") ?? null;
+  const sjuk = m.details?.typ === "sjukfranvaro" ? m.details : null;
+  const sjukSerie =
+    sjuk?.serie?.map((p) => ({
+      period: tertialEtikett(p.period),
+      total: p.total ?? null,
+      kvinnor: p.kvinnor ?? null,
+      man: p.man ?? null,
+    })) ?? [];
+  // En månad (senaste perioden) för nettokostnadsdiagrammet. Fler månader när månadsdata finns.
+  const ekManad = ekNetto
+    ? [
+        {
+          manad: ekonomiManadEtikett(ekonomi?.period),
+          budget_helar: ekNetto.budget_helar ?? null,
+          budget_ack: ekNetto.budget_ack ?? null,
+          utfall: ekNetto.utfall ?? null,
+          utfall_fg: ekNetto.utfall_fg ?? null,
+          prognos: ekNetto.prognos ?? null,
+          diff:
+            ekNetto.prognos != null && ekNetto.budget_helar != null
+              ? Math.round((ekNetto.prognos - ekNetto.budget_helar) * 10) / 10
+              : null,
+        },
+      ]
+    : [];
   const dims = [
     ["motivation", "Motivation"],
     ["styrning", "Styrning"],
@@ -372,6 +431,118 @@ export function DetailPanel({
               <p className="max-w-[640px] pl-[30px] text-small leading-relaxed text-dark-secondary">
                 {area.info}
               </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Ekonomi-nedbrytning (visas bara för ekonomi): verksamhetens nettokostnad */}
+      {ekonomi && (
+        <div className="bg-background-content p-24 md:p-28">
+          <div className="mb-12 flex items-start justify-between gap-8">
+            <div className="flex items-center gap-8">
+              <BarChart3 size={16} className="text-vattjom-text-primary" aria-hidden="true" />
+              <h3 className="font-header text-base font-bold tracking-tight">
+                Verksamhetens nettokostnad
+              </h3>
+            </div>
+            <InfoPopover title="Om diagrammet">
+              <p>
+                Nettokostnad i mnkr{ekonomi.period ? ` t.o.m. ${ekonomi.period}` : ""} (negativa tal
+                = kostnad). Linjerna visar budget (helår och ackumulerat); staplarna visar ackumulerat
+                utfall, samma period föregående år, helårsprognos och differensen prognos − budget helår.
+              </p>
+              <p className="text-dark-secondary">
+                Just nu visas senaste perioden. Fler månader fylls på i diagrammet när månadsdata finns.
+              </p>
+              {ekonomi.kalla && <p className="text-dark-secondary">Källa: {ekonomi.kalla}</p>}
+            </InfoPopover>
+          </div>
+
+          {ekNetto && (
+            <dl className="mb-16 grid grid-cols-3 gap-12">
+              {([
+                ["Budget (ack)", ekNetto.budget_ack],
+                ["Utfall (ack)", ekNetto.utfall],
+                ["Prognos (helår)", ekNetto.prognos],
+              ] as const).map(([label, v]) => (
+                <div key={label} className="rounded-12 border border-hairline bg-background-200 p-12">
+                  <dt className="eyebrow-sm">{label}</dt>
+                  <dd className="mt-2 font-header text-base font-bold tabular-nums">
+                    {typeof v === "number" ? `${fmtMnkr(v)} mnkr` : "–"}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          {ekManad.length > 0 ? (
+            <EkonomiNettokostnadChart data={ekManad} />
+          ) : (
+            <p className="text-small text-dark-secondary">Ingen nettokostnadsdata tillgänglig.</p>
+          )}
+        </div>
+      )}
+
+      {/* Sjukfrånvaro (visas bara för sjukfrånvaro): total över tid + kön, samt fördelning */}
+      {sjuk && (
+        <div className="bg-background-content p-24 md:p-28">
+          <div className="mb-12 flex items-start justify-between gap-8">
+            <div className="flex items-center gap-8">
+              <BarChart3 size={16} className="text-vattjom-text-primary" aria-hidden="true" />
+              <h3 className="font-header text-base font-bold tracking-tight">Total sjukfrånvaro</h3>
+            </div>
+            <InfoPopover title="Om diagrammet">
+              <p>
+                Total sjukfrånvaro i % av ordinarie arbetstid (grön linje), med kvinnors och mäns
+                andel som staplar per period.
+              </p>
+              <p className="text-dark-secondary">
+                Just nu visas senaste perioden. Fler perioder fylls på i diagrammet när helårsdata finns.
+              </p>
+              {sjuk.kalla && <p className="text-dark-secondary">Källa: {sjuk.kalla}</p>}
+            </InfoPopover>
+          </div>
+
+          {sjukSerie.length > 0 ? (
+            <SjukfranvaroChart data={sjukSerie} />
+          ) : (
+            <p className="text-small text-dark-secondary">Ingen sjukfrånvarodata tillgänglig.</p>
+          )}
+
+          {/* Fördelning: långtid + åldersgrupper (kön visas i diagrammet ovan) */}
+          {(typeof sjuk.langtidsandel === "number" ||
+            (sjuk.aldersgrupper && sjuk.aldersgrupper.length > 0)) && (
+            <div className="mt-20 border-t border-hairline pt-16">
+              {typeof sjuk.langtidsandel === "number" && (
+                <p className="mb-12 text-small text-dark-secondary">
+                  Andel långtidssjukfrånvaro (sammanhängande ≥ 60 dagar):{" "}
+                  <span className="font-header font-bold text-dark-primary">{fmt(sjuk.langtidsandel)} %</span>
+                </p>
+              )}
+              {sjuk.aldersgrupper && sjuk.aldersgrupper.length > 0 && (
+                <>
+                  <div className="eyebrow-sm mb-10">Sjukfrånvaro per åldersgrupp</div>
+                  <div className="grid gap-x-24 gap-y-12 sm:grid-cols-3">
+                    {sjuk.aldersgrupper.map((a) => (
+                      <div key={a.grupp}>
+                        <div className="mb-4 flex items-baseline justify-between">
+                          <span className="text-small text-dark-secondary">{a.grupp}</span>
+                          <span className="font-header text-base font-bold tabular-nums">
+                            {typeof a.varde === "number" ? `${fmt(a.varde)} %` : "–"}
+                          </span>
+                        </div>
+                        <span className="meter block">
+                          <span
+                            className="meter-fill block bg-vattjom-surface-primary"
+                            style={{ width: `${Math.min(100, ((a.varde ?? 0) / 10) * 100)}%` }}
+                          />
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

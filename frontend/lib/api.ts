@@ -75,6 +75,61 @@ export interface HmeDetails {
   segment?: { chef: HmeSegment; medarbetare: HmeSegment } | null;
 }
 
+/** Ett resultaträkningsmått (mnkr; null = saknas för enheten). */
+export interface EkonomiMattRad {
+  matt_kod: string;
+  namn: string;
+  budget_helar?: number | null;
+  budget_ack?: number | null;
+  utfall?: number | null;
+  utfall_fg?: number | null;
+  prognos?: number | null;
+}
+
+/** Nettokostnad nedbruten på ett verksamhetsområde (klartextnamn ofta okänt ännu). */
+export interface EkonomiOmradeRad {
+  omrade_kod: string | null;
+  namn?: string | null;
+  utfall?: number | null;
+  budget_ack?: number | null;
+}
+
+/** Nedbrytning för ekonomi-mätvärdet: resultaträkning + nettokostnad per område (mnkr). */
+export interface EkonomiDetails {
+  typ: "ekonomi";
+  enhet?: string;
+  kalla?: string;
+  period?: string;
+  resultatrakning?: EkonomiMattRad[];
+  nettokostnad_per_omrade?: EkonomiOmradeRad[];
+}
+
+/** Sjukfrånvaro per åldersgrupp (% av ordinarie arbetstid). */
+export interface SjukAldersgrupp {
+  grupp: string;
+  varde?: number | null;
+}
+
+/** Sjukfrånvaro en period (tidsserie): total %, kvinnors andel %, mäns andel %. */
+export interface SjukPunkt {
+  period: string;
+  total?: number | null;
+  kvinnor?: number | null;
+  man?: number | null;
+}
+
+/** Nedbrytning för sjukfrånvaro-mätvärdet: kön, långtidsandel, åldersgrupper + tidsserie. */
+export interface SjukfranvaroDetails {
+  typ: "sjukfranvaro";
+  period?: string;
+  kalla?: string;
+  kvinnor?: number | null;
+  man?: number | null;
+  langtidsandel?: number | null;
+  aldersgrupper?: SjukAldersgrupp[];
+  serie?: SjukPunkt[];
+}
+
 export interface Measurement {
   value_text: string;
   value_num: number;
@@ -88,7 +143,8 @@ export interface Measurement {
   trend_good: boolean | null;
   trend_text: string;
   interpretation: string;
-  details: HmeDetails | null;
+  /** Typspecifik nedbrytning. Diskriminera på `details.typ`. */
+  details: HmeDetails | EkonomiDetails | SjukfranvaroDetails | null;
 }
 
 export interface Activity {
