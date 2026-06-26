@@ -5,15 +5,18 @@ import {
   CalendarDays,
   MessageSquareReply,
   FileText,
+  Flag,
   type LucideIcon,
 } from "lucide-react";
 import { StatusHeader } from "./StatusHeader";
 import { Expandable } from "./Expandable";
 import {
   FRAGOR,
+  OVERGRIPANDE,
   STATUSRAPPORTER,
   SENAST_UPPDATERAD,
   type Fraga,
+  type OvergripandeFraga,
   type Statusrapport,
 } from "./data";
 
@@ -157,6 +160,30 @@ function BesvaradKort({ q }: { q: Fraga }) {
   );
 }
 
+/** Övergripande/strategisk fråga: röd accent, hanteras utanför projektet. */
+function OvergripandeKort({ q }: { q: OvergripandeFraga }) {
+  return (
+    <li className="overflow-hidden rounded-12 border border-hairline border-l-[6px] border-l-status-alert bg-background-content">
+      <div className="p-20">
+        <div className="flex flex-wrap items-center gap-x-12 gap-y-6">
+          <IdBricka id={q.id} />
+          <span className="eyebrow-sm inline-flex items-center gap-6 rounded-full bg-error-background-200 px-10 py-4 text-error-text">
+            <Flag size={12} aria-hidden="true" />
+            Utanför projektet
+          </span>
+        </div>
+        <h3 className="mt-12 font-header text-large font-bold leading-snug tracking-tight">
+          {q.fraga}
+        </h3>
+        {q.bakgrund && (
+          <p className="mt-8 text-small leading-relaxed text-dark-secondary">{q.bakgrund}</p>
+        )}
+        {q.mer && <Expandable paragraphs={q.mer} />}
+      </div>
+    </li>
+  );
+}
+
 /** Statusrapport: daterat kort med rubrik, text och valfria punkter. Blå accent. */
 function StatusrapportKort({ r, senaste }: { r: Statusrapport; senaste: boolean }) {
   return (
@@ -209,6 +236,7 @@ function EmptyState({ children }: { children: React.ReactNode }) {
 export default function StatusPage() {
   const oppna = FRAGOR.filter((q) => !q.svar);
   const besvarade = FRAGOR.filter((q) => q.svar);
+  const overgripande = OVERGRIPANDE;
   const rapporter = [...STATUSRAPPORTER].sort((a, b) => b.datum.localeCompare(a.datum));
 
   return (
@@ -227,13 +255,14 @@ export default function StatusPage() {
             Frågor och beslut
           </h1>
           <p className="mt-12 text-small leading-relaxed text-dark-secondary">
-            En överblick av frågor i projektet: de som väntar på svar och de som
-            fått ett beslut.
+            En överblick av frågor i projektet — de som väntar på svar och de som
+            fått ett beslut — samt övergripande frågor som behöver hanteras utanför
+            projektet.
           </p>
         </div>
 
         {/* ===== Sammanfattning ===== */}
-        <div className="mt-24 grid grid-cols-1 gap-16 sm:grid-cols-2">
+        <div className="mt-24 grid grid-cols-1 gap-16 sm:grid-cols-3">
           <SummaryTile
             icon={HelpCircle}
             value={oppna.length}
@@ -248,10 +277,17 @@ export default function StatusPage() {
             accent="text-status-good"
             tint="bg-success-background-200"
           />
+          <SummaryTile
+            icon={Flag}
+            value={overgripande.length}
+            label={overgripande.length === 1 ? "övergripande fråga" : "övergripande frågor"}
+            accent="text-status-alert"
+            tint="bg-error-background-200"
+          />
         </div>
 
-        {/* ===== Frågor i två kolumner: öppna till vänster, besvarade till höger ===== */}
-        <div className="mt-32 grid grid-cols-1 items-start gap-24 lg:grid-cols-2">
+        {/* ===== Frågor i tre kolumner: öppna · besvarade · övergripande (utanför projektet) ===== */}
+        <div className="mt-32 grid grid-cols-1 items-start gap-24 lg:grid-cols-3">
         {/* ===== Öppna frågor ===== */}
         <section aria-labelledby="rubrik-oppna">
           <h2
@@ -291,6 +327,28 @@ export default function StatusPage() {
             <ul className="flex flex-col gap-16">
               {besvarade.map((q, i) => (
                 <BesvaradKort key={i} q={q} />
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* ===== Övergripande frågor (hanteras utanför projektet) ===== */}
+        <section aria-labelledby="rubrik-overgripande">
+          <h2
+            id="rubrik-overgripande"
+            className="mb-16 flex items-center gap-10 font-header text-h4 font-bold tracking-tight"
+          >
+            <span className="text-status-alert" aria-hidden="true">
+              <Flag size={18} strokeWidth={2.2} />
+            </span>
+            Övergripande frågor
+          </h2>
+          {overgripande.length === 0 ? (
+            <EmptyState>Inga övergripande frågor just nu.</EmptyState>
+          ) : (
+            <ul className="flex flex-col gap-16">
+              {overgripande.map((q, i) => (
+                <OvergripandeKort key={i} q={q} />
               ))}
             </ul>
           )}

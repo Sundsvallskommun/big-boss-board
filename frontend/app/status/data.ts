@@ -36,7 +36,7 @@ export interface Fraga {
 export const SENAST_UPPDATERAD = "2026-06-25";
 
 /** Nästa lediga id. Höj med 1 varje gång ett kort läggs till. Återanvänd aldrig. */
-export const NASTA_ID = 7;
+export const NASTA_ID = 8;
 
 /** Alla frågor. Öppna och besvarade visas i var sin sektion utifrån om `svar` finns. */
 export const FRAGOR: Fraga[] = [
@@ -94,6 +94,44 @@ export const FRAGOR: Fraga[] = [
     fraga: "Hur säkerställer vi att sjukfrånvaro-nyckeltalet dokumenteras korrekt?",
     bakgrund:
       "Sjukfrånvaron som nyckeltal behöver dokumenteras tydligare. Det finns brister i dagens hantering som leder till risker (bl.a. ofullständig och fördröjd statistik). Underlaget kompletteras framåt.",
+  },
+  {
+    id: 7,
+    fraga: "Hur hanteras månadsdata i Qlik-export?",
+    bakgrund:
+      "Hur hanteras månadsdata i den exportfil kring ekonomi som finns nu? Det verkar som att exportfilen som vi nu fått enbart är för maj, skapas det en ny fil per månad för ekonomidata och ser det likadant ut då för sjukfrånvaro?",
+  },
+];
+
+/** En övergripande/strategisk fråga som behöver hanteras UTANFÖR detta projekt
+ *  (koncern-/förvaltningsövergripande nivå). Visas i den röda kolumnen "Övergripande frågor".
+ *  Samma disciplin som frågorna: fylls manuellt, inga personuppgifter, ISO-datum.
+ *  Eget id-nummer (#N) inom kategorin; återanvänds aldrig. */
+export interface OvergripandeFraga {
+  id: number;
+  /** Rubrik för frågan. */
+  fraga: string;
+  /** Bakgrund/kontext. */
+  bakgrund: string;
+  /** Valfri fördjupning som kan flikas ut ("Visa mer"). En post per stycke. */
+  mer?: string[];
+}
+
+/** Övergripande/strategiska frågor (hanteras utanför projektet). Nästa lediga id = 2. */
+export const OVERGRIPANDE: OvergripandeFraga[] = [
+  {
+    id: 1,
+    fraga: "Upprättande av ett nyckeltalsbibliotek",
+    bakgrund:
+      "Under arbetet har det blivit mycket tydligt att många av de nyckeltal som används i " +
+      "uppföljning idag saknar dokumentation. Det gör det mycket svårt att förstå hur ett " +
+      "nyckeltal räknas ut.",
+    mer: [
+      "Koncernen behöver upprätta en form av nyckeltalsbibliotek där samtliga nyckeltal som " +
+        "används finns beskrivna i detalj rörande hur de räknas ut.",
+      "Syftet är transparens och öppenhet, att nyckeltalen går att reproducera i framtiden, och " +
+        "att vi inte skapar ett enormt beroende till nuvarande tekniska lösningar.",
+    ],
   },
 ];
 
