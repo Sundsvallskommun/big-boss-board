@@ -166,6 +166,148 @@ class AdminKpiUpsert(BaseModel):
     rader: list[AdminMeasurementIn]
 
 
+# ---- Ekonomi-import -------------------------------------------------------
+
+
+class EkonomiMatt(BaseModel):
+    """Ett resultaträkningsmått för en enhet (kolumnvärden i mnkr; null = saknas)."""
+
+    namn: str
+    budget_helar: float | None = None
+    budget_ack: float | None = None
+    utfall: float | None = None
+    utfall_fg: float | None = None
+    prognos: float | None = None
+
+
+class EkonomiOmrade(BaseModel):
+    """Nettokostnad nedbruten på ett verksamhetsområde (klartextnamn ofta okänt ännu)."""
+
+    omrade_kod: str | None = None
+    namn: str | None = None
+    utfall: float | None = None
+    budget_ack: float | None = None
+
+
+class EkonomiEnhet(BaseModel):
+    """En förvaltning: huvudmått (per mått_kod) + nettokostnad per område."""
+
+    kod: str
+    namn: str
+    niva: str = "förvaltning"
+    matt: dict[str, EkonomiMatt]
+    omrade: list[EkonomiOmrade] = []
+
+
+class EkonomiImport(BaseModel):
+    """Normaliserad importpayload för ekonomi (per förvaltning)."""
+
+    kpi: str = "ekonomi"
+    period: str = ""
+    kalla: str = ""
+    enheter: list[EkonomiEnhet]
+
+
+class EkonomiPost(BaseModel):
+    """En rad i den råa ekonomirapporten (long-format)."""
+
+    period: str | None = None
+    enhet_kod: str
+    enhet_namn: str
+    niva: str
+    matt_kod: str
+    matt_namn: str
+    matt_typ: str
+    omrade_kod: str | None = None
+    kolumn_kod: str
+    kolumn_namn: str
+    matvarde_mnkr: float | None = None
+
+
+class EkonomiRapport(BaseModel):
+    """Rå ekonomirapport som import-endpointen tar emot (normaliseras server-side)."""
+
+    dataset: dict | None = None
+    metadata: dict | None = None
+    poster: list[EkonomiPost]
+
+
+class EkonomiRad(BaseModel):
+    """En enhets utfall i importsvaret."""
+
+    namn: str
+    kod: str
+    value: str | None = None
+    status: str | None = None
+    atgard: str  # "skapad" | "uppdaterad" | "ingen_org_for_kod" | "ingen_dialog" | "ofullstandig"
+
+
+class EkonomiResultat(BaseModel):
+    """Sammanfattning av en ekonomi-import."""
+
+    skapade: int
+    uppdaterade: int
+    hoppade_over: int
+    enheter: list[EkonomiRad]
+
+
+# ---- Sjukfrånvaro-import (personal-CSV) -----------------------------------
+
+
+class SjukAldersgrupp(BaseModel):
+    """Sjukfrånvaro (% av ordinarie arbetstid) för en åldersgrupp."""
+
+    grupp: str
+    varde: float | None = None
+
+
+class SjukPunkt(BaseModel):
+    """Sjukfrånvaro en period: total %, kvinnors andel %, mäns andel % (för tidsserien)."""
+
+    period: str
+    total: float | None = None
+    kvinnor: float | None = None
+    man: float | None = None
+
+
+class SjukEnhet(BaseModel):
+    """En förvaltnings sjukfrånvaro: senaste periodens värden + tidsserie."""
+
+    kod: str
+    namn: str
+    period: str = ""
+    total: float | None = None
+    kvinnor: float | None = None
+    man: float | None = None
+    langtidsandel: float | None = None
+    aldersgrupper: list[SjukAldersgrupp] = []
+    serie: list[SjukPunkt] = []
+
+
+class SjukImport(BaseModel):
+    """Normaliserad importpayload för sjukfrånvaro (per förvaltning)."""
+
+    kpi: str = "sjukfranvaro"
+    period: str = ""
+    kalla: str = ""
+    enheter: list[SjukEnhet]
+
+
+class SjukRad(BaseModel):
+    namn: str
+    kod: str
+    value: str | None = None
+    status: str | None = None
+    atgard: str
+
+
+class SjukResultat(BaseModel):
+    skapade: int
+    uppdaterade: int
+    hoppade_over: int
+    enheter: list[SjukRad]
+
+
 class DialogueArea(BaseModel):
     """Ett område i en dialog: referensdata + mätvärde + aktiviteter.
 

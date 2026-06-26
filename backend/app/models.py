@@ -50,6 +50,9 @@ class Organisation(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     namn: Mapped[str] = mapped_column(String(200))
     slug: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    # Masterdata-organisationsid (kommunens katalog). Kanonisk nyckel som alla dataset
+    # kopplar mot. Nullable: enheter utanför masterdatan (t.ex. bolag) saknar kod.
+    kod: Mapped[str | None] = mapped_column(String(16), unique=True, index=True, nullable=True)
 
     dialogues: Mapped[list[Dialogue]] = relationship(back_populates="organisation")
 

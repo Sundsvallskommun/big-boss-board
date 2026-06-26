@@ -14,9 +14,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import SessionLocal
-from app.models import KpiArea, Question, SupportFunction, Tool
-from app.schemas import HmeImport
+from app.models import KpiArea, Organisation, Question, SupportFunction, Tool
+from app.schemas import EkonomiImport, HmeImport, SjukImport
+from app.services.ekonomi_import import csv_to_payload as ekonomi_csv_to_payload
+from app.services.ekonomi_import import import_ekonomi
+from app.services.ekonomi_import import report_to_payload as ekonomi_report_to_payload
 from app.services.hme_import import import_hme, report_to_payload
+from app.services.sjukfranvaro_import import csv_to_payload as sjuk_csv_to_payload
+from app.services.sjukfranvaro_import import import_sjukfranvaro
 
 # Stödfunktioner + verktygslåda (key, namn, ikon, [verktyg]).
 SUPPORT_FUNCTIONS: list[tuple[str, str, str, list[str]]] = [
@@ -112,6 +117,29 @@ KPI_AREAS: list[dict] = [
 # git och monteras lokalt/vid deploy; i drift uppdateras HME istället via /api/import/hme.
 HME_REPORT_PATH = Path(__file__).resolve().parent / "data" / "hme_totalindex.json"
 
+# Ekonomirapporten (resultaträkning per förvaltning) levereras utanför git, samma väg som HME.
+# Qlik-exporten är CSV framåt; JSON stöds som tidigare format. CSV prioriteras om båda finns.
+EKONOMI_CSV_PATH = Path(__file__).resolve().parent / "data" / "ekonomi.csv"
+EKONOMI_REPORT_PATH = Path(__file__).resolve().parent / "data" / "ekonomi.json"
+
+# Sjukfrånvaro (personal-CSV från Qlik) — levereras utanför git, samma väg.
+SJUK_CSV_PATH = Path(__file__).resolve().parent / "data" / "sjukfranvaro.csv"
+
+# Masterdata-organisationsid → org-slug (de slugar HME redan skapat). Sätter Organisation.kod
+# så att ekonomi (och framtida dataset) kan kopplas på koden. Räddningstjänsten/Stadsbacken
+# saknas i masterdatan här och får därför ingen kod ännu.
+KOD_TILL_SLUG: dict[str, str] = {
+    "24": "barn-och-utbildningsforvaltning",
+    "23": "vard-och-omsorgsforvaltningen",
+    "31": "individ-och-arbetsmarknadsforvaltning",
+    "28": "kommunstyrelsekontoret",
+    "30": "kultur-och-fritid",
+    "26": "stadsbyggnadskontoret",
+    "25": "miljokontoret",
+    "29": "overformyndarkontoret",
+    "27": "lantmaterikontoret",
+}
+
 
 async def _get_or_create(session: AsyncSession, model, defaults: dict | None = None, **filters):
     """Hämta rad på filters eller skapa den. Returnerar (objekt, skapad?)."""
@@ -164,20 +192,59 @@ async def seed(session: AsyncSession) -> None:
     # importeras förvaltningsdialogerna via samma väg som /api/import/hme. Saknas den
     # kör appen vidare med enbart referensdata (väljaren visar tomt läge) — i drift
     # fylls HME på via import-endpointen.
-    if not HME_REPORT_PATH.exists():
+    if HME_REPORT_PATH.exists():
+        report = json.loads(HME_REPORT_PATH.read_text(encoding="utf-8"))
+        payload = HmeImport(**report_to_payload(report))
+        resultat = await import_hme(session, payload)
         print(
-            f"[seed] {HME_REPORT_PATH.name} saknas — hoppar över förvaltningsdialoger "
-            "(endast referensdata). Importera HME via /api/import/hme."
+            f"[seed] HME importerad ur {HME_REPORT_PATH.name}: "
+            f"{resultat['skapade']} skapade, {resultat['uppdaterade']} uppdaterade."
         )
-        return
+    else:
+        print(
+            f"[seed] {HME_REPORT_PATH.name} saknas — hoppar över HME-import "
+            "(importera via /api/import/hme)."
+        )
 
-    report = json.loads(HME_REPORT_PATH.read_text(encoding="utf-8"))
-    payload = HmeImport(**report_to_payload(report))
-    resultat = await import_hme(session, payload)
-    print(
-        f"[seed] HME importerad ur {HME_REPORT_PATH.name}: "
-        f"{resultat['skapade']} skapade, {resultat['uppdaterade']} uppdaterade."
-    )
+    # Sätt masterdata-kod på förvaltningsorganisationerna (kanonisk nyckel som dataset kopplar mot).
+    # Körs alltid (även utan HME-fil) så att redan seedade orgs får sin kod och ekonomi kan kopplas.
+    for kod, slug in KOD_TILL_SLUG.items():
+        org = (await session.execute(select(Organisation).filter_by(slug=slug))).scalar_one_or_none()
+        if org is not None and org.kod != kod:
+            org.kod = kod
+    await session.commit()
+
+    # Ekonomirapporten levereras utanför git (samma som HME). Finns den importeras ekonomidata
+    # per förvaltning via samma väg som /api/import/ekonomi (matchar på masterdata-koden).
+    ek = kalla = None
+    if EKONOMI_CSV_PATH.exists():
+        text = EKONOMI_CSV_PATH.read_text(encoding="utf-8-sig")
+        ek = await import_ekonomi(session, EkonomiImport(**ekonomi_csv_to_payload(text)))
+        kalla = EKONOMI_CSV_PATH.name
+    elif EKONOMI_REPORT_PATH.exists():
+        rapport = json.loads(EKONOMI_REPORT_PATH.read_text(encoding="utf-8"))
+        ek = await import_ekonomi(session, EkonomiImport(**ekonomi_report_to_payload(rapport)))
+        kalla = EKONOMI_REPORT_PATH.name
+
+    if ek is not None:
+        print(
+            f"[seed] Ekonomi importerad ur {kalla}: "
+            f"{ek['skapade']} skapade, {ek['uppdaterade']} uppdaterade, {ek['hoppade_over']} hoppade över."
+        )
+    else:
+        print("[seed] ingen ekonomifil (ekonomi.csv/ekonomi.json) — hoppar över ekonomidata.")
+
+    # Sjukfrånvaro (personal-CSV). Finns den importeras den per förvaltning (matchar på kod).
+    if SJUK_CSV_PATH.exists():
+        sj = await import_sjukfranvaro(
+            session, SjukImport(**sjuk_csv_to_payload(SJUK_CSV_PATH.read_text(encoding="utf-8-sig")))
+        )
+        print(
+            f"[seed] Sjukfrånvaro importerad ur {SJUK_CSV_PATH.name}: "
+            f"{sj['skapade']} skapade, {sj['uppdaterade']} uppdaterade, {sj['hoppade_over']} hoppade över."
+        )
+    else:
+        print(f"[seed] {SJUK_CSV_PATH.name} saknas — hoppar över sjukfrånvarodata.")
 
 
 async def main() -> None:
