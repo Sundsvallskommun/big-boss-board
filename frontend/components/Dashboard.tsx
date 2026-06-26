@@ -162,14 +162,8 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
           </div>
         </section>
 
-        {/* ===== KPI-strip ===== */}
-        <div className="mb-12 flex items-end justify-between gap-12">
-          <div>
-            <h2 className="font-header text-h3 font-bold tracking-tight">Ansvarsområden</h2>
-            <p className="mt-2 text-small text-dark-secondary">
-              Välj ett område för att öppna dialogen.
-            </p>
-          </div>
+        {/* ===== KPI-strip: statuslegend (rubrik borttagen — sektioner saknar rubriker) ===== */}
+        <div className="mb-12 flex items-end justify-end gap-12">
           <div className="hidden items-center gap-16 pb-4 md:flex">
             {(["good", "warn", "alert"] as const).map((st) => (
               <span key={st} className="eyebrow-sm flex items-center gap-6">
