@@ -30,6 +30,10 @@ export interface Fraga {
   /** Längre fördjupning som kan flikas ut på kortet ("Visa mer"). En post per stycke.
    *  Sammanfattningen (bakgrund/svar) visas alltid — det här är detaljerna under den. */
   mer?: string[];
+  /** Förslag till beslut: en rekommendation som väntar på beslut. Frågan är fortfarande
+   *  ÖPPEN (ersätter inte `svar`) men visas med en egen ruta i kortet och en indikator i
+   *  översikten. Ett `svar` (beslut) sätts först på uttrycklig begäran. */
+  forslag?: string;
 }
 
 /** Senast uppdaterad (visas i topbaren). Sätt manuellt vid ändring. Tom = visas ej. */
@@ -65,6 +69,12 @@ export const FRAGOR: Fraga[] = [
     fraga: "Hur löser vi inläsning av HME-data rent tekniskt?",
     bakgrund:
       "HME-data har vi idag i excelformat, denna skulle vi behöva kunna läsa in på lämplig plats för att senare använda för att läsa in data till nyckeltalet.",
+    forslag:
+      "Att använda oss av data från officiell rapport för HME från 2025. Att vi inte använder " +
+      "rådata för att räkna ut nyckeltal. Detta förslag bygger på att vi idag inte lyckats få fram " +
+      "en beskrivning av hur HME-värdena räknas ut på förvaltningsnivå, t.ex. hur värden viktas för " +
+      "att få ett slutresultat. En annan fördel med att använda rapportens aggregerade och " +
+      "sammanställda data är att vi då får med historik direkt till 2017.",
   },
   {
     id: 4,
@@ -94,6 +104,10 @@ export const FRAGOR: Fraga[] = [
     fraga: "Hur säkerställer vi att sjukfrånvaro-nyckeltalet dokumenteras korrekt?",
     bakgrund:
       "Sjukfrånvaron som nyckeltal behöver dokumenteras tydligare. Det finns brister i dagens hantering som leder till risker (bl.a. ofullständig och fördröjd statistik). Underlaget kompletteras framåt.",
+    forslag:
+      "Kommunkoncernen föreslås upprätta ett koncerngemensamt nyckeltalsbibliotek med alla " +
+      "algoritmer/beräkningar dokumenterade, så att man kan reproducera nyckeltal utifrån rådata " +
+      "fritt och inte kräva ett visst system.",
   },
   {
     id: 7,

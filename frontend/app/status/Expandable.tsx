@@ -12,6 +12,20 @@ export function Expandable({ paragraphs }: { paragraphs: string[] }) {
 
   return (
     <div className="mt-12">
+      {/* Texten ligger FÖRE knappen så att länken hamnar längst ned när den är utfälld.
+          Växla display via klass — INTE `hidden`-attributet: en `flex`-utility skulle
+          annars överstyra `[hidden]{display:none}` och texten visas alltid. */}
+      <div
+        id={regionId}
+        className={open ? "mb-10 flex flex-col gap-8" : "hidden"}
+      >
+        {paragraphs.map((p, i) => (
+          <p key={i} className="text-small leading-relaxed text-dark-secondary">
+            {p}
+          </p>
+        ))}
+      </div>
+
       <button
         type="button"
         aria-expanded={open}
@@ -27,19 +41,6 @@ export function Expandable({ paragraphs }: { paragraphs: string[] }) {
         />
         {open ? "Visa mindre" : "Visa mer"}
       </button>
-
-      {/* Växla display via klass — INTE `hidden`-attributet: en `flex`-utility skulle
-          annars överstyra `[hidden]{display:none}` och texten visas alltid. */}
-      <div
-        id={regionId}
-        className={open ? "mt-10 flex flex-col gap-8" : "hidden"}
-      >
-        {paragraphs.map((p, i) => (
-          <p key={i} className="text-small leading-relaxed text-dark-secondary">
-            {p}
-          </p>
-        ))}
-      </div>
     </div>
   );
 }

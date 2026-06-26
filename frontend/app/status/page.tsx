@@ -6,6 +6,7 @@ import {
   MessageSquareReply,
   FileText,
   Flag,
+  Lightbulb,
   type LucideIcon,
 } from "lucide-react";
 import { StatusHeader } from "./StatusHeader";
@@ -96,6 +97,12 @@ function OppenKort({ q }: { q: Fraga }) {
             <HelpCircle size={12} aria-hidden="true" />
             Väntar på svar
           </span>
+          {q.forslag && (
+            <span className="eyebrow-sm inline-flex items-center gap-6 rounded-full bg-vattjom-background-100 px-10 py-4 text-vattjom-text-primary">
+              <Lightbulb size={12} aria-hidden="true" />
+              Förslag till beslut
+            </span>
+          )}
         </div>
         <h3 className="mt-12 font-header text-large font-bold leading-snug tracking-tight">
           {q.fraga}
@@ -105,6 +112,18 @@ function OppenKort({ q }: { q: Fraga }) {
             {q.bakgrund}
           </p>
         )}
+
+        {/* Förslag till beslut — egen ruta (frågan är fortfarande öppen tills beslut fattas). */}
+        {q.forslag && (
+          <div className="mt-16 rounded-12 border border-hairline bg-vattjom-background-100 p-16">
+            <p className="eyebrow-sm flex items-center gap-6 text-vattjom-text-primary">
+              <Lightbulb size={13} aria-hidden="true" />
+              Förslag till beslut
+            </p>
+            <p className="mt-8 text-small leading-relaxed text-dark-primary">{q.forslag}</p>
+          </div>
+        )}
+
         {q.mer && <Expandable paragraphs={q.mer} />}
       </div>
     </li>
