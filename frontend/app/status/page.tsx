@@ -86,6 +86,29 @@ function IdBricka({ id }: { id: number }) {
   );
 }
 
+/** Indikator-pill i kortets översikt: "Förslag till beslut finns". */
+function ForslagPill() {
+  return (
+    <span className="eyebrow-sm inline-flex items-center gap-6 rounded-full bg-vattjom-background-100 px-10 py-4 text-vattjom-text-primary">
+      <Lightbulb size={12} aria-hidden="true" />
+      Förslag till beslut
+    </span>
+  );
+}
+
+/** Egen ruta i kortet med själva förslaget till beslut (frågan förblir öppen). */
+function ForslagRuta({ text }: { text: string }) {
+  return (
+    <div className="mt-16 rounded-12 border border-hairline bg-vattjom-background-100 p-16">
+      <p className="eyebrow-sm flex items-center gap-6 text-vattjom-text-primary">
+        <Lightbulb size={13} aria-hidden="true" />
+        Förslag till beslut
+      </p>
+      <p className="mt-8 text-small leading-relaxed text-dark-primary">{text}</p>
+    </div>
+  );
+}
+
 /** Öppen fråga: gul accent, väntar på svar. */
 function OppenKort({ q }: { q: Fraga }) {
   return (
@@ -97,12 +120,7 @@ function OppenKort({ q }: { q: Fraga }) {
             <HelpCircle size={12} aria-hidden="true" />
             Väntar på svar
           </span>
-          {q.forslag && (
-            <span className="eyebrow-sm inline-flex items-center gap-6 rounded-full bg-vattjom-background-100 px-10 py-4 text-vattjom-text-primary">
-              <Lightbulb size={12} aria-hidden="true" />
-              Förslag till beslut
-            </span>
-          )}
+          {q.forslag && <ForslagPill />}
         </div>
         <h3 className="mt-12 font-header text-large font-bold leading-snug tracking-tight">
           {q.fraga}
@@ -114,15 +132,7 @@ function OppenKort({ q }: { q: Fraga }) {
         )}
 
         {/* Förslag till beslut — egen ruta (frågan är fortfarande öppen tills beslut fattas). */}
-        {q.forslag && (
-          <div className="mt-16 rounded-12 border border-hairline bg-vattjom-background-100 p-16">
-            <p className="eyebrow-sm flex items-center gap-6 text-vattjom-text-primary">
-              <Lightbulb size={13} aria-hidden="true" />
-              Förslag till beslut
-            </p>
-            <p className="mt-8 text-small leading-relaxed text-dark-primary">{q.forslag}</p>
-          </div>
-        )}
+        {q.forslag && <ForslagRuta text={q.forslag} />}
 
         {q.mer && <Expandable paragraphs={q.mer} />}
       </div>
@@ -190,6 +200,7 @@ function OvergripandeKort({ q }: { q: OvergripandeFraga }) {
             <Flag size={12} aria-hidden="true" />
             Utanför projektet
           </span>
+          {q.forslag && <ForslagPill />}
         </div>
         <h3 className="mt-12 font-header text-large font-bold leading-snug tracking-tight">
           {q.fraga}
@@ -197,6 +208,7 @@ function OvergripandeKort({ q }: { q: OvergripandeFraga }) {
         {q.bakgrund && (
           <p className="mt-8 text-small leading-relaxed text-dark-secondary">{q.bakgrund}</p>
         )}
+        {q.forslag && <ForslagRuta text={q.forslag} />}
         {q.mer && <Expandable paragraphs={q.mer} />}
       </div>
     </li>

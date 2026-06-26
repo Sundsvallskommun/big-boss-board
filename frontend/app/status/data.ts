@@ -37,10 +37,11 @@ export interface Fraga {
 }
 
 /** Senast uppdaterad (visas i topbaren). Sätt manuellt vid ändring. Tom = visas ej. */
-export const SENAST_UPPDATERAD = "2026-06-25";
+export const SENAST_UPPDATERAD = "2026-06-26";
 
-/** Nästa lediga id. Höj med 1 varje gång ett kort läggs till. Återanvänd aldrig. */
-export const NASTA_ID = 8;
+/** Nästa lediga id — GLOBALT över alla kort (FRAGOR + OVERGRIPANDE), så att varje kort
+ *  har ett unikt #N. Höj med 1 varje gång ett kort läggs till, oavsett lista. Återanvänd aldrig. */
+export const NASTA_ID = 9;
 
 /** Alla frågor. Öppna och besvarade visas i var sin sektion utifrån om `svar` finns. */
 export const FRAGOR: Fraga[] = [
@@ -120,32 +121,33 @@ export const FRAGOR: Fraga[] = [
 /** En övergripande/strategisk fråga som behöver hanteras UTANFÖR detta projekt
  *  (koncern-/förvaltningsövergripande nivå). Visas i den röda kolumnen "Övergripande frågor".
  *  Samma disciplin som frågorna: fylls manuellt, inga personuppgifter, ISO-datum.
- *  Eget id-nummer (#N) inom kategorin; återanvänds aldrig. */
+ *  `id` delar nummerserie med FRAGOR (globalt unika kort, se NASTA_ID). */
 export interface OvergripandeFraga {
   id: number;
   /** Rubrik för frågan. */
   fraga: string;
   /** Bakgrund/kontext. */
   bakgrund: string;
+  /** Förslag till beslut — visas som egen ruta + indikator-pill (samma som FRAGOR). */
+  forslag?: string;
   /** Valfri fördjupning som kan flikas ut ("Visa mer"). En post per stycke. */
   mer?: string[];
 }
 
-/** Övergripande/strategiska frågor (hanteras utanför projektet). Nästa lediga id = 2. */
+/** Övergripande/strategiska frågor (hanteras utanför projektet). Delar id-serie med FRAGOR. */
 export const OVERGRIPANDE: OvergripandeFraga[] = [
   {
-    id: 1,
+    id: 8,
     fraga: "Upprättande av ett nyckeltalsbibliotek",
     bakgrund:
       "Under arbetet har det blivit mycket tydligt att många av de nyckeltal som används i " +
       "uppföljning idag saknar dokumentation. Det gör det mycket svårt att förstå hur ett " +
       "nyckeltal räknas ut.",
-    mer: [
+    forslag:
       "Koncernen behöver upprätta en form av nyckeltalsbibliotek där samtliga nyckeltal som " +
-        "används finns beskrivna i detalj rörande hur de räknas ut.",
-      "Syftet är transparens och öppenhet, att nyckeltalen går att reproducera i framtiden, och " +
-        "att vi inte skapar ett enormt beroende till nuvarande tekniska lösningar.",
-    ],
+      "används finns beskrivna i detalj rörande hur de räknas ut. Syftet är transparens och " +
+      "öppenhet, att nyckeltalen går att reproducera i framtiden, och att vi inte skapar ett " +
+      "enormt beroende till nuvarande tekniska lösningar.",
   },
 ];
 
@@ -166,6 +168,28 @@ export interface Statusrapport {
 
 /** Statusrapporter, senaste datum först (sorteras i vyn). */
 export const STATUSRAPPORTER: Statusrapport[] = [
+  {
+    datum: "2026-06-26",
+    rubrik: "Lägesrapport vecka 26 — prototypen redo för test",
+    text:
+      "En intensiv vecka där de stora tekniska delarna kommit på plats. Prototypen är nu så " +
+      "färdig den kan bli inför användartester och kvalitetskontroll av data — tekniken är i " +
+      "stort sett klar inför första styrgruppsmötet. Nästa steg är att låta ansvarig chef och " +
+      "styrgruppen testa och ge feedback, varpå vi gör en ändringsloop utifrån det. Nästa vecka " +
+      "planerar vi arbetet med att produktionssätta lösningen parallellt med sluttester och " +
+      "verifiering av data.",
+    punkter: [
+      "HME: riktig anonymiserad data per förvaltning ur officiella totalindex-rapporten — historik från 2017 och verklig trend, med förvaltningsväljare.",
+      "Ekonomi: nettokostnad mot budget med kombinationsdiagram (budget, utfall, prognos).",
+      "Sjukfrånvaro: total sjukfrånvaro med köns- och åldersfördelning samt tröskelvärden som styr färg (grön/gul/röd).",
+      "Datainläsning: token-skyddade import-API:er och admin-GUI med inläsningslogg — HME (JSON) samt ekonomi och sjukfrånvaro via Qlik-CSV. Förvaltningar kopplas via masterdata-id.",
+      "Dialogen: aktiviteter och åtgärder ersätter överenskommelser; omarbetad dashboard och dialogpanel.",
+      "Status-sidan: frågor & beslut, förslag till beslut, övergripande koncernfrågor och en kolumn för löpande lägesrapporter.",
+      "Beslut: endast förvaltningsnivå visas för HME (#1); Kommunikativt ledarskap kan inte ingå i första versionen (#2).",
+      "Nya förslag till beslut: utgå från officiella HME-rapporten i stället för rådata (#3) och upprätta ett koncerngemensamt nyckeltalsbibliotek (#6/#8).",
+      "Öppna punkter: källa och metod för sjukfrånvaro och ekonomi (#4), HME-källa (#5) samt hur Qlik hanterar månadsdata (#7).",
+    ],
+  },
   {
     datum: "2026-06-25",
     rubrik: "Statusrapportering införd",
