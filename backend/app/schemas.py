@@ -117,6 +117,97 @@ class SubmissionUpdate(BaseModel):
     notering: str | None = None
 
 
+# ---- Status-sidans kort (Fas B: frågor + statusrapporter i DB) -----------
+
+
+class StatusFragaOut(ORMModel):
+    id: int
+    nummer: int
+    kategori: str
+    fraga: str
+    bakgrund: str | None = None
+    svar: str | None = None
+    forum: str | None = None
+    datum: str | None = None
+    forslag: str | None = None
+    mer: list[str] | None = None
+    ordning: int
+    publicerad: bool
+    submission_id: int | None = None
+    skapad_at: datetime
+    uppdaterad_at: datetime | None = None
+    publicerad_at: datetime | None = None
+
+
+class StatusrapportOut(ORMModel):
+    id: int
+    datum: str
+    rubrik: str
+    text: str
+    punkter: list[str] | None = None
+    ordning: int
+    publicerad: bool
+    skapad_at: datetime
+    uppdaterad_at: datetime | None = None
+
+
+class StatusContentOut(BaseModel):
+    """Publikt status-innehåll: publicerade frågor + statusrapporter i ett anrop."""
+
+    fragor: list[StatusFragaOut]
+    rapporter: list[StatusrapportOut]
+
+
+class StatusFragaCreate(BaseModel):
+    """Skapa ett frågekort (kurerat, ev. ur en inkorgs-submission)."""
+
+    kategori: str = "fraga"  # "fraga" | "overgripande"
+    fraga: str
+    bakgrund: str | None = None
+    svar: str | None = None
+    forum: str | None = None
+    datum: str | None = None
+    forslag: str | None = None
+    mer: list[str] | None = None
+    ordning: int = 0
+    publicerad: bool = True
+    # Härkomst: markerar den submissionen som "publicerad" vid skapande.
+    submission_id: int | None = None
+
+
+class StatusFragaUpdate(BaseModel):
+    """PATCH: endast angivna fält ändras. Sätt `svar` → kortet blir besvarat."""
+
+    kategori: str | None = None
+    fraga: str | None = None
+    bakgrund: str | None = None
+    svar: str | None = None
+    forum: str | None = None
+    datum: str | None = None
+    forslag: str | None = None
+    mer: list[str] | None = None
+    ordning: int | None = None
+    publicerad: bool | None = None
+
+
+class StatusrapportCreate(BaseModel):
+    datum: str
+    rubrik: str
+    text: str
+    punkter: list[str] | None = None
+    ordning: int = 0
+    publicerad: bool = True
+
+
+class StatusrapportUpdate(BaseModel):
+    datum: str | None = None
+    rubrik: str | None = None
+    text: str | None = None
+    punkter: list[str] | None = None
+    ordning: int | None = None
+    publicerad: bool | None = None
+
+
 # ---- Dataimport ----------------------------------------------------------
 
 

@@ -229,6 +229,50 @@ export async function getDialogue(id: number): Promise<DialogueDetail> {
   return res.json();
 }
 
+/** Status-sidans kurerade kort (Fas B — flyttade från hårdkodad data.ts till DB). */
+export interface StatusFraga {
+  id: number;
+  /** Publikt referensnummer "#N". */
+  nummer: number;
+  /** "fraga" = öppen/besvarad | "overgripande" = hanteras utanför projektet. */
+  kategori: string;
+  fraga: string;
+  bakgrund: string | null;
+  /** Finns svar → kortet visas som besvarat. */
+  svar: string | null;
+  forum: string | null;
+  datum: string | null;
+  forslag: string | null;
+  mer: string[] | null;
+  ordning: number;
+  publicerad: boolean;
+  submission_id: number | null;
+}
+
+export interface Statusrapport {
+  id: number;
+  datum: string;
+  rubrik: string;
+  text: string;
+  punkter: string[] | null;
+  ordning: number;
+  publicerad: boolean;
+}
+
+export interface StatusContent {
+  fragor: StatusFraga[];
+  rapporter: Statusrapport[];
+}
+
+/** Publicerat status-innehåll (frågor + statusrapporter) i ett anrop. */
+export async function listStatusContent(): Promise<StatusContent> {
+  const res = await fetch(`${apiBase()}/api/status-cards`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Kunde inte hämta statusinnehåll (HTTP ${res.status}).`);
+  }
+  return res.json();
+}
+
 /** Lägg till en aktivitet i ett område (anropas i webbläsaren via proxyn). */
 export async function createActivity(
   dialogueId: number,

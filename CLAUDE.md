@@ -88,9 +88,32 @@ publicerar manuellt.
   + intern `notering`). CLI: `IMPORT_TOKEN=… python3 scripts/read_inbox.py --url <bas-url>`.
 - Logik i `app/services/submissions.py`; modell i `models.py`; migration
   `6f4a1b2c8d05_submission_inkorg.py`.
-- **Ej gjort ännu:** status-sidans publika kolumner ligger fortfarande hårdkodade i
-  `frontend/app/status/data.ts`. Planerad Fas B: flytta status-innehållet till DB med
-  publiceringsväg, så triage → publicering blir helt datadrivet.
+
+## Status-sidan: datadriven (Fas B)
+
+Status-sidans kort bor i **databasen** (inte längre hårdkodade — `data.ts` är borttagen).
+Två tabeller: `status_fraga` (öppna/besvarade + övergripande frågor; öppen vs besvarad
+**härleds** av om `svar` finns, `kategori` skiljer vanlig/övergripande) och `statusrapport`.
+Modeller i `models.py`, migration `7a2b3c4d5e06_status_content.py`, logik i
+`app/services/status_content.py`.
+
+- **Publikt läs:** `GET /api/status-cards` → `{fragor, rapporter}` (endast `publicerad=True`).
+  `frontend/app/status/page.tsx` (server-komponent, `force-dynamic`) hämtar via
+  `lib/api.ts listStatusContent()`.
+- **Token-skyddat skriv** (samma `IMPORT_TOKEN`, i `routers/admin.py`):
+  `POST/PATCH/DELETE /api/admin/status-cards` och `POST/PATCH /api/admin/status-rapporter`,
+  samt `GET /api/admin/status-cards` (inkl. opublicerade utkast). Server sätter `nummer`
+  (publikt "#N", max+1, återanvänds aldrig). Anges `submission_id` vid skapande markeras
+  den inkorgsposten `publicerad`. Sätt `svar` → kortet flyttas till besvarade.
+- **Inkorg i GUI:t:** status-sidan visar en **admin-only** inkorg-sektion (via `isAdmin()`
+  + server-only `lib/admin-api.ts listSubmissionsAdmin()`). Vanlig access-kod ser den inte;
+  råa inlämningar publiceras aldrig automatiskt.
+- **Publiceringsväg:** läs inkorgen via API lokalt → `POST /api/admin/status-cards` med
+  `submission_id` → kortet hamnar i rätt kolumn och submissionen markeras publicerad.
+- **Bootstrap:** startinnehållet (de tidigare `data.ts`-korten) seedas **en gång** i
+  `seed.py` (bara om tabellen är tom), så senare API-redigeringar inte återuppstår.
+- **Ännu ej byggt:** inget webb-GUI för triage (sker via API/Claude Code); statuskort
+  saknar ändringshistorik (`uppdaterad_at` räcker).
 
 ## Ekonomi: månadsserie (hela året)
 

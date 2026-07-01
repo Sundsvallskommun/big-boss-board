@@ -223,3 +223,66 @@ class Submission(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     uppdaterad_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class StatusFraga(Base):
+    """Kurerat frågekort på status-sidan (Fas B — flyttat från hårdkodad frontend-fil).
+
+    Motsvarar `Fraga`/`OvergripandeFraga` i den gamla `data.ts`. Öppen vs besvarad
+    HÄRLEDS av om `svar` finns; `kategori` skiljer vanlig fråga från övergripande.
+    Skapas/redigeras via token-skyddat admin-API och publiceras manuellt (`publicerad`
+    styr om kortet syns publikt). `submission_id` bär härkomsten från inkorgen.
+    Endast öppen och publik information (dataregeln gäller).
+    """
+
+    __tablename__ = "status_fraga"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Publikt referensnummer "#N" — globalt unikt, återanvänds aldrig (server sätter max+1).
+    nummer: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    # "fraga" = vanlig fråga (öppen/besvarad) | "overgripande" = hanteras utanför projektet.
+    kategori: Mapped[str] = mapped_column(String(32), default="fraga", server_default="fraga")
+    fraga: Mapped[str] = mapped_column(Text)
+    bakgrund: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Svaret/beslutet. Finns det → kortet visas som besvarat.
+    svar: Mapped[str | None] = mapped_column(Text, nullable=True)
+    forum: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # ISO-datum (YYYY-MM-DD) som fritext — frontend formaterar (undviker tidszon vid SSR).
+    datum: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    forslag: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Längre fördjupning ("Visa mer"), en post per stycke.
+    mer: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    ordning: Mapped[int] = mapped_column(Integer, default=0)
+    publicerad: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", index=True
+    )
+    submission_id: Mapped[int | None] = mapped_column(
+        ForeignKey("submission.id"), nullable=True
+    )
+    skapad_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    uppdaterad_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    publicerad_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Statusrapport(Base):
+    """Daterad lägesrapport på status-sidan (Fas B — flyttad från hårdkodad frontend-fil)."""
+
+    __tablename__ = "statusrapport"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # ISO-datum (YYYY-MM-DD) som fritext, se StatusFraga.datum.
+    datum: Mapped[str] = mapped_column(String(32))
+    rubrik: Mapped[str] = mapped_column(String(300))
+    text: Mapped[str] = mapped_column(Text)
+    # Valfria punkter (en post per rad).
+    punkter: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    ordning: Mapped[int] = mapped_column(Integer, default=0)
+    publicerad: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", index=True
+    )
+    skapad_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    uppdaterad_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

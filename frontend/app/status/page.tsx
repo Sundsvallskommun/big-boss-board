@@ -9,19 +9,18 @@ import {
   FileText,
   Flag,
   Lightbulb,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 import { StatusHeader } from "./StatusHeader";
 import { Expandable } from "./Expandable";
 import {
-  FRAGOR,
-  OVERGRIPANDE,
-  STATUSRAPPORTER,
-  SENAST_UPPDATERAD,
-  type Fraga,
-  type OvergripandeFraga,
+  listStatusContent,
+  type StatusFraga,
   type Statusrapport,
-} from "./data";
+} from "@/lib/api";
+import { isAdmin } from "@/lib/auth";
+import { listSubmissionsAdmin, type Submission } from "@/lib/admin-api";
 
 export const metadata: Metadata = {
   title: "Frågor och beslut",
@@ -29,6 +28,9 @@ export const metadata: Metadata = {
   // Inte avsedd för indexering — nås via manuell URL.
   robots: { index: false, follow: false },
 };
+
+// Läser cookies (admin-inkorg) och färsk DB-data → aldrig statisk.
+export const dynamic = "force-dynamic";
 
 const MANADER = [
   "jan", "feb", "mar", "apr", "maj", "jun",
@@ -112,12 +114,12 @@ function ForslagRuta({ text }: { text: string }) {
 }
 
 /** Öppen fråga: gul accent, väntar på svar. */
-function OppenKort({ q }: { q: Fraga }) {
+function OppenKort({ q }: { q: StatusFraga }) {
   return (
     <li className="overflow-hidden rounded-12 border border-hairline border-l-[6px] border-l-status-warn bg-background-content">
       <div className="p-20">
         <div className="flex flex-wrap items-center gap-x-12 gap-y-6">
-          <IdBricka id={q.id} />
+          <IdBricka id={q.nummer} />
           <span className="eyebrow-sm inline-flex items-center gap-6 rounded-full bg-warning-background-100 px-10 py-4 text-warning-text">
             <HelpCircle size={12} aria-hidden="true" />
             Väntar på svar
@@ -143,12 +145,12 @@ function OppenKort({ q }: { q: Fraga }) {
 }
 
 /** Besvarad fråga: grön accent, fråga + tydligt svarsblock. */
-function BesvaradKort({ q }: { q: Fraga }) {
+function BesvaradKort({ q }: { q: StatusFraga }) {
   return (
     <li className="overflow-hidden rounded-12 border border-hairline border-l-[6px] border-l-status-good bg-background-content">
       <div className="p-20">
         <div className="flex flex-wrap items-center gap-x-12 gap-y-6">
-          <IdBricka id={q.id} />
+          <IdBricka id={q.nummer} />
           <span className="eyebrow-sm inline-flex items-center gap-6 rounded-full bg-success-background-200 px-10 py-4 text-success-text">
             <CheckCircle2 size={12} aria-hidden="true" />
             Besvarad
@@ -192,12 +194,12 @@ function BesvaradKort({ q }: { q: Fraga }) {
 }
 
 /** Övergripande/strategisk fråga: röd accent, hanteras utanför projektet. */
-function OvergripandeKort({ q }: { q: OvergripandeFraga }) {
+function OvergripandeKort({ q }: { q: StatusFraga }) {
   return (
     <li className="overflow-hidden rounded-12 border border-hairline border-l-[6px] border-l-status-alert bg-background-content">
       <div className="p-20">
         <div className="flex flex-wrap items-center gap-x-12 gap-y-6">
-          <IdBricka id={q.id} />
+          <IdBricka id={q.nummer} />
           <span className="eyebrow-sm inline-flex items-center gap-6 rounded-full bg-error-background-200 px-10 py-4 text-error-text">
             <Flag size={12} aria-hidden="true" />
             Utanför projektet
@@ -258,6 +260,38 @@ function StatusrapportKort({ r, senaste }: { r: Statusrapport; senaste: boolean 
   );
 }
 
+/** Färg/etikett per triage-status för en inkorgspost. */
+const INKORG_STATUS: Record<string, { label: string; klass: string }> = {
+  ny: { label: "Ny", klass: "bg-warning-background-100 text-warning-text" },
+  granskad: { label: "Granskad", klass: "bg-vattjom-background-100 text-vattjom-text-primary" },
+  publicerad: { label: "Publicerad", klass: "bg-success-background-200 text-success-text" },
+  arkiverad: { label: "Arkiverad", klass: "bg-background-200 text-dark-secondary" },
+};
+
+/** Läsbart inkorgskort (endast admin): rå inlämning + triage-status. Redigeras via API. */
+function InkorgKort({ s }: { s: Submission }) {
+  const st = INKORG_STATUS[s.status] ?? INKORG_STATUS.ny;
+  return (
+    <li className="overflow-hidden rounded-12 border border-hairline border-l-[6px] border-l-divider bg-background-content">
+      <div className="p-20">
+        <div className="flex flex-wrap items-center gap-x-12 gap-y-6">
+          <IdBricka id={s.id} />
+          <span className={`eyebrow-sm inline-flex items-center gap-6 rounded-full px-10 py-4 ${st.klass}`}>
+            {st.label}
+          </span>
+          <span className="eyebrow-sm inline-flex items-center gap-4">
+            <CalendarDays size={12} aria-hidden="true" />
+            <time dateTime={s.skapad_at}>{visaDatum(s.skapad_at.slice(0, 10))}</time>
+          </span>
+        </div>
+        <p className="mt-12 whitespace-pre-wrap text-small leading-relaxed text-dark-primary">
+          {s.text}
+        </p>
+      </div>
+    </li>
+  );
+}
+
 function EmptyState({ children }: { children: React.ReactNode }) {
   return (
     <p className="rounded-12 border border-dashed border-hairline bg-background-content px-16 py-24 text-center text-small leading-snug text-dark-secondary">
@@ -266,15 +300,26 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function StatusPage() {
-  const oppna = FRAGOR.filter((q) => !q.svar);
-  const besvarade = FRAGOR.filter((q) => q.svar);
-  const overgripande = OVERGRIPANDE;
-  const rapporter = [...STATUSRAPPORTER].sort((a, b) => b.datum.localeCompare(a.datum));
+export default async function StatusPage() {
+  const { fragor, rapporter: rapporterRaw } = await listStatusContent();
+  const admin = await isAdmin();
+  const inkorg = admin ? await listSubmissionsAdmin() : [];
+
+  const oppna = fragor.filter((q) => q.kategori === "fraga" && !q.svar);
+  const besvarade = fragor.filter((q) => q.kategori === "fraga" && q.svar);
+  const overgripande = fragor.filter((q) => q.kategori === "overgripande");
+  const rapporter = [...rapporterRaw].sort((a, b) => b.datum.localeCompare(a.datum));
+
+  // "Uppdaterad"-datum = senaste förekommande datum i innehållet (frågor/rapporter).
+  const datumen = [
+    ...fragor.map((q) => q.datum),
+    ...rapporter.map((r) => r.datum),
+  ].filter((d): d is string => !!d);
+  const senast = datumen.sort().at(-1) ?? "";
 
   return (
     <>
-      <StatusHeader uppdaterad={visaDatum(SENAST_UPPDATERAD)} />
+      <StatusHeader uppdaterad={senast ? visaDatum(senast) : ""} />
 
       <main
         id="huvudinnehall"
@@ -300,6 +345,37 @@ export default function StatusPage() {
             Lämna en fråga eller synpunkt
           </Link>
         </div>
+
+        {/* ===== Inkorg (endast admin) ===== */}
+        {admin && (
+          <section aria-labelledby="rubrik-inkorg" className="mt-32">
+            <h2
+              id="rubrik-inkorg"
+              className="mb-4 flex items-center gap-10 font-header text-h4 font-bold tracking-tight"
+            >
+              <span className="text-dark-secondary" aria-hidden="true">
+                <Inbox size={18} strokeWidth={2.2} />
+              </span>
+              Inkorg
+              <span className="eyebrow-sm rounded-full bg-background-200 px-10 py-4 text-dark-secondary">
+                endast admin
+              </span>
+            </h2>
+            <p className="mb-16 text-small leading-relaxed text-dark-secondary">
+              Inkomna inlämningar, nyast först. Syns bara för admin och publiceras aldrig
+              automatiskt — triageras och läggs som kort i rätt kolumn via API.
+            </p>
+            {inkorg.length === 0 ? (
+              <EmptyState>Inga inlämningar i inkorgen.</EmptyState>
+            ) : (
+              <ul className="grid grid-cols-1 gap-16 md:grid-cols-2">
+                {inkorg.map((s) => (
+                  <InkorgKort key={s.id} s={s} />
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
 
         {/* ===== Sammanfattning ===== */}
         <div className="mt-24 grid grid-cols-1 gap-16 sm:grid-cols-3">

@@ -10,11 +10,19 @@ import asyncio
 import json
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import SessionLocal
-from app.models import KpiArea, Organisation, Question, SupportFunction, Tool
+from app.models import (
+    KpiArea,
+    Organisation,
+    Question,
+    Statusrapport,
+    StatusFraga,
+    SupportFunction,
+    Tool,
+)
 from app.schemas import EkonomiImport, HmeImport, SjukImport
 from app.services.ekonomi_import import csv_to_payload as ekonomi_csv_to_payload
 from app.services.ekonomi_import import import_ekonomi
@@ -113,6 +121,177 @@ KPI_AREAS: list[dict] = [
     },
 ]
 
+# Status-sidans kort (Fas B). Bootstrap-innehåll transkriberat från den tidigare
+# hårdkodade frontend-filen (data.ts). Seedas EN gång (bara om tabellen är tom) så att
+# arbetsgruppens senare API-redigeringar/raderingar inte återuppstår vid omstart.
+# `nummer` = det publika "#N"; övergripande frågor har kategori "overgripande".
+STATUS_FRAGOR_SEED: list[dict] = [
+    {
+        "nummer": 1, "kategori": "fraga",
+        "fraga": "Hur många organisationsnivåer på HME ska synas i BBB?",
+        "bakgrund": (
+            "Behov har lyfts av att kunna se HME-mätningen på fler nivåer. Ska man bara se "
+            "förvaltningsnivå i BBB, eller ska man kunna borra ned till djupare nivåer i organisationen?"
+        ),
+        "svar": (
+            "Endast förvaltningsnivå visas i BBB. En framtida förlängning för samtliga chefer "
+            "ska inkludera djupare nivåer."
+        ),
+        "forum": "Styrgrupp", "datum": "2026-06-22",
+    },
+    {
+        "nummer": 2, "kategori": "fraga",
+        "fraga": "Hinner Kommunikativt ledarskap med i BBB efter sommaren?",
+        "bakgrund": "Osäkerhet kring när data för nyckeltalet ”Kommunikativt ledarskap” finns tillgänglig.",
+        "svar": (
+            "Data samlas in via kommande medarbetarenkät under första halvåret 2027. Nyckeltalet "
+            "kan därför inte ingå i första versionen av BBB."
+        ),
+        "forum": "I dialog med Kommunikationsdirektör", "datum": "2026-06-22",
+    },
+    {
+        "nummer": 3, "kategori": "fraga",
+        "fraga": "Hur löser vi inläsning av HME-data rent tekniskt?",
+        "bakgrund": (
+            "HME-data har vi idag i excelformat, denna skulle vi behöva kunna läsa in på lämplig "
+            "plats för att senare använda för att läsa in data till nyckeltalet."
+        ),
+        "forslag": (
+            "Att använda oss av data från officiell rapport för HME från 2025. Att vi inte använder "
+            "rådata för att räkna ut nyckeltal. Detta förslag bygger på att vi idag inte lyckats få fram "
+            "en beskrivning av hur HME-värdena räknas ut på förvaltningsnivå, t.ex. hur värden viktas för "
+            "att få ett slutresultat. En annan fördel med att använda rapportens aggregerade och "
+            "sammanställda data är att vi då får med historik direkt till 2017."
+        ),
+    },
+    {
+        "nummer": 4, "kategori": "fraga",
+        "fraga": "Hur hämtar vi nyckeltal för Sjukfrånvaro och Ekonomi?",
+        "bakgrund": (
+            "Vilken källa och metod ska vi använda? Alternativ: via Qlik och tillgängligt gränssnitt, "
+            "eller direkt mot datalagret? Lägesbild: det finns redan en färdig export från QlikSense för "
+            "dessa nyckeltal (samma som används i Stratsys) som skulle kunna återanvändas i dashboarden, "
+            "med möjlighet att länka vidare till Stratsys. Frågan ska upp till styrgruppen för beslut."
+        ),
+        "mer": [
+            "Den befintliga exporten är dock mycket detaljerad kring sjukfrånvaro. Vi behöver därför en "
+            "motsvarande export som enbart ligger på förvaltningsnivå.",
+            "Frågan om en ny export på förvaltningsnivå tas vidare med leverantören Mindcamp, som byggt "
+            "den nuvarande exporten. Den ordinarie kontakten är borta från och med fredag, så frågan "
+            "drivs vidare direkt med leverantören.",
+        ],
+    },
+    {
+        "nummer": 5, "kategori": "fraga",
+        "fraga": "Vilken källa ska vi utgå från för HME-nyckeltalet?",
+        "bakgrund": (
+            "Vi har två källor för HME: rådata på radnivå från medarbetarenkäten, och en officiell "
+            "rapport som sammanfattar HME-index per förvaltning (inklusive historik och trend). Förslag "
+            "till styrgruppen: utgå från den officiella rapportens aggregerade statistik, eftersom vi inte "
+            "kan återskapa de officiella värdena ur rådatan — vi saknar de underliggande vikterna och "
+            "beräkningsstegen, och rapportens siffror är de som används i verksamheten."
+        ),
+        "mer": [
+            "Båda källorna beskriver samma mätning 2025: antalet svar stämmer i praktiken överens mellan "
+            "dem. Skillnaden ligger i hur HME-indexet räknas fram.",
+            "När vi beräknar HME-index direkt ur rådatan avviker våra värden systematiskt från rapporten "
+            "— rapporten ligger genomgående högre, särskilt för små förvaltningar (t.ex. Miljökontoret 91 "
+            "mot vår beräkning 82, och Räddningstjänsten 86 mot 78). För de stora förvaltningarna stämmer "
+            "värdena däremot väl överens.",
+            "Vi har testat flera beräkningssätt: att poola alla individers svar, att i stället snitta "
+            "chefernas och medarbetarnas medelvärden var för sig, samt att räkna på respondentnivå "
+            "respektive på delindexnivå med och utan avrundning. Inget av dem återskapar rapportens siffror. "
+            "Den enskilt största förbättringen kom av att vikta delgrupper lika i stället för att poola "
+            "individer — vilket tyder på att den officiella metoden väger samman undergrupper snarare än "
+            "enskilda svar.",
+            "Slutsatsen är att det officiella indexet bygger på ett viktningsschema (vilka undergrupper som "
+            "ingår och hur de vägs) som inte går att utläsa ur den platta rådatafilen. Vi kan därför inte "
+            "återskapa de officiella nyckeltalen på ett tillförlitligt sätt.",
+            "Rekommendation: använd den officiella rapportens aggregerade statistik som sanningskälla för "
+            "HME-rubrikvärdet, historiken (2017–2025) och den verkliga trenden. De delindex (Motivation, "
+            "Styrning, Ledarskap) och den chef/medarbetare-uppdelning vi tagit fram ur rådatan kan behållas "
+            "som kompletterande sammanhang i dialogen, men ska då tydligt märkas som framräknade ur rådata "
+            "och kan avvika något från det officiella indexet.",
+        ],
+    },
+    {
+        "nummer": 6, "kategori": "fraga",
+        "fraga": "Hur säkerställer vi att sjukfrånvaro-nyckeltalet dokumenteras korrekt?",
+        "bakgrund": (
+            "Sjukfrånvaron som nyckeltal behöver dokumenteras tydligare. Det finns brister i dagens "
+            "hantering som leder till risker (bl.a. ofullständig och fördröjd statistik). Underlaget "
+            "kompletteras framåt."
+        ),
+        "forslag": (
+            "Kommunkoncernen föreslås upprätta ett koncerngemensamt nyckeltalsbibliotek med alla "
+            "algoritmer/beräkningar dokumenterade, så att man kan reproducera nyckeltal utifrån rådata "
+            "fritt och inte kräva ett visst system."
+        ),
+    },
+    {
+        "nummer": 7, "kategori": "fraga",
+        "fraga": "Hur hanteras månadsdata i Qlik-export?",
+        "bakgrund": (
+            "Hur hanteras månadsdata i den exportfil kring ekonomi som finns nu? Det verkar som att "
+            "exportfilen som vi nu fått enbart är för maj, skapas det en ny fil per månad för ekonomidata "
+            "och ser det likadant ut då för sjukfrånvaro?"
+        ),
+    },
+    {
+        "nummer": 9, "kategori": "fraga",
+        "fraga": "Mäts sjukfrånvaro i tertial?",
+    },
+    {
+        "nummer": 8, "kategori": "overgripande",
+        "fraga": "Upprättande av ett nyckeltalsbibliotek",
+        "bakgrund": (
+            "Under arbetet har det blivit mycket tydligt att många av de nyckeltal som används i "
+            "uppföljning idag saknar dokumentation. Det gör det mycket svårt att förstå hur ett "
+            "nyckeltal räknas ut."
+        ),
+        "forslag": (
+            "Koncernen behöver upprätta en form av nyckeltalsbibliotek där samtliga nyckeltal som "
+            "används finns beskrivna i detalj rörande hur de räknas ut. Syftet är transparens och "
+            "öppenhet, att nyckeltalen går att reproducera i framtiden, och att vi inte skapar ett "
+            "enormt beroende till nuvarande tekniska lösningar."
+        ),
+    },
+]
+
+STATUSRAPPORTER_SEED: list[dict] = [
+    {
+        "datum": "2026-06-26",
+        "rubrik": "Lägesrapport vecka 26 — prototypen redo för test",
+        "text": (
+            "En intensiv vecka där de stora tekniska delarna kommit på plats. Prototypen är nu så "
+            "färdig den kan bli inför användartester och kvalitetskontroll av data — tekniken är i "
+            "stort sett klar inför första styrgruppsmötet. Nästa steg är att låta ansvarig chef och "
+            "styrgruppen testa och ge feedback, varpå vi gör en ändringsloop utifrån det. Nästa vecka "
+            "planerar vi arbetet med att produktionssätta lösningen parallellt med sluttester och "
+            "verifiering av data."
+        ),
+        "punkter": [
+            "HME: riktig anonymiserad data per förvaltning ur officiella totalindex-rapporten — historik från 2017 och verklig trend, med förvaltningsväljare.",
+            "Ekonomi: nettokostnad mot budget med kombinationsdiagram (budget, utfall, prognos).",
+            "Sjukfrånvaro: total sjukfrånvaro med köns- och åldersfördelning samt tröskelvärden som styr färg (grön/gul/röd).",
+            "Datainläsning: token-skyddade import-API:er och admin-GUI med inläsningslogg — HME (JSON) samt ekonomi och sjukfrånvaro via Qlik-CSV. Förvaltningar kopplas via masterdata-id.",
+            "Dialogen: aktiviteter och åtgärder ersätter överenskommelser; omarbetad dashboard och dialogpanel.",
+            "Status-sidan: frågor & beslut, förslag till beslut, övergripande koncernfrågor och en kolumn för löpande lägesrapporter.",
+            "Beslut: endast förvaltningsnivå visas för HME (#1); Kommunikativt ledarskap kan inte ingå i första versionen (#2).",
+            "Nya förslag till beslut: utgå från officiella HME-rapporten i stället för rådata (#3) och upprätta ett koncerngemensamt nyckeltalsbibliotek (#6/#8).",
+            "Öppna punkter: källa och metod för sjukfrånvaro och ekonomi (#4), HME-källa (#5) samt hur Qlik hanterar månadsdata (#7).",
+        ],
+    },
+    {
+        "datum": "2026-06-25",
+        "rubrik": "Statusrapportering införd",
+        "text": (
+            "Den här sidan har fått en kolumn för löpande statusrapporter. Här samlas daterade "
+            "lägesrapporter om arbetet, med den senaste överst."
+        ),
+    },
+]
+
 # Officiella HME-totalindexrapporten (flerårig, per enhet/förvaltning). Levereras utanför
 # git och monteras lokalt/vid deploy; i drift uppdateras HME istället via /api/import/hme.
 HME_REPORT_PATH = Path(__file__).resolve().parent / "data" / "hme_totalindex.json"
@@ -152,6 +331,29 @@ async def _get_or_create(session: AsyncSession, model, defaults: dict | None = N
     return obj, True
 
 
+async def _bootstrap_status_content(session: AsyncSession) -> None:
+    """Fyll status_fraga/statusrapport med startinnehållet — bara om tabellen är tom.
+
+    Engångs-bootstrap: när arbetsgruppen börjat redigera/publicera via API rör vi
+    aldrig innehållet igen (annars skulle raderade kort återuppstå vid omstart).
+    """
+    antal_fragor = (await session.execute(select(func.count()).select_from(StatusFraga))).scalar()
+    if antal_fragor == 0:
+        for f in STATUS_FRAGOR_SEED:
+            session.add(StatusFraga(publicerad=True, **f))
+        print(f"[seed] status-frågor bootstrappade: {len(STATUS_FRAGOR_SEED)} kort.")
+
+    antal_rapporter = (
+        await session.execute(select(func.count()).select_from(Statusrapport))
+    ).scalar()
+    if antal_rapporter == 0:
+        for r in STATUSRAPPORTER_SEED:
+            session.add(Statusrapport(publicerad=True, **r))
+        print(f"[seed] statusrapporter bootstrappade: {len(STATUSRAPPORTER_SEED)} st.")
+
+    await session.commit()
+
+
 async def seed(session: AsyncSession) -> None:
     # Stödfunktioner + verktyg.
     support_by_key: dict[str, SupportFunction] = {}
@@ -187,6 +389,9 @@ async def seed(session: AsyncSession) -> None:
             )
 
     await session.commit()
+
+    # Status-sidans kort (Fas B) — engångs-bootstrap av startinnehållet.
+    await _bootstrap_status_content(session)
 
     # HME-rapporten levereras utanför git (monteras lokalt/vid deploy). Finns den
     # importeras förvaltningsdialogerna via samma väg som /api/import/hme. Saknas den

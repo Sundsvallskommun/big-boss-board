@@ -13,9 +13,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_import_token
 from app.db import get_session
-from app.models import Submission
-from app.schemas import AdminKpiUpsert, SubmissionOut, SubmissionUpdate
+from app.models import StatusFraga, Submission
+from app.schemas import (
+    AdminKpiUpsert,
+    StatusFragaCreate,
+    StatusFragaOut,
+    StatusFragaUpdate,
+    StatusrapportCreate,
+    StatusrapportOut,
+    StatusrapportUpdate,
+    SubmissionOut,
+    SubmissionUpdate,
+)
 from app.services.admin_data import prune_kpi_area, read_state, upsert_kpi
+from app.services.status_content import (
+    create_fraga,
+    create_rapport,
+    delete_fraga,
+    list_all_fragor,
+    update_fraga,
+    update_rapport,
+)
 from app.services.submissions import list_submissions, update_submission
 
 router = APIRouter(
@@ -82,3 +100,76 @@ async def update_submission_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+
+# ---- Status-sidans kort: publiceringsväg från inkorgen (Fas B) -----------
+
+
+@router.get("/status-cards", response_model=list[StatusFragaOut])
+async def list_status_cards_endpoint(
+    session: AsyncSession = Depends(get_session),
+) -> list[StatusFraga]:
+    """Lista alla frågekort (även opublicerade utkast) för triage/diagnos."""
+    return await list_all_fragor(session)
+
+
+@router.post("/status-cards", response_model=StatusFragaOut, status_code=status.HTTP_201_CREATED)
+async def create_status_card_endpoint(
+    payload: StatusFragaCreate,
+    session: AsyncSession = Depends(get_session),
+) -> StatusFraga:
+    """Skapa ett frågekort (öppen/besvarad/övergripande). Server sätter publikt #N.
+
+    Anges `submission_id` markeras den inkorgsposten som 'publicerad'.
+    """
+    return await create_fraga(session, payload)
+
+
+@router.patch("/status-cards/{fraga_id}", response_model=StatusFragaOut)
+async def update_status_card_endpoint(
+    fraga_id: int,
+    payload: StatusFragaUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> StatusFraga:
+    """Redigera ett frågekort (PATCH). Sätt `svar` → kortet flyttas till besvarade."""
+    try:
+        return await update_fraga(session, fraga_id, payload)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@router.delete("/status-cards/{fraga_id}")
+async def delete_status_card_endpoint(
+    fraga_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Ta bort ett frågekort."""
+    try:
+        await delete_fraga(session, fraga_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return {"borttagen": fraga_id}
+
+
+@router.post(
+    "/status-rapporter", response_model=StatusrapportOut, status_code=status.HTTP_201_CREATED
+)
+async def create_status_rapport_endpoint(
+    payload: StatusrapportCreate,
+    session: AsyncSession = Depends(get_session),
+):
+    """Skapa en statusrapport (daterad lägesrapport)."""
+    return await create_rapport(session, payload)
+
+
+@router.patch("/status-rapporter/{rapport_id}", response_model=StatusrapportOut)
+async def update_status_rapport_endpoint(
+    rapport_id: int,
+    payload: StatusrapportUpdate,
+    session: AsyncSession = Depends(get_session),
+):
+    """Redigera en statusrapport (PATCH)."""
+    try:
+        return await update_rapport(session, rapport_id, payload)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
