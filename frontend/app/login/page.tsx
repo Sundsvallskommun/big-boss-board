@@ -1,5 +1,4 @@
-// Importeras från subpaketet (inte umbrella) så server-grafen slipper forms/RHF.
-import { Logo } from "@sk-web-gui/logo";
+import { Logo } from "@/components/ui";
 import { LoginForm } from "./LoginForm";
 
 export default function LoginPage() {
@@ -9,7 +8,7 @@ export default function LoginPage() {
       tabIndex={-1}
       className="mx-auto flex min-h-screen max-w-[420px] flex-col justify-center px-6 py-16 outline-none"
     >
-      <span className="mb-8 flex h-9 items-center [&_svg]:h-9 [&_svg]:w-auto">
+      <span className="mb-8 flex items-center">
         <Logo variant="logo" />
       </span>
       <h1 className="font-header text-h3 font-bold tracking-tight">Logga in</h1>

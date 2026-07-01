@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, FormControl, FormLabel, Input, Textarea } from "@sk-web-gui/react";
+import { Button, FormControl, FormLabel, Input, Textarea } from "@/components/ui";
 import {
   TrendingUp,
   TrendingDown,
@@ -84,6 +84,14 @@ function ekonomiManadEtikett(period?: string): string {
   if (!mm) return "Aktuell period";
   const namn = MANADER[Number(mm[2]) - 1] ?? "";
   return `${namn.charAt(0).toUpperCase()}${namn.slice(1)} ${mm[1]}`;
+}
+
+/** Kort månadsetikett ("Jun") för X-axeln när serien har flera månader. */
+function ekonomiManadKort(period?: string): string {
+  const mm = period ? /^(\d{4})-(\d{2})/.exec(period) : null;
+  if (!mm) return "Period";
+  const namn = MANADER[Number(mm[2]) - 1] ?? "";
+  return `${namn.charAt(0).toUpperCase()}${namn.slice(1)}`;
 }
 
 function ActivityRow({
@@ -222,23 +230,34 @@ export function DetailPanel({
       kvinnor: p.kvinnor ?? null,
       man: p.man ?? null,
     })) ?? [];
-  // En månad (senaste perioden) för nettokostnadsdiagrammet. Fler månader när månadsdata finns.
-  const ekManad = ekNetto
-    ? [
-        {
-          manad: ekonomiManadEtikett(ekonomi?.period),
-          budget_helar: ekNetto.budget_helar ?? null,
-          budget_ack: ekNetto.budget_ack ?? null,
-          utfall: ekNetto.utfall ?? null,
-          utfall_fg: ekNetto.utfall_fg ?? null,
-          prognos: ekNetto.prognos ?? null,
-          diff:
-            ekNetto.prognos != null && ekNetto.budget_helar != null
-              ? Math.round((ekNetto.prognos - ekNetto.budget_helar) * 10) / 10
-              : null,
-        },
-      ]
-    : [];
+  // Nettokostnadsdiagrammet: hela årsserien om den finns, annars bara senaste perioden.
+  const ekPunkt = (
+    manad: string,
+    r: {
+      budget_helar?: number | null;
+      budget_ack?: number | null;
+      utfall?: number | null;
+      utfall_fg?: number | null;
+      prognos?: number | null;
+    },
+  ) => ({
+    manad,
+    budget_helar: r.budget_helar ?? null,
+    budget_ack: r.budget_ack ?? null,
+    utfall: r.utfall ?? null,
+    utfall_fg: r.utfall_fg ?? null,
+    prognos: r.prognos ?? null,
+    diff:
+      r.prognos != null && r.budget_helar != null
+        ? Math.round((r.prognos - r.budget_helar) * 10) / 10
+        : null,
+  });
+  const ekManad =
+    ekonomi?.serie && ekonomi.serie.length > 0
+      ? ekonomi.serie.map((p) => ekPunkt(ekonomiManadKort(p.period), p))
+      : ekNetto
+      ? [ekPunkt(ekonomiManadEtikett(ekonomi?.period), ekNetto)]
+      : [];
   const dims = [
     ["motivation", "Motivation"],
     ["styrning", "Styrning"],

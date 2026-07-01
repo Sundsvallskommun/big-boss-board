@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button, FormControl, FormLabel, Input } from "@sk-web-gui/react";
+import { Button, FormControl, FormLabel, Input } from "@/components/ui";
 import { login, type LoginState } from "./actions";
 
 export function LoginForm() {

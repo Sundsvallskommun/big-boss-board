@@ -1,8 +1,6 @@
-"use client";
-
-import { GuiProvider, ColorSchemeMode } from "@sk-web-gui/react";
-
-/** Registrerar designsystemets tema och CSS-variabler. Ljust färgschema (publik tjänst). */
+/** Tidigare registrerade detta @sk-web-guis GuiProvider (CSS-variabler + tema).
+ *  Nu äger vi tokens via tailwind.config.js + globals.css, så ingen provider behövs.
+ *  Behålls som tunn passthrough för att inte ändra layout-trädet. */
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <GuiProvider colorScheme={ColorSchemeMode.Light}>{children}</GuiProvider>;
+  return <>{children}</>;
 }

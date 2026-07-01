@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button } from "@sk-web-gui/react";
+import { Button } from "@/components/ui";
 import { UploadCloud, CheckCircle2, AlertTriangle } from "lucide-react";
 import { STATUS } from "@/components/status";
 import { importData, type ImportState } from "./actions";

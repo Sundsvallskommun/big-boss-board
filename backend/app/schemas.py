@@ -92,6 +92,31 @@ class ActivityKlar(BaseModel):
     notering: str = ""
 
 
+# ---- Inkorg: inkomna synpunkter/frågor/aktiviteter (intake) --------------
+
+
+class SubmissionCreate(BaseModel):
+    """Indata från det publika formuläret — endast fri text."""
+
+    text: str
+
+
+class SubmissionOut(ORMModel):
+    id: int
+    text: str
+    status: str
+    notering: str | None
+    skapad_at: datetime
+    uppdaterad_at: datetime | None
+
+
+class SubmissionUpdate(BaseModel):
+    """Admin-triage: ändra status och/eller notering (endast angivna fält)."""
+
+    status: str | None = None
+    notering: str | None = None
+
+
 # ---- Dataimport ----------------------------------------------------------
 
 
@@ -189,6 +214,17 @@ class EkonomiOmrade(BaseModel):
     budget_ack: float | None = None
 
 
+class EkonomiSeriePunkt(BaseModel):
+    """Nettokostnad (RR.005) en rapportperiod — en punkt i månadsserien (mnkr)."""
+
+    period: str
+    budget_helar: float | None = None
+    budget_ack: float | None = None
+    utfall: float | None = None
+    utfall_fg: float | None = None
+    prognos: float | None = None
+
+
 class EkonomiEnhet(BaseModel):
     """En förvaltning: huvudmått (per mått_kod) + nettokostnad per område."""
 
@@ -197,6 +233,8 @@ class EkonomiEnhet(BaseModel):
     niva: str = "förvaltning"
     matt: dict[str, EkonomiMatt]
     omrade: list[EkonomiOmrade] = []
+    # Månadsserie av nettokostnad över flera rapportperioder (tom = bara senaste perioden).
+    serie: list[EkonomiSeriePunkt] = []
 
 
 class EkonomiImport(BaseModel):
@@ -206,6 +244,13 @@ class EkonomiImport(BaseModel):
     period: str = ""
     kalla: str = ""
     enheter: list[EkonomiEnhet]
+
+
+class EkonomiCsvSerie(BaseModel):
+    """Flera CSV-perioder i ett anrop → månadsserie. En rå CSV-text per rapportperiod."""
+
+    perioder: list[str]
+    kalla: str = "Ekonomisk uppföljning (Qlik-export, CSV)"
 
 
 class EkonomiPost(BaseModel):

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import { DevBanner } from "@/components/DevBanner";
-import { getThemeCss } from "@/lib/theme-css";
 
 export const metadata: Metadata = {
   // Internt arbetsnamn "Big Boss Board" visas aldrig i UI.
@@ -18,10 +17,8 @@ export default function RootLayout({
   return (
     <html lang="sv">
       <head>
-        {/* Designsystemets temavariabler server-side (eliminerar färg-flash vid SSR). */}
-        <style dangerouslySetInnerHTML={{ __html: getThemeCss() }} />
-        {/* Raleway (rubriker) enligt designsystemet + Geist Mono för etiketter.
-            Brödtext är Arial (systemfont) via SK-temat. BYGGPLAN §6 tillåter Google Fonts. */}
+        {/* Raleway (rubriker) + Geist Mono (etiketter) via Google Fonts.
+            Brödtext är Arial (systemfont). Färger/tokens via Tailwind, ingen SSR-injektion. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link

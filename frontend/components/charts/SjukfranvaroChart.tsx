@@ -21,13 +21,13 @@ export interface SjukChartPunkt {
   man: number | null;
 }
 
-/** Seriefärger som SK CSS-variabler (motsvarar beslutsstödets graf — inga hårdkodade hex). */
+/** Seriefärger i kommunens palett (motsvarar beslutsstödets graf). */
 const C = {
-  total: "var(--sk-colors-primitives-green-700)",
-  kvinnor: "var(--sk-colors-gronsta-background-300)",
-  man: "var(--sk-colors-primitives-purple-700)",
-  grid: "var(--sk-colors-primitives-gray-200)",
-  axis: "var(--sk-colors-dark-secondary)",
+  total: "#157A47", // grön 700
+  kvinnor: "#B9DCC6", // ljus grön (gronsta)
+  man: "#6B3FA0", // lila 700
+  grid: "#E5E5E5", // gray-200
+  axis: "#51515C", // dark-secondary
 };
 
 const fmt = (v: number) => v.toFixed(1).replace(".", ",");

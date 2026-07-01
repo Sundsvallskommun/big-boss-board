@@ -25,16 +25,16 @@ export interface EkonomiManad {
   diff: number | null;
 }
 
-/** Seriefärger som SK CSS-variabler (motsvarar rapportens färgsättning — inga hårdkodade hex). */
+/** Seriefärger i kommunens palett (motsvarar rapportens färgsättning). */
 const C = {
-  budgetHelar: "var(--sk-colors-primitives-green-700)",
-  budgetAck: "var(--sk-colors-gronsta-background-300)",
-  utfall: "var(--sk-colors-primitives-purple-700)",
-  utfallFg: "var(--sk-colors-primitives-purple-400)",
-  prognos: "var(--sk-colors-primitives-blue-700)",
-  diff: "var(--sk-colors-vattjom-background-300)",
-  grid: "var(--sk-colors-primitives-gray-200)",
-  axis: "var(--sk-colors-dark-secondary)",
+  budgetHelar: "#157A47", // grön 700
+  budgetAck: "#B9DCC6", // ljus grön (gronsta)
+  utfall: "#6B3FA0", // lila 700
+  utfallFg: "#B49AD4", // ljus lila
+  prognos: "#1A6FD0", // blå 700
+  diff: "#AFCBE9", // ljus vattjom-blå
+  grid: "#E5E5E5", // gray-200
+  axis: "#51515C", // dark-secondary
 };
 
 const fmt = (v: number) =>

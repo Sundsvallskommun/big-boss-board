@@ -1,6 +1,6 @@
-/* Sundsvalls designsystem driver all styling via Tailwind-preseten (@sk-web-gui/core).
-   Inga hårdkodade hex — färger/spacing/typografi kommer från designtokens.
-   GuiProvider injicerar CSS-variablerna i runtime. */
+/* Lättviktig CSS-bas i Sundsvalls visuella språk.
+   Tokens (färger/spacing/typografi) kommer från tailwind.config.js — ett eget,
+   litet lager i stället för @sk-web-gui-preseten. Inga designsystem-beroenden. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,33 +8,29 @@
 @layer base {
   html,
   body {
-    /* Grå sidyta (token background-200 = #f0f0f0, som prototypen) så vita kort
-       (background-content) får djup. OBS: använd inte `bg-background` — SK:s
-       preset pekar den mot en felstavad variabel (--sk-colors-background-DEFUALT)
-       och den är dessutom vit i ljust tema. */
+    /* Grå sidyta så vita kort (background-content) får djup. */
     @apply bg-background-200 text-dark-primary;
+    /* Brödtext = Arial (kommunens sans), satt explicit utöver Tailwinds preflight. */
+    font-family: Arial, Helvetica, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 }
 
 @layer components {
-  /* Vit ikon-bricka på tonad yta: subtil inre ring i stället för tjock ram
-     (som prototypen: box-shadow 0 0 0 1px rgba(31,31,37,0.05)). Färg = SK-token. */
+  /* Vit ikon-bricka på tonad yta: subtil inre ring i stället för tjock ram. */
   .icon-chip {
-    box-shadow: 0 0 0 1px var(--sk-colors-primitives-overlay-darken-1);
+    box-shadow: 0 0 0 1px rgb(31 31 37 / 0.05);
   }
 
-  /* Valt KPI-kort: 1px blå kant + mjuk blå glow nedåt (prototypens
-     0 10px 28px -14px rgba(0,69,149,0.45)). Blått = vattjom-token via color-mix. */
+  /* Valt KPI-kort: 1px blå kant + mjuk blå glow nedåt. */
   .card-selected {
     box-shadow:
-      0 0 0 1px var(--sk-colors-vattjom-surface-primary-DEFAULT),
-      0 10px 28px -14px
-        color-mix(in srgb, var(--sk-colors-vattjom-surface-primary-DEFAULT) 45%, transparent);
+      0 0 0 1px #0055b8,
+      0 10px 28px -14px rgb(0 85 184 / 0.45);
   }
 
-  /* Etikett-stil (bespoke ovanpå tokens): versal mono, dämpad textton. */
-  /* Etiketter i absoluta px (matchar prototypen exakt). OBS: använd INTE rem här —
-     SK-temat sätter root-fontstorleken till 62.5% (10px), så rem skulle ge ~0.6×. */
+  /* Etikett-stil: versal mono, dämpad textton. Absoluta px. */
   .eyebrow {
     font-family: "Geist Mono", ui-monospace, monospace;
     @apply uppercase text-dark-secondary;
@@ -49,9 +45,7 @@
     letter-spacing: 0.16em;
     line-height: 1.2;
   }
-  /* Beslutsinstans på status-sidan (STYRGRUPP m.fl.) — medvetet större och
-     tydligare än övriga etiketter: mörkare ton och tyngre vikt. Absolut px
-     (SK:s 62.5%-rot gör rem för litet). */
+  /* Beslutsinstans på status-sidan — medvetet större och tydligare. */
   .beslutsinstans {
     font-family: "Geist Mono", ui-monospace, monospace;
     @apply uppercase font-semibold text-dark-primary;
@@ -60,10 +54,9 @@
     line-height: 1.35;
   }
 
-  /* Mätarbar (bespoke, finns ej i SK) — byggd med tokens, värdebredd sätts inline. */
+  /* Mätarbar (bespoke) — värdebredd sätts inline. */
   .meter {
     @apply relative h-[7px] w-full overflow-visible rounded-full;
-    /* Halvgenomskinlig vit så kortets ton skiner igenom (som prototypen). */
     background-color: rgb(255 255 255 / 0.8);
     box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06);
   }

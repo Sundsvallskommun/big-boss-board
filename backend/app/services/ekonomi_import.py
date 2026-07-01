@@ -163,6 +163,47 @@ def csv_to_payload(text: str, kalla: str = "Ekonomisk uppföljning (Qlik-export,
     return {"kpi": "ekonomi", "period": period, "kalla": kalla, "enheter": list(enheter.values())}
 
 
+def csvs_to_serie_payload(
+    period_texts: list[str], kalla: str = "Ekonomisk uppföljning (Qlik-export, CSV)"
+) -> dict:
+    """Flera CSV-perioder → EN normaliserad payload med månadsserie per förvaltning.
+
+    `period_texts`: rå CSV-text, EN per rapportperiod (dagsuttaget som är mest komplett
+    för perioden). Senaste periodens matt/omrade blir kortets huvudvärde (headline);
+    utöver det får varje enhet en `serie` av nettokostnad (RR.005) över alla perioder,
+    kronologiskt. Grafen ritar serien; saknas fler perioder faller den tillbaka på headline.
+    """
+    per_period = [csv_to_payload(t, kalla) for t in period_texts]
+    per_period = [p for p in per_period if p.get("period") and p.get("enheter")]
+    if not per_period:
+        return {"kpi": "ekonomi", "period": "", "kalla": kalla, "enheter": []}
+
+    per_period.sort(key=lambda p: p["period"])  # äldst först → serien går jan→…
+
+    # Nettokostnadsserie per enhet-kod, en punkt per period.
+    serie_by_kod: dict[str, list[dict]] = {}
+    for p in per_period:
+        for e in p["enheter"]:
+            netto = e["matt"].get(NETTOKOSTNAD)
+            if netto is None:
+                continue
+            serie_by_kod.setdefault(e["kod"], []).append(
+                {
+                    "period": p["period"],
+                    "budget_helar": netto.get("budget_helar"),
+                    "budget_ack": netto.get("budget_ack"),
+                    "utfall": netto.get("utfall"),
+                    "utfall_fg": netto.get("utfall_fg"),
+                    "prognos": netto.get("prognos"),
+                }
+            )
+
+    latest = per_period[-1]
+    for e in latest["enheter"]:
+        e["serie"] = serie_by_kod.get(e["kod"], [])
+    return latest
+
+
 def _measurement_fields(enhet: EkonomiEnhet, period: str, kalla: str) -> dict:
     """Bygg mätvärdesfält: nettokostnad mot budget + resultaträkning/områden i details."""
     netto = enhet.matt.get(NETTOKOSTNAD)
@@ -232,6 +273,8 @@ def _measurement_fields(enhet: EkonomiEnhet, period: str, kalla: str) -> dict:
             "period": period,
             "resultatrakning": resultatrakning,
             "nettokostnad_per_omrade": omraden,
+            # Månadsserie av nettokostnad (RR.005) över året. Tom → grafen visar bara headline.
+            "serie": [p.model_dump() for p in enhet.serie],
         },
     }
 

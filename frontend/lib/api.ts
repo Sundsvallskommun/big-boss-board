@@ -94,6 +94,16 @@ export interface EkonomiOmradeRad {
   budget_ack?: number | null;
 }
 
+/** Nettokostnad (RR.005) en rapportperiod — en punkt i månadsserien (mnkr). */
+export interface EkonomiSeriePunkt {
+  period: string;
+  budget_helar?: number | null;
+  budget_ack?: number | null;
+  utfall?: number | null;
+  utfall_fg?: number | null;
+  prognos?: number | null;
+}
+
 /** Nedbrytning för ekonomi-mätvärdet: resultaträkning + nettokostnad per område (mnkr). */
 export interface EkonomiDetails {
   typ: "ekonomi";
@@ -102,6 +112,8 @@ export interface EkonomiDetails {
   period?: string;
   resultatrakning?: EkonomiMattRad[];
   nettokostnad_per_omrade?: EkonomiOmradeRad[];
+  /** Månadsserie av nettokostnad över året (tom/utelämnad → bara senaste perioden). */
+  serie?: EkonomiSeriePunkt[];
 }
 
 /** Sjukfrånvaro per åldersgrupp (% av ordinarie arbetstid). */

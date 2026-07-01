@@ -41,7 +41,7 @@ export const SENAST_UPPDATERAD = "2026-06-26";
 
 /** Nästa lediga id — GLOBALT över alla kort (FRAGOR + OVERGRIPANDE), så att varje kort
  *  har ett unikt #N. Höj med 1 varje gång ett kort läggs till, oavsett lista. Återanvänd aldrig. */
-export const NASTA_ID = 9;
+export const NASTA_ID = 10;
 
 /** Alla frågor. Öppna och besvarade visas i var sin sektion utifrån om `svar` finns. */
 export const FRAGOR: Fraga[] = [
@@ -115,6 +115,10 @@ export const FRAGOR: Fraga[] = [
     fraga: "Hur hanteras månadsdata i Qlik-export?",
     bakgrund:
       "Hur hanteras månadsdata i den exportfil kring ekonomi som finns nu? Det verkar som att exportfilen som vi nu fått enbart är för maj, skapas det en ny fil per månad för ekonomidata och ser det likadant ut då för sjukfrånvaro?",
+  },
+  {
+    id: 9,
+    fraga: "Mäts sjukfrånvaro i tertial?",
   },
 ];
 

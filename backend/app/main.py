@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.db import engine
-from app.routers import activities, admin, dialogues, import_data, kpi_areas
+from app.routers import activities, admin, dialogues, import_data, kpi_areas, submissions
 
 app = FastAPI(
     title="Big Boss Board API",
@@ -18,6 +18,7 @@ app.include_router(dialogues.router)
 app.include_router(kpi_areas.router)
 app.include_router(activities.router)
 app.include_router(import_data.router)
+app.include_router(submissions.router)
 app.include_router(admin.router)
 
 

@@ -200,3 +200,26 @@ class Activity(Base):
 
     dialogue: Mapped[Dialogue] = relationship(back_populates="activities")
     kpi_area: Mapped[KpiArea] = relationship()
+
+
+class Submission(Base):
+    """Inkommen synpunkt/fråga/aktivitet från en projektdeltagare (inkorgen/intake).
+
+    Lämnas in som fri text via det publika formuläret (gatat av access-koden) och
+    hamnar i en EGEN kö — den rör aldrig de kurerade kolumnerna på status-sidan.
+    Arbetsgruppen läser, knådar och publicerar manuellt. Endast öppen och publik
+    information (dataregeln gäller även här — inga personuppgifter).
+    """
+
+    __tablename__ = "submission"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    text: Mapped[str] = mapped_column(Text)
+    # Triage-läge som arbetsgruppen sätter: ny (oläst) | granskad | publicerad | arkiverad.
+    status: Mapped[str] = mapped_column(String(32), default="ny", server_default="ny", index=True)
+    # Intern triage-notering (visas aldrig publikt).
+    notering: Mapped[str | None] = mapped_column(Text, nullable=True)
+    skapad_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    uppdaterad_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

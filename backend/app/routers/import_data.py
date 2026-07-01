@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import require_import_token
 from app.db import get_session
 from app.schemas import (
+    EkonomiCsvSerie,
     EkonomiImport,
     EkonomiRapport,
     EkonomiResultat,
@@ -19,7 +20,12 @@ from app.schemas import (
     SjukImport,
     SjukResultat,
 )
-from app.services.ekonomi_import import csv_to_payload, import_ekonomi, report_to_payload
+from app.services.ekonomi_import import (
+    csv_to_payload,
+    csvs_to_serie_payload,
+    import_ekonomi,
+    report_to_payload,
+)
 from app.services.hme_import import import_hme
 from app.services.sjukfranvaro_import import csv_to_payload as sjuk_csv_to_payload
 from app.services.sjukfranvaro_import import import_sjukfranvaro
@@ -55,6 +61,23 @@ async def import_ekonomi_csv_endpoint(
     text = (await request.body()).decode("utf-8-sig")
     try:
         payload = EkonomiImport(**csv_to_payload(text))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return await import_ekonomi(session, payload)
+
+
+@router.post("/ekonomi-serie", response_model=EkonomiResultat, dependencies=[Depends(require_import_token)])
+async def import_ekonomi_serie_endpoint(
+    body: EkonomiCsvSerie,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Upserta ekonomi ur flera CSV-perioder → månadsserie per förvaltning.
+
+    `perioder`: en rå CSV-text per rapportperiod (senaste, mest kompletta dagsuttaget).
+    Senaste perioden blir kortets huvudvärde; serien ritas i nettokostnadsdiagrammet.
+    """
+    try:
+        payload = EkonomiImport(**csvs_to_serie_payload(body.perioder, body.kalla))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return await import_ekonomi(session, payload)

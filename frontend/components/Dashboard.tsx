@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Logo } from "@sk-web-gui/react";
+import { Logo } from "@/components/ui";
 import { TrendingUp, TrendingDown, ChevronLeft } from "lucide-react";
 import {
   type DialogueDetail,
@@ -74,12 +74,10 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
       <header className="sticky top-0 z-30 border-b border-hairline bg-background-content">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-16 px-24 py-16 md:px-32">
           <div className="flex min-w-0 items-center gap-14">
-            {/* SK-logon är liggande (viewBox 164×72); .sk-logo-figure defaultas
-                stående och squashar den. Sätt rätt proportion (~48px hög). */}
             <Link
               href="/"
               aria-label="Till startsidan"
-              className="flex items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&_.sk-logo-figure]:!h-[48px] [&_.sk-logo-figure]:!w-[109px]"
+              className="flex items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <Logo variant="logo" />
             </Link>

@@ -41,6 +41,10 @@ build/
 # Rå indata (HME-källfiler).
 indata/
 
+# Rå ekonomi-CSV (Qlik-uttag per period) — kommunens ekonomidata, versionshanteras
+# aldrig. Matas in via scripts/import_ekonomi_serie.py mot import-endpointen.
+ekonomi-indata/
+
 # Riktig HME-aggregatdata levereras utanför git (privat; monteras vid deploy).
 # Endast katalogen (via .gitkeep) versionshanteras — aldrig själva datafilerna.
 /backend/app/data/*

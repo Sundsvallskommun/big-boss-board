@@ -11,15 +11,14 @@ import {
   ReferenceLine,
 } from "recharts";
 
-/** Färger som SK CSS-variabler (injiceras globalt av getThemeCss) — inga nya hex
- *  utöver status-warn (samma medvetna gula avsteg som i tailwind.config). */
+/** Färger i kommunens palett (samma tokens som tailwind.config). */
 const C = {
-  vattjom: "var(--sk-colors-vattjom-surface-primary-DEFAULT)",
-  good: "var(--sk-colors-success-surface-primary-DEFAULT)",
-  alert: "var(--sk-colors-error-surface-primary-DEFAULT)",
-  warn: "#EAB308",
-  grid: "var(--sk-colors-primitives-gray-200)",
-  axis: "var(--sk-colors-dark-secondary)",
+  vattjom: "#0055B8", // vattjom-surface-primary
+  good: "#1E8A4E", // status-good
+  alert: "#D32F2F", // status-alert
+  warn: "#EAB308", // status-warn (rent gult)
+  grid: "#E5E5E5", // gray-200
+  axis: "#51515C", // dark-secondary
 };
 
 export interface HmePoint {

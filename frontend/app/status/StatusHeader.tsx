@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Logo } from "@sk-web-gui/react";
+import { Logo } from "@/components/ui";
 import { CalendarDays } from "lucide-react";
 
-/** Topbar för projektstatus-sidan. Klient-komponent eftersom SK:s <Logo> drar in
- *  paketets barrel — den får inte hamna i serverbundeln (jfr Dashboard.tsx). */
+/** Topbar för projektstatus-sidan. */
 export function StatusHeader({ uppdaterad }: { uppdaterad: string }) {
   return (
     <header className="sticky top-0 z-30 border-b border-hairline bg-background-content">
@@ -14,7 +13,7 @@ export function StatusHeader({ uppdaterad }: { uppdaterad: string }) {
           <Link
             href="/"
             aria-label="Till startsidan"
-            className="flex items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&_.sk-logo-figure]:!h-[48px] [&_.sk-logo-figure]:!w-[109px]"
+            className="flex items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <Logo variant="logo" />
           </Link>
