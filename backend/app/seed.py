@@ -126,9 +126,10 @@ KPI_AREAS: list[dict] = [
         "key": "kommunikativt", "namn": "Kommunikativt ledarskap", "short": None, "ikon": "megaphone",
         "lower_better": False, "support": "Kommunikation",
         "questions": [
-            "Hur för du ut kommunens och förvaltningens riktning till dina medarbetare?",
-            "Hur skapar du dialog och delaktighet i vardagen?",
-            "Hur vet du att dina budskap når fram och förstås?",
+            "Min chef förklarar mål och förväntningar på ett tydligt sätt",
+            "Min chef ger medarbetare konstruktiv kritik på deras arbete",
+            "Min chef är lyhörd och lyssnar på medarbetarna",
+            "Min chef involverar medarbetarna i viktiga frågor som rör min organisation",
         ],
     },
 ]
@@ -404,11 +405,23 @@ async def seed(session: AsyncSession) -> None:
         if area.info != a.get("info"):
             area.info = a.get("info")
         area_by_key[a["key"]] = area
-        for q_ordning, text in enumerate(a["questions"]):
-            await _get_or_create(
-                session, Question, {"ordning": q_ordning},
-                kpi_area_id=area.id, text=text,
+        # Reconcilera frågeställningarna mot seed-listan (positionsvis): uppdatera text på
+        # befintliga, lägg till nya, ta bort överflödiga. Utan detta blir gamla frågor kvar
+        # i drift (_get_or_create tar aldrig bort) när en areas frågor ändras.
+        befintliga = (
+            await session.execute(
+                select(Question).filter_by(kpi_area_id=area.id).order_by(Question.ordning)
             )
+        ).scalars().all()
+        onskade = a["questions"]
+        for i, text in enumerate(onskade):
+            if i < len(befintliga):
+                befintliga[i].text = text
+                befintliga[i].ordning = i
+            else:
+                session.add(Question(kpi_area_id=area.id, text=text, ordning=i))
+        for extra in befintliga[len(onskade):]:
+            await session.delete(extra)
 
     # BYGGPLAN §17: dessa nyckeltal följs upp via dialogfrågor och ska aldrig ha mätdata.
     # Rensa ev. gamla dummy-mätvärden (från den ursprungliga seeden) så de renderas som
