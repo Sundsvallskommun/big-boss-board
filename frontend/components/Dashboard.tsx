@@ -232,13 +232,13 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                     </span>
                   </span>
 
-                  {/* Värde + trend */}
-                  <span className="flex items-end justify-between gap-12">
-                    <span className="font-header text-h1 font-bold leading-none tracking-tight xl:text-h3">
+                  {/* Värdet på egen rad (får hela bredden → radbryts inte), förändringen under. */}
+                  <span className="block">
+                    <span className="block font-header text-h1 font-bold leading-none tracking-tight xl:text-h3">
                       {m.value_text}
                     </span>
                     <span
-                      className={`flex items-center gap-6 pb-1 text-small font-semibold ${
+                      className={`mt-6 flex items-center gap-6 text-small font-semibold ${
                         m.trend_dir === null
                           ? "text-dark-secondary"
                           : m.trend_good
