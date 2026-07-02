@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { Button, FormControl, FormLabel, Input, Textarea } from "@/components/ui";
 import {
   TrendingUp,
@@ -21,11 +22,34 @@ import {
 import type { Activity, DialogueArea } from "@/lib/api";
 import { areaIcon } from "./icons";
 import { STATUS } from "./status";
-import { HmeLineChart } from "./charts/HmeLineChart";
-import { EkonomiNettokostnadChart } from "./charts/EkonomiNettokostnadChart";
-import { SjukfranvaroChart } from "./charts/SjukfranvaroChart";
 import { InfoPopover } from "./InfoPopover";
 import { SjukfranvaroNivaer } from "./SjukfranvaroNivaer";
+
+/** Diagrammen laddas bara i webbläsaren (ssr: false). recharts är tungt att
+ *  server-rendera och ger inget värde på servern (ResponsiveContainer mäter först
+ *  DOM:en i klienten). Att hålla dem utanför SSR gör att dialog-sidan renderas lätt
+ *  även under samtidig last — annars kan flera samtidiga renderingar mätta
+ *  frontend-processen. En platshållare i rätt höjd håller layouten stabil. */
+const ChartPlaceholder = ({ height }: { height: number }) => (
+  <div
+    className="w-full animate-pulse rounded-8 bg-background-200"
+    style={{ height }}
+    aria-hidden="true"
+  />
+);
+
+const HmeLineChart = dynamic(() => import("./charts/HmeLineChart").then((m) => m.HmeLineChart), {
+  ssr: false,
+  loading: () => <ChartPlaceholder height={320} />,
+});
+const EkonomiNettokostnadChart = dynamic(
+  () => import("./charts/EkonomiNettokostnadChart").then((m) => m.EkonomiNettokostnadChart),
+  { ssr: false, loading: () => <ChartPlaceholder height={380} /> },
+);
+const SjukfranvaroChart = dynamic(
+  () => import("./charts/SjukfranvaroChart").then((m) => m.SjukfranvaroChart),
+  { ssr: false, loading: () => <ChartPlaceholder height={360} /> },
+);
 
 type Feedback = { kind: "ok" | "err"; msg: string } | null;
 
