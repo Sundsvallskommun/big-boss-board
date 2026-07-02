@@ -216,15 +216,15 @@ def _measurement_fields(enhet: EkonomiEnhet, period: str, kalla: str) -> dict:
     budget = abs(budget_ack)
     pct = round(kostnad / budget * 100, 1)
     status = ekonomi_status(pct)
-    # Headline: avvikelse mot ackumulerad budget i mnkr (senaste rapportperioden),
-    # i klartext så tecknet aldrig kan missförstås. >0 = under budget, <0 = över.
+    # Headline: avvikelse mot ackumulerad budget i mnkr, med tecken enligt kommunal
+    # konvention — minus = över budget (spenderat mer än budget), plus = under budget.
     avvikelse = round(budget - kostnad, 1)
     if avvikelse > 0:
-        value_text = f"{_num(avvikelse)} mnkr under budget"
+        value_text = f"+{_num(avvikelse)} mnkr"
     elif avvikelse < 0:
-        value_text = f"{_num(abs(avvikelse))} mnkr över budget"
+        value_text = f"−{_num(abs(avvikelse))} mnkr"
     else:
-        value_text = "På budget"
+        value_text = "±0 mnkr"
 
     # Trend: nettokostnad i år mot fg år (ack, jämförbar period). Högre kostnad = sämre.
     trend_dir: TrendDir | None = None
@@ -242,9 +242,9 @@ def _measurement_fields(enhet: EkonomiEnhet, period: str, kalla: str) -> dict:
             trend_text = "Oförändrat vs fg år"
 
     interp = {
-        Status.good: f"Nettokostnaden ligger inom budget ({value_text}). Fortsätt följa kostnadsutvecklingen.",
-        Status.warn: f"Nettokostnaden ligger något över budget ({value_text}). Bevaka utvecklingen.",
-        Status.alert: f"Nettokostnaden överskrider budget ({value_text}). Vidta åtgärder och följ upp tätare.",
+        Status.good: f"Nettokostnaden ligger inom budget (avvikelse {value_text} mot ackumulerad budget). Fortsätt följa kostnadsutvecklingen.",
+        Status.warn: f"Nettokostnaden ligger något över budget (avvikelse {value_text}). Bevaka utvecklingen.",
+        Status.alert: f"Nettokostnaden överskrider budget (avvikelse {value_text}). Vidta åtgärder och följ upp tätare.",
     }[status]
 
     resultatrakning = [
