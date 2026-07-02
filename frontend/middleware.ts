@@ -33,5 +33,5 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   // Kör på allt utom statiska Next-resurser.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand).*)"],
 };

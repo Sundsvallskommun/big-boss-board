@@ -37,8 +37,11 @@ implementerar det i ett **eget, litet token-lager** — **inte** hela designsyst
 - **UI-primitiver:** lokala i `frontend/components/ui/` (`Button`, `Input`, `Textarea`,
   `FormControl`, `FormLabel`, `Logo`) via barrel `@/components/ui`. Stödjer de props appen använder
   (`Button` variant `primary`/`ghost`, `loading`, `leftIcon`).
-- **Logotyp:** `<Logo>` är en **egen wordmark** (emblem + "Sundsvalls kommun" i vattjom-blå), **inte**
-  kommunens officiella logotyp (medvetet avsteg, godkänt). Officiella märket finns inte i koden.
+- **Logotyp:** appens header (`components/BrandLockup`, använd i BrandBar/StatusHeader/Dashboard)
+  visar kommunens **officiella logotyp** (`frontend/public/brand/sundsvalls-kommun-logotyp.svg`,
+  svart variant) + avdelare + produktnamnet **"Dialogstöd"** i Raleway — samma header-stil som
+  systerappen Verktyg. Den egna wordmarken `<Logo>` (emblem + "Sundsvalls kommun" i vattjom-blå)
+  finns kvar och används på login-skärmen.
 - **Typsnitt:** brödtext/fält/knappar = **Arial**, rubriker = **Raleway** (`font-header`), etiketter =
   **Geist Mono** (`font-mono`). Raleway + Geist Mono laddas i `app/layout.tsx` (Google Fonts).
 

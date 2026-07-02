@@ -1,19 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { Logo } from "@/components/ui";
+import { BrandLockup } from "@/components/BrandLockup";
 import { TrendingUp, TrendingDown, ChevronLeft } from "lucide-react";
 import {
   type DialogueDetail,
   type Activity,
-  type Status,
   createActivity,
   markActivityKlar,
 } from "@/lib/api";
 import { areaIcon } from "./icons";
 import { STATUS } from "./status";
-import { StatusFordelning } from "./StatusFordelning";
 import { DetailPanel } from "./DetailPanel";
 
 // Tillfälligt dolda nyckeltal i denna version (ta bort ur setet för att visa igen).
@@ -28,28 +26,11 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
     Object.fromEntries(areas.map((a) => [a.area.key, a.activities ?? []])),
   );
 
-  // Sammanvägd status: good=1, warn=0.5, alert=0. Styr etiketten.
-  const score = useMemo(() => {
-    if (areas.length === 0) return 0;
-    const w = { good: 1, warn: 0.5, alert: 0 } as const;
-    return areas.reduce((sum, a) => sum + w[a.measurement.status], 0) / areas.length;
-  }, [areas]);
-
-  // Antal nyckeltal per status — driver fördelningsstapeln.
-  const counts = useMemo(() => {
-    const c: Record<Status, number> = { good: 0, warn: 0, alert: 0 };
-    for (const a of areas) c[a.measurement.status]++;
-    return c;
-  }, [areas]);
-
   const selectedIndex = Math.max(
     0,
     areas.findIndex((a) => a.area.key === selected),
   );
   const current = areas[selectedIndex];
-
-  const gaugeLabel =
-    score >= 0.75 ? "I mål" : score >= 0.4 ? "Delvis i mål" : "Under mål";
 
   function scrollToDetail() {
     document.getElementById("detail")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -73,32 +54,14 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
       {/* ===== Topbar ===== */}
       <header className="sticky top-0 z-30 border-b border-hairline bg-background-content">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-16 px-24 py-16 md:px-32">
-          <div className="flex min-w-0 items-center gap-14">
-            <Link
-              href="/"
-              aria-label="Till startsidan"
-              className="flex items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              <Logo variant="logo" />
-            </Link>
-            <span className="h-36 w-px shrink-0 bg-divider" aria-hidden="true" />
-            <Link
-              href="/"
-              className="inline-flex items-center gap-4 truncate rounded-md text-base font-semibold tracking-tight text-dark-secondary transition hover:text-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              <ChevronLeft size={16} aria-hidden="true" />
-              Alla förvaltningar
-            </Link>
-          </div>
-          <div className="flex items-center gap-12">
-            <div
-              role="img"
-              aria-label={`Ansvarig chef: ${dialogue.ansvarig_chef.namn}`}
-              className="grid h-40 w-40 place-items-center rounded-full bg-vattjom-surface-primary text-small font-semibold text-white"
-            >
-              {dialogue.ansvarig_chef.initialer}
-            </div>
-          </div>
+          <BrandLockup />
+          <Link
+            href="/"
+            className="inline-flex items-center gap-4 truncate rounded-md text-base font-semibold tracking-tight text-dark-secondary transition hover:text-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <ChevronLeft size={16} aria-hidden="true" />
+            Alla förvaltningar
+          </Link>
         </div>
       </header>
 
@@ -127,38 +90,8 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
               </div>
               <div className="text-small leading-tight text-dark-secondary">Sundsvalls kommun</div>
             </div>
-            <span className="h-36 w-px bg-divider" aria-hidden="true" />
-            <div>
-              <div className="eyebrow-sm">Ansvarig chef</div>
-              <div className="mt-2 text-base font-semibold leading-tight">
-                {dialogue.ansvarig_chef.namn}
-              </div>
-              <div className="text-small leading-tight text-dark-secondary">{dialogue.period}</div>
-            </div>
           </div>
         </div>
-
-        {/* ===== Norra stjärnan ===== */}
-        <section className="mb-32 overflow-hidden rounded-12 border border-hairline bg-background-content">
-          <div className="grid items-center gap-24 p-24 md:grid-cols-[1fr_auto] md:p-28">
-            <div className="space-y-16">
-              <div className="flex items-baseline gap-12">
-                <span className="eyebrow w-[68px] shrink-0">Effekt</span>
-                <p className="text-[19px] font-semibold leading-snug tracking-[-0.015em] md:text-[21px]">
-                  Sundsvalls kommun uppnår <span className="text-vattjom-text-primary">samtliga uppdrag</span>
-                </p>
-              </div>
-              <div className="h-px bg-hairline" />
-              <div className="flex items-baseline gap-12">
-                <span className="eyebrow w-[68px] shrink-0">Resultat</span>
-                <p className="text-[19px] font-semibold leading-snug tracking-[-0.015em] md:text-[21px]">
-                  Chefer säkrar resultat och måluppfyllelse
-                </p>
-              </div>
-            </div>
-            <StatusFordelning counts={counts} total={areas.length} label={gaugeLabel} />
-          </div>
-        </section>
 
         {/* ===== KPI-strip: statuslegend (rubrik borttagen — sektioner saknar rubriker) ===== */}
         <div className="mb-12 flex items-end justify-end gap-12">
