@@ -7,17 +7,20 @@ import { TrendingUp, TrendingDown, ChevronLeft, MessagesSquare } from "lucide-re
 import {
   type DialogueDetail,
   type Activity,
+  type AreaStatus,
+  type Status,
   createActivity,
   markActivityKlar,
+  setAreaStatus,
 } from "@/lib/api";
 import { areaIcon } from "./icons";
 import { STATUS } from "./status";
 import { DetailPanel } from "./DetailPanel";
 import { QuestionPanel } from "./QuestionPanel";
 
-// Tillfälligt dolt nyckeltal (Verksamhet byggs i BYGGPLAN §16). Digital transformation
-// och Kommunikativt ledarskap visas som dialogfråge-kort utan mätdata (§17).
-const DOLDA_OMRADEN = new Set(["verksamhet"]);
+// Inga dolda nyckeltal längre. Verksamhet, Digital transformation och Kommunikativt
+// ledarskap visas som dialogfråge-kort utan mätdata, med manuellt satt status (§16–17).
+const DOLDA_OMRADEN = new Set<string>();
 
 export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
   const areas = dialogue.areas.filter((a) => !DOLDA_OMRADEN.has(a.area.key));
@@ -26,6 +29,10 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
   // Aktiviteter per område, initierat från servern; uppdateras vid lägg-till/klarrapport.
   const [activities, setActivities] = useState<Record<string, Activity[]>>(() =>
     Object.fromEntries(areas.map((a) => [a.area.key, a.activities ?? []])),
+  );
+  // Manuellt satt status per område (§16), initierat från servern; uppdateras vid spara.
+  const [manuellStatus, setManuellStatus] = useState<Record<string, AreaStatus | null>>(() =>
+    Object.fromEntries(areas.map((a) => [a.area.key, a.manuell_status])),
   );
 
   const selectedIndex = Math.max(
@@ -49,6 +56,11 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
       ...prev,
       [key]: (prev[key] ?? []).map((a) => (a.id === activityId ? updated : a)),
     }));
+  }
+
+  async function sparaStatus(key: string, areaId: number, status: Status, kommentar: string) {
+    const saved = await setAreaStatus(dialogue.id, areaId, status, kommentar);
+    setManuellStatus((prev) => ({ ...prev, [key]: saved }));
   }
 
   return (
@@ -122,8 +134,10 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
             const AreaIcon = areaIcon(area.ikon);
             const isSel = area.key === selected;
 
-            // Nyckeltal utan mätdata (§17) → dialogfråge-kort, utan mätare och status.
+            // Nyckeltal utan mätdata (§16–17) → dialogfråge-kort med manuellt satt status.
             if (!m) {
+              const ms = manuellStatus[area.key];
+              const st = ms ? STATUS[ms.status] : null;
               return (
                 <button
                   key={area.key}
@@ -134,29 +148,46 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                     setSelected(area.key);
                     scrollToDetail();
                   }}
-                  className={`flex flex-col overflow-hidden rounded-12 border bg-background-content text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-                    isSel ? "border-vattjom-surface-primary card-selected" : "border-hairline"
-                  }`}
+                  className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                    st ? st.soft : "bg-background-content"
+                  } ${isSel ? "border-vattjom-surface-primary card-selected" : "border-hairline"}`}
                 >
-                  <span className="h-4 w-full bg-divider" aria-hidden="true" />
+                  <span className={`h-4 w-full ${st ? st.solid : "bg-divider"}`} aria-hidden="true" />
                   <span className="flex h-full flex-col gap-16 p-20">
                     <span className="flex items-center gap-10">
-                      <span className="icon-chip grid h-40 w-40 shrink-0 place-items-center rounded-12 bg-background-content text-vattjom-text-primary">
+                      <span
+                        className={`icon-chip grid h-40 w-40 shrink-0 place-items-center rounded-12 bg-background-content ${
+                          st ? st.solidText : "text-vattjom-text-primary"
+                        }`}
+                      >
                         <AreaIcon size={20} strokeWidth={2} aria-hidden="true" />
                       </span>
                       <span className="text-base font-semibold leading-tight tracking-tight">
                         {area.short ? `${area.namn} (${area.short})` : area.namn}
                       </span>
                     </span>
-                    <span className="mt-auto flex items-center gap-8 text-small text-dark-secondary">
-                      <MessagesSquare
-                        size={16}
-                        strokeWidth={2}
-                        aria-hidden="true"
-                        className="text-vattjom-text-primary"
-                      />
-                      Dialogfrågor · {area.questions.length}{" "}
-                      {area.questions.length === 1 ? "fråga" : "frågor"}
+                    <span className="mt-auto flex items-center justify-between gap-8">
+                      <span className="flex items-center gap-8 text-small text-dark-secondary">
+                        <MessagesSquare
+                          size={16}
+                          strokeWidth={2}
+                          aria-hidden="true"
+                          className="text-vattjom-text-primary"
+                        />
+                        {area.questions.length}{" "}
+                        {area.questions.length === 1 ? "fråga" : "frågor"}
+                      </span>
+                      {st ? (
+                        <span className={`eyebrow-sm flex shrink-0 items-center gap-6 ${st.text}`}>
+                          <span
+                            className={`inline-block h-8 w-8 rounded-full ${st.solid}`}
+                            aria-hidden="true"
+                          />
+                          {st.legend}
+                        </span>
+                      ) : (
+                        <span className="eyebrow-sm shrink-0 text-dark-secondary">Ingen status</span>
+                      )}
                     </span>
                   </span>
                 </button>
@@ -256,6 +287,10 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                 item={current}
                 index={selectedIndex}
                 total={areas.length}
+                manuellStatus={manuellStatus[current.area.key] ?? null}
+                onSaveStatus={(status, kommentar) =>
+                  sparaStatus(current.area.key, current.area.id, status, kommentar)
+                }
               />
             ))}
         </div>

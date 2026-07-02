@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db import get_session
-from app.models import Activity, Dialogue, KpiArea, Measurement, SupportFunction
+from app.models import Activity, AreaStatus, Dialogue, KpiArea, Measurement, SupportFunction
 from app.schemas import DialogueArea, DialogueDetail, DialogueSummary
 
 router = APIRouter(prefix="/api/dialogues", tags=["dialogues"])
@@ -88,10 +88,18 @@ async def get_dialogue(
         )
     ).scalars().all()
     meas_by_area = {m.kpi_area_id: m for m in dialogue.measurements}
+    # Manuellt satt status per område (BYGGPLAN §16), för nyckeltal utan mätdata.
+    status_by_area = {
+        s.kpi_area_id: s
+        for s in (
+            await session.execute(select(AreaStatus).filter_by(dialogue_id=dialogue_id))
+        ).scalars()
+    }
     areas = [
         DialogueArea(
             area=area,
             measurement=meas_by_area.get(area.id),
+            manuell_status=status_by_area.get(area.id),
             activities=activities_by_area.get(area.id, []),
         )
         for area in all_areas

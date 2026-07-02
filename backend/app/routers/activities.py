@@ -11,9 +11,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select
+
 from app.db import get_session
-from app.models import Activity, Dialogue, KpiArea
-from app.schemas import ActivityCreate, ActivityKlar, ActivityOut
+from app.models import Activity, AreaStatus, Dialogue, KpiArea
+from app.schemas import ActivityCreate, ActivityKlar, ActivityOut, AreaStatusIn, AreaStatusOut
 
 router = APIRouter(tags=["activities"])
 
@@ -43,6 +45,42 @@ async def create_activity(
     await session.commit()
     await session.refresh(activity)
     return activity
+
+
+@router.put(
+    "/api/dialogues/{dialogue_id}/areas/{area_id}/status",
+    response_model=AreaStatusOut,
+)
+async def set_area_status(
+    dialogue_id: int,
+    area_id: int,
+    body: AreaStatusIn,
+    session: AsyncSession = Depends(get_session),
+) -> AreaStatus:
+    """Sätt/uppdatera manuell status (grön/gul/röd) + kommentar för ett område (BYGGPLAN §16).
+
+    Upsertar per (dialog, område) — dvs per förvaltning. Del av dialogflödet (gatas av
+    access-koden via proxyn), inte token-skyddad.
+    """
+    if await session.get(Dialogue, dialogue_id) is None:
+        raise HTTPException(status_code=404, detail="Dialogen hittades inte.")
+    if await session.get(KpiArea, area_id) is None:
+        raise HTTPException(status_code=404, detail="Området hittades inte.")
+
+    kommentar = (body.kommentar or "").strip() or None
+    row = (
+        await session.execute(
+            select(AreaStatus).filter_by(dialogue_id=dialogue_id, kpi_area_id=area_id)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        row = AreaStatus(dialogue_id=dialogue_id, kpi_area_id=area_id)
+        session.add(row)
+    row.status = body.status
+    row.kommentar = kommentar
+    await session.commit()
+    await session.refresh(row)
+    return row
 
 
 @router.post("/api/activities/{activity_id}/klar", response_model=ActivityOut)

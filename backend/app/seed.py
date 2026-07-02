@@ -133,9 +133,10 @@ KPI_AREAS: list[dict] = [
     },
 ]
 
-# Nyckeltal som följs upp via dialogfrågor i stället för mätdata (BYGGPLAN §17).
-# Seeden ser till att dessa saknar mätvärden så frontend visar dem som dialogfråge-kort.
-DIALOG_ONLY_KEYS = {"digital", "kommunikativt"}
+# Nyckeltal som följs upp via dialogfrågor + manuellt satt status i stället för mätdata
+# (BYGGPLAN §16–17). Seeden rensar ev. gamla dummy-mätvärden så frontend visar dem som
+# dialogfråge-kort; status sätts manuellt per förvaltning (area_status).
+DIALOG_ONLY_KEYS = {"verksamhet", "digital", "kommunikativt"}
 
 # Status-sidans kort (Fas B). Bootstrap-innehåll transkriberat från den tidigare
 # hårdkodade frontend-filen (data.ts). Seedas EN gång (bara om tabellen är tom) så att

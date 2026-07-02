@@ -444,6 +444,21 @@ class SjukResultat(BaseModel):
     enheter: list[SjukRad]
 
 
+class AreaStatusOut(ORMModel):
+    """Manuellt satt status + kommentar för ett område i en dialog (BYGGPLAN §16)."""
+
+    status: Status
+    kommentar: str | None = None
+    uppdaterad_at: datetime
+
+
+class AreaStatusIn(BaseModel):
+    """Sätt/uppdatera manuell status för ett område (per förvaltning)."""
+
+    status: Status
+    kommentar: str | None = None
+
+
 class DialogueArea(BaseModel):
     """Ett område i en dialog: referensdata + mätvärde + aktiviteter.
 
@@ -453,6 +468,8 @@ class DialogueArea(BaseModel):
     area: KpiAreaOut
     # None för nyckeltal utan mätdata (följs upp via dialogfrågor, BYGGPLAN §17).
     measurement: MeasurementOut | None = None
+    # Manuellt satt status (BYGGPLAN §16) för nyckeltal utan mätdata. None = ej satt.
+    manuell_status: AreaStatusOut | None = None
     activities: list[ActivityOut] = []
 
 

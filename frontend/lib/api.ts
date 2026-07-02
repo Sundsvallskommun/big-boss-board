@@ -168,10 +168,19 @@ export interface Activity {
   klar_at: string | null;
 }
 
+/** Manuellt satt status + kommentar för ett område (BYGGPLAN §16), per förvaltning. */
+export interface AreaStatus {
+  status: Status;
+  kommentar: string | null;
+  uppdaterad_at: string;
+}
+
 export interface DialogueArea {
   area: KpiArea;
   /** null för nyckeltal utan mätdata (följs upp via dialogfrågor). */
   measurement: Measurement | null;
+  /** Manuellt satt status för nyckeltal utan mätdata. null = ej satt ännu. */
+  manuell_status: AreaStatus | null;
   activities: Activity[];
 }
 
@@ -318,6 +327,24 @@ export async function createActivity(
   });
   if (!res.ok) {
     throw new Error("Kunde inte lägga till aktiviteten.");
+  }
+  return res.json();
+}
+
+/** Sätt/uppdatera manuell status + kommentar för ett område (per förvaltning). */
+export async function setAreaStatus(
+  dialogueId: number,
+  areaId: number,
+  status: Status,
+  kommentar: string,
+): Promise<AreaStatus> {
+  const res = await fetch(`/api/dialogues/${dialogueId}/areas/${areaId}/status`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status, kommentar }),
+  });
+  if (!res.ok) {
+    throw new Error("Kunde inte spara statusen.");
   }
   return res.json();
 }

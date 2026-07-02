@@ -202,6 +202,26 @@ class Activity(Base):
     kpi_area: Mapped[KpiArea] = relationship()
 
 
+class AreaStatus(Base):
+    """Manuellt satt status för ett nyckeltal utan mätdata (BYGGPLAN §16), per dialog
+    (dvs per förvaltning) och område. Chefen sätter grön/gul/röd + valfri kommentar.
+    En rad per (dialog, område) — upsertas."""
+
+    __tablename__ = "area_status"
+    __table_args__ = (UniqueConstraint("dialogue_id", "kpi_area_id", name="uq_area_status_area"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dialogue_id: Mapped[int] = mapped_column(ForeignKey("dialogue.id"))
+    kpi_area_id: Mapped[int] = mapped_column(ForeignKey("kpi_area.id"))
+    status: Mapped[Status] = mapped_column(Enum(Status, name="status"))
+    kommentar: Mapped[str | None] = mapped_column(Text, nullable=True)
+    uppdaterad_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    kpi_area: Mapped[KpiArea] = relationship()
+
+
 class Submission(Base):
     """Inkommen synpunkt/fråga/aktivitet från en projektdeltagare (inkorgen/intake).
 
