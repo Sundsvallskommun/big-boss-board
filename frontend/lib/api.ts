@@ -205,6 +205,49 @@ function apiBase(): string {
   return typeof window === "undefined" ? SERVER_BASE : "";
 }
 
+/** Fel från API-lagret med bevarad HTTP-status (så sidor kan skilja 404 från 5xx). */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Hämta JSON med kort timeout + retry på transienta fel.
+ *
+ *  Sidorna är `force-dynamic` och renderas om vid varje mjuk navigering; en hängande
+ *  eller flaky backend (t.ex. 502/503/504 eller en uppkoppling som aldrig svarar) ska
+ *  därför inte kunna frysa navigeringen på obestämd tid. Vi bryter efter `TIMEOUT_MS`,
+ *  försöker igen på nätverksfel/timeout/5xx (med liten backoff) och ger upp direkt på
+ *  4xx (ett bestående fel som 404 ska bubbla vidare, inte döljas av omförsök). */
+async function fetchJson<T>(path: string, label: string): Promise<T> {
+  const url = `${apiBase()}${path}`;
+  const TIMEOUT_MS = 5000; // bryt en hängande uppkoppling snabbt
+  const ATTEMPTS = 3; // täcker en transient blipp; worst case ~15 s med loading-vy synlig
+  let lastErr: unknown;
+
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
+    } catch (err) {
+      lastErr = err; // timeout (AbortError) eller nätverksfel → transient, försök igen
+      if (attempt < ATTEMPTS - 1) await sleep(150 * (attempt + 1));
+      continue;
+    }
+    if (res.ok) return (await res.json()) as T;
+    if (res.status < 500) throw new ApiError(`${label} (HTTP ${res.status}).`, res.status);
+    lastErr = new ApiError(`${label} (HTTP ${res.status}).`, res.status); // 5xx → transient
+    if (attempt < ATTEMPTS - 1) await sleep(150 * (attempt + 1));
+  }
+  throw lastErr instanceof Error ? lastErr : new ApiError(label);
+}
+
 export interface DialogueSummary {
   id: number;
   period: string;
@@ -214,19 +257,11 @@ export interface DialogueSummary {
 }
 
 export async function listDialogues(): Promise<DialogueSummary[]> {
-  const res = await fetch(`${apiBase()}/api/dialogues`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`Kunde inte hämta dialoger (HTTP ${res.status}).`);
-  }
-  return res.json();
+  return fetchJson<DialogueSummary[]>("/api/dialogues", "Kunde inte hämta dialoger");
 }
 
 export async function getDialogue(id: number): Promise<DialogueDetail> {
-  const res = await fetch(`${apiBase()}/api/dialogues/${id}`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`Kunde inte hämta dialogen (HTTP ${res.status}).`);
-  }
-  return res.json();
+  return fetchJson<DialogueDetail>(`/api/dialogues/${id}`, "Kunde inte hämta dialogen");
 }
 
 /** Status-sidans kurerade kort (Fas B — flyttade från hårdkodad data.ts till DB). */
@@ -266,11 +301,7 @@ export interface StatusContent {
 
 /** Publicerat status-innehåll (frågor + statusrapporter) i ett anrop. */
 export async function listStatusContent(): Promise<StatusContent> {
-  const res = await fetch(`${apiBase()}/api/status-cards`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`Kunde inte hämta statusinnehåll (HTTP ${res.status}).`);
-  }
-  return res.json();
+  return fetchJson<StatusContent>("/api/status-cards", "Kunde inte hämta statusinnehåll");
 }
 
 /** Lägg till en aktivitet i ett område (anropas i webbläsaren via proxyn). */

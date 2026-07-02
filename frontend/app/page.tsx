@@ -8,19 +8,8 @@ import { isAdmin } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  let dialogues;
-  try {
-    dialogues = await listDialogues();
-  } catch {
-    return (
-      <main id="huvudinnehall" tabIndex={-1} className="mx-auto max-w-[640px] px-6 py-24 outline-none">
-        <h1 className="font-header text-h3 font-bold tracking-tight">Dialogerna kunde inte hämtas</h1>
-        <p className="mt-3 text-base leading-relaxed text-dark-secondary">
-          Tjänsten svarar inte just nu. Försök igen om en stund.
-        </p>
-      </main>
-    );
-  }
+  // Fel bubblar till app/error.tsx (återställningsbar vy med "Försök igen").
+  const dialogues = await listDialogues();
 
   const sorted = [...dialogues].sort((a, b) =>
     a.organisation.namn.localeCompare(b.organisation.namn, "sv"),
