@@ -74,7 +74,8 @@ services:
     healthcheck:
       # /login svarar 200 oavsett om ACCESS_CODE är satt (serveras av frontend själv).
       # 127.0.0.1 (inte localhost) — servern lyssnar på IPv4, localhost provar ::1 först.
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/login || exit 1"]
+      # node-baserad check: bookworm-slim (glibc) saknar wget/curl, men har node.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5

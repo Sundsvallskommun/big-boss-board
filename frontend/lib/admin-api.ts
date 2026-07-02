@@ -22,6 +22,8 @@ export async function listSubmissionsAdmin(): Promise<Submission[]> {
     const res = await fetch(`${backend}/api/admin/submissions`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
+      // Får aldrig hänga status-sidan om backend är trög/onåbar.
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return [];
     return res.json();
