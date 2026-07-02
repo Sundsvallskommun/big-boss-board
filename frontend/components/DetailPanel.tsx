@@ -365,7 +365,7 @@ export function DetailPanel({
           <div className={`rounded-12 border p-16 ${s.soft} ${s.border}`}>
             <dt className={`flex items-center gap-6 font-mono text-[12px] font-semibold uppercase tracking-[0.05em] ${s.text}`}>
               <Gauge size={14} strokeWidth={2.2} aria-hidden="true" />
-              Utfall
+              {area.key === "ekonomi" ? "Avvikelse" : "Utfall"}
             </dt>
             <dd className={`mt-6 font-header text-h3 font-bold leading-none ${s.text}`}>
               {m.value_text}

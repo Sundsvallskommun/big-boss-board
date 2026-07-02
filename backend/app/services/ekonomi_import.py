@@ -212,9 +212,19 @@ def _measurement_fields(enhet: EkonomiEnhet, period: str, kalla: str) -> dict:
 
     utfall = netto.utfall or 0.0
     budget_ack = netto.budget_ack
-    pct = round(abs(utfall) / abs(budget_ack) * 100, 1)
+    kostnad = abs(utfall)
+    budget = abs(budget_ack)
+    pct = round(kostnad / budget * 100, 1)
     status = ekonomi_status(pct)
-    value_text = f"{_num(round(pct))} % av budget"
+    # Headline: avvikelse mot ackumulerad budget i mnkr (senaste rapportperioden),
+    # i klartext så tecknet aldrig kan missförstås. >0 = under budget, <0 = över.
+    avvikelse = round(budget - kostnad, 1)
+    if avvikelse > 0:
+        value_text = f"{_num(avvikelse)} mnkr under budget"
+    elif avvikelse < 0:
+        value_text = f"{_num(abs(avvikelse))} mnkr över budget"
+    else:
+        value_text = "På budget"
 
     # Trend: nettokostnad i år mot fg år (ack, jämförbar period). Högre kostnad = sämre.
     trend_dir: TrendDir | None = None
@@ -256,11 +266,13 @@ def _measurement_fields(enhet: EkonomiEnhet, period: str, kalla: str) -> dict:
 
     return {
         "value_text": value_text,
-        "value_num": pct,
-        "unit": "% av budget",
-        "target_text": "100 % (budget)",
-        "target_num": EK_BUDGET,
-        "bar_max": 120.0,
+        # Mätaren visar ackumulerat utfall mot ack. budget (mållinje) i mnkr —
+        # stapel förbi mållinjen = över budget. Färgen styrs av samma tröskel som förr.
+        "value_num": kostnad,
+        "unit": "mnkr",
+        "target_text": f"{_num(budget)} mnkr",
+        "target_num": budget,
+        "bar_max": round(max(kostnad, budget) * 1.15, 1),
         "status": status,
         "trend_dir": trend_dir,
         "trend_good": trend_good,
