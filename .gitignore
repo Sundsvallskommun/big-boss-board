@@ -45,6 +45,10 @@ indata/
 # aldrig. Matas in via scripts/import_ekonomi_serie.py mot import-endpointen.
 ekonomi-indata/
 
+# Rå sjukfrånvaro-CSV (Qlik personal-uttag per period) — versionshanteras aldrig.
+# Matas in via scripts/import_sjukfranvaro.py mot import-endpointen.
+sjukfranvaro-indata/
+
 # Riktig HME-aggregatdata levereras utanför git (privat; monteras vid deploy).
 # Endast katalogen (via .gitkeep) versionshanteras — aldrig själva datafilerna.
 /backend/app/data/*
