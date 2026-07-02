@@ -10,6 +10,7 @@ import {
   Flag,
   Lightbulb,
   Inbox,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { StatusHeader } from "./StatusHeader";
@@ -90,6 +91,17 @@ function IdBricka({ id }: { id: number }) {
   );
 }
 
+/** Etikett i kortets översikt för vilket forum/instans som äger frågan (t.ex. "Styrgrupp").
+ *  Besvarade kort visar forum i svarsblocket; öppna/övergripande kort får det här. */
+function ForumPill({ forum }: { forum: string }) {
+  return (
+    <span className="eyebrow-sm inline-flex items-center gap-6 rounded-full bg-vattjom-background-100 px-10 py-4 text-vattjom-text-primary">
+      <Users size={12} aria-hidden="true" />
+      {forum}
+    </span>
+  );
+}
+
 /** Indikator-pill i kortets översikt: "Förslag till beslut finns". */
 function ForslagPill() {
   return (
@@ -124,6 +136,7 @@ function OppenKort({ q }: { q: StatusFraga }) {
             <HelpCircle size={12} aria-hidden="true" />
             Väntar på svar
           </span>
+          {q.forum && <ForumPill forum={q.forum} />}
           {q.forslag && <ForslagPill />}
         </div>
         <h3 className="mt-12 font-header text-large font-bold leading-snug tracking-tight">
@@ -204,6 +217,7 @@ function OvergripandeKort({ q }: { q: StatusFraga }) {
             <Flag size={12} aria-hidden="true" />
             Utanför projektet
           </span>
+          {q.forum && <ForumPill forum={q.forum} />}
           {q.forslag && <ForslagPill />}
         </div>
         <h3 className="mt-12 font-header text-large font-bold leading-snug tracking-tight">
