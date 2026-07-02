@@ -170,7 +170,8 @@ export interface Activity {
 
 export interface DialogueArea {
   area: KpiArea;
-  measurement: Measurement;
+  /** null för nyckeltal utan mätdata (följs upp via dialogfrågor). */
+  measurement: Measurement | null;
   activities: Activity[];
 }
 

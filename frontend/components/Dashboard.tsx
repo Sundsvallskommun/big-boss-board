@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BrandLockup } from "@/components/BrandLockup";
-import { TrendingUp, TrendingDown, ChevronLeft } from "lucide-react";
+import { TrendingUp, TrendingDown, ChevronLeft, MessagesSquare } from "lucide-react";
 import {
   type DialogueDetail,
   type Activity,
@@ -13,9 +13,11 @@ import {
 import { areaIcon } from "./icons";
 import { STATUS } from "./status";
 import { DetailPanel } from "./DetailPanel";
+import { QuestionPanel } from "./QuestionPanel";
 
-// Tillfälligt dolda nyckeltal i denna version (ta bort ur setet för att visa igen).
-const DOLDA_OMRADEN = new Set(["verksamhet", "digital"]);
+// Tillfälligt dolt nyckeltal (Verksamhet byggs i BYGGPLAN §16). Digital transformation
+// och Kommunikativt ledarskap visas som dialogfråge-kort utan mätdata (§17).
+const DOLDA_OMRADEN = new Set(["verksamhet"]);
 
 export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
   const areas = dialogue.areas.filter((a) => !DOLDA_OMRADEN.has(a.area.key));
@@ -117,10 +119,52 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
         >
           {areas.map((item) => {
             const { area, measurement: m } = item;
-            const s = STATUS[m.status];
             const AreaIcon = areaIcon(area.ikon);
-            const TrendIcon = m.trend_dir === "up" ? TrendingUp : TrendingDown;
             const isSel = area.key === selected;
+
+            // Nyckeltal utan mätdata (§17) → dialogfråge-kort, utan mätare och status.
+            if (!m) {
+              return (
+                <button
+                  key={area.key}
+                  type="button"
+                  aria-selected={isSel}
+                  aria-pressed={isSel}
+                  onClick={() => {
+                    setSelected(area.key);
+                    scrollToDetail();
+                  }}
+                  className={`flex flex-col overflow-hidden rounded-12 border bg-background-content text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                    isSel ? "border-vattjom-surface-primary card-selected" : "border-hairline"
+                  }`}
+                >
+                  <span className="h-4 w-full bg-divider" aria-hidden="true" />
+                  <span className="flex h-full flex-col gap-16 p-20">
+                    <span className="flex items-center gap-10">
+                      <span className="icon-chip grid h-40 w-40 shrink-0 place-items-center rounded-12 bg-background-content text-vattjom-text-primary">
+                        <AreaIcon size={20} strokeWidth={2} aria-hidden="true" />
+                      </span>
+                      <span className="text-base font-semibold leading-tight tracking-tight">
+                        {area.short ? `${area.namn} (${area.short})` : area.namn}
+                      </span>
+                    </span>
+                    <span className="mt-auto flex items-center gap-8 text-small text-dark-secondary">
+                      <MessagesSquare
+                        size={16}
+                        strokeWidth={2}
+                        aria-hidden="true"
+                        className="text-vattjom-text-primary"
+                      />
+                      Dialogfrågor · {area.questions.length}{" "}
+                      {area.questions.length === 1 ? "fråga" : "frågor"}
+                    </span>
+                  </span>
+                </button>
+              );
+            }
+
+            const s = STATUS[m.status];
+            const TrendIcon = m.trend_dir === "up" ? TrendingUp : TrendingDown;
             const fillPct = Math.min(100, (m.value_num / m.bar_max) * 100);
             const targetPct = Math.min(100, (m.target_num / m.bar_max) * 100);
 
@@ -195,17 +239,25 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
 
         {/* ===== Dialogpanel ===== */}
         <div id="detail">
-          {current && (
-            <DetailPanel
-              key={current.area.key}
-              item={current}
-              index={selectedIndex}
-              total={areas.length}
-              activities={activities[current.area.key] ?? []}
-              onAddActivity={(text) => addActivity(current.area.key, current.area.id, text)}
-              onMarkKlar={(activityId, notering) => markKlar(current.area.key, activityId, notering)}
-            />
-          )}
+          {current &&
+            (current.measurement ? (
+              <DetailPanel
+                key={current.area.key}
+                item={current}
+                index={selectedIndex}
+                total={areas.length}
+                activities={activities[current.area.key] ?? []}
+                onAddActivity={(text) => addActivity(current.area.key, current.area.id, text)}
+                onMarkKlar={(activityId, notering) => markKlar(current.area.key, activityId, notering)}
+              />
+            ) : (
+              <QuestionPanel
+                key={current.area.key}
+                item={current}
+                index={selectedIndex}
+                total={areas.length}
+              />
+            ))}
         </div>
 
         <footer className="mt-40 text-center">

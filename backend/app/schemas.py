@@ -451,7 +451,8 @@ class DialogueArea(BaseModel):
     """
 
     area: KpiAreaOut
-    measurement: MeasurementOut
+    # None för nyckeltal utan mätdata (följs upp via dialogfrågor, BYGGPLAN §17).
+    measurement: MeasurementOut | None = None
     activities: list[ActivityOut] = []
 
 

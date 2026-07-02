@@ -231,7 +231,10 @@ export function DetailPanel({
   onAddActivity: (text: string) => Promise<void>;
   onMarkKlar: (activityId: number, notering: string) => Promise<void>;
 }) {
-  const { area, measurement: m } = item;
+  const { area } = item;
+  // DetailPanel renderas bara för nyckeltal MED mätdata (Dashboard väljer QuestionPanel
+  // för dem utan) — assertion är därför säker och håller typerna nöjda.
+  const m = item.measurement!;
   const s = STATUS[m.status];
   const AreaIcon = areaIcon(area.ikon);
   // Trend kan saknas (ingen jämförelseperiod) → neutral platshållare utan riktningspil.

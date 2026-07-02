@@ -10,12 +10,13 @@ import asyncio
 import json
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import SessionLocal
 from app.models import (
     KpiArea,
+    Measurement,
     Organisation,
     Question,
     Statusrapport,
@@ -119,7 +120,22 @@ KPI_AREAS: list[dict] = [
             "Var finns hindren: kompetens, system eller resurser?",
         ],
     },
+    {
+        # Nyckeltal utan mätdata (BYGGPLAN §17) — följs upp genom dialog, inte siffror.
+        # Frågeställningarna är preliminära och tas fram tillsammans med Kommunikationsdirektör.
+        "key": "kommunikativt", "namn": "Kommunikativt ledarskap", "short": None, "ikon": "megaphone",
+        "lower_better": False, "support": "Kommunikation",
+        "questions": [
+            "Hur för du ut kommunens och förvaltningens riktning till dina medarbetare?",
+            "Hur skapar du dialog och delaktighet i vardagen?",
+            "Hur vet du att dina budskap når fram och förstås?",
+        ],
+    },
 ]
+
+# Nyckeltal som följs upp via dialogfrågor i stället för mätdata (BYGGPLAN §17).
+# Seeden ser till att dessa saknar mätvärden så frontend visar dem som dialogfråge-kort.
+DIALOG_ONLY_KEYS = {"digital", "kommunikativt"}
 
 # Status-sidans kort (Fas B). Bootstrap-innehåll transkriberat från den tidigare
 # hårdkodade frontend-filen (data.ts). Seedas EN gång (bara om tabellen är tom) så att
@@ -392,6 +408,15 @@ async def seed(session: AsyncSession) -> None:
                 session, Question, {"ordning": q_ordning},
                 kpi_area_id=area.id, text=text,
             )
+
+    # BYGGPLAN §17: dessa nyckeltal följs upp via dialogfrågor och ska aldrig ha mätdata.
+    # Rensa ev. gamla dummy-mätvärden (från den ursprungliga seeden) så de renderas som
+    # dialogfråge-kort. Idempotent — inget skapar mätvärden för dem, så de dyker inte upp igen.
+    dialog_only_ids = [area_by_key[k].id for k in DIALOG_ONLY_KEYS if k in area_by_key]
+    if dialog_only_ids:
+        await session.execute(
+            delete(Measurement).where(Measurement.kpi_area_id.in_(dialog_only_ids))
+        )
 
     await session.commit()
 

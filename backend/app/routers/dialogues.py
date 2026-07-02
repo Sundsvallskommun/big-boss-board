@@ -80,14 +80,21 @@ async def get_dialogue(
     for act in sorted(dialogue.activities, key=lambda a: a.id):
         activities_by_area.setdefault(act.kpi_area_id, []).append(act)
 
-    measurements = sorted(dialogue.measurements, key=lambda m: m.kpi_area.ordning)
+    # Alla KPI-områden returneras — även de utan mätvärde (BYGGPLAN §17: nyckeltal som
+    # följs upp genom dialogfrågor i stället för siffror). measurement = None då.
+    all_areas = (
+        await session.execute(
+            select(KpiArea).options(*_kpi_area_loader()).order_by(KpiArea.ordning)
+        )
+    ).scalars().all()
+    meas_by_area = {m.kpi_area_id: m for m in dialogue.measurements}
     areas = [
         DialogueArea(
-            area=m.kpi_area,
-            measurement=m,
-            activities=activities_by_area.get(m.kpi_area_id, []),
+            area=area,
+            measurement=meas_by_area.get(area.id),
+            activities=activities_by_area.get(area.id, []),
         )
-        for m in measurements
+        for area in all_areas
     ]
 
     return DialogueDetail(
