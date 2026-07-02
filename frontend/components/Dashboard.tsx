@@ -68,7 +68,7 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
     <>
       {/* ===== Topbar ===== */}
       <header className="sticky top-0 z-30 border-b border-hairline bg-background-content">
-        <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-16 px-24 py-16 md:px-32">
+        <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-16 px-24 py-16 md:px-32 xl:max-w-[1440px]">
           <BrandLockup />
           <Link
             href="/"
@@ -83,7 +83,7 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
       <main
         id="huvudinnehall"
         tabIndex={-1}
-        className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-32 outline-none md:px-32 md:pt-40"
+        className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-32 outline-none md:px-32 md:pt-40 xl:max-w-[1440px]"
       >
         {/* ===== Rubrik + kontext ===== */}
         <div className="mb-32 flex flex-wrap items-end justify-between gap-x-32 gap-y-16">
@@ -126,10 +126,9 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
           </p>
         )}
 
-        <div
-          className="mb-32 grid gap-16"
-          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}
-        >
+        {/* Responsiv KPI-strip: 2 kort på mobil, 3 på mellanstora, alla 6 på en rad på
+            breda skärmar (xl) — där breddas även containern så korten får rum. */}
+        <div className="mb-32 grid grid-cols-2 gap-12 md:grid-cols-3 md:gap-16 xl:grid-cols-6">
           {areas.map((item) => {
             const { area, measurement: m } = item;
             const AreaIcon = areaIcon(area.ikon);
@@ -172,7 +171,7 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                     {/* Status (parallell till datakortens värde-rad → samma höjd) */}
                     <span className="flex items-end justify-between gap-12">
                       <span
-                        className={`font-header text-h2 font-bold leading-tight tracking-tight ${
+                        className={`font-header text-h2 font-bold leading-tight tracking-tight xl:text-h3 ${
                           st ? st.text : "text-dark-secondary"
                         }`}
                       >
@@ -235,7 +234,7 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
 
                   {/* Värde + trend */}
                   <span className="flex items-end justify-between gap-12">
-                    <span className="font-header text-h1 font-bold leading-none tracking-tight">
+                    <span className="font-header text-h1 font-bold leading-none tracking-tight xl:text-h3">
                       {m.value_text}
                     </span>
                     <span
