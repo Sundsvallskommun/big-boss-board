@@ -381,6 +381,11 @@ async def seed(session: AsyncSession) -> None:
             },
             key=a["key"],
         )
+        # Håll seed-ägt innehåll i synk även för redan skapade areor. Utan detta får
+        # areor som skapades innan ett fält lades till (t.ex. info-texten "Att tänka på
+        # om siffran") aldrig värdet i drift — _get_or_create uppdaterar inte befintliga.
+        if area.info != a.get("info"):
+            area.info = a.get("info")
         area_by_key[a["key"]] = area
         for q_ordning, text in enumerate(a["questions"]):
             await _get_or_create(
