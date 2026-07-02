@@ -9,11 +9,7 @@ import { Button, FormControl, FormLabel, Textarea } from "@/components/ui";
 
 type Feedback = { kind: "ok" | "err"; msg: string } | null;
 
-const STATUS_VAL: { value: Status; label: string }[] = [
-  { value: "good", label: "Grön" },
-  { value: "warn", label: "Gul" },
-  { value: "alert", label: "Röd" },
-];
+const STATUS_VAL: Status[] = ["good", "warn", "alert"];
 
 /** ISO-datetime → "2 jul 2026". Fritext/ogiltigt returneras oförändrat. */
 const MANADER = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
@@ -142,16 +138,16 @@ export function QuestionPanel({
         </p>
 
         <div role="radiogroup" aria-label="Status" className="flex flex-wrap gap-8">
-          {STATUS_VAL.map((o) => {
-            const os = STATUS[o.value];
-            const active = val === o.value;
+          {STATUS_VAL.map((v) => {
+            const os = STATUS[v];
+            const active = val === v;
             return (
               <button
-                key={o.value}
+                key={v}
                 type="button"
                 role="radio"
                 aria-checked={active}
-                onClick={() => setVal(o.value)}
+                onClick={() => setVal(v)}
                 className={`inline-flex items-center gap-10 rounded-12 border px-20 py-14 text-large font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
                   active
                     ? `${os.soft} ${os.border} ${os.text} ring-1 ring-inset ring-current`
@@ -159,7 +155,7 @@ export function QuestionPanel({
                 }`}
               >
                 <span className={`inline-block h-14 w-14 rounded-full ${os.solid}`} aria-hidden="true" />
-                {o.label}
+                {os.legend}
               </button>
             );
           })}

@@ -22,9 +22,6 @@ import { QuestionPanel } from "./QuestionPanel";
 // ledarskap visas som dialogfråge-kort utan mätdata, med manuellt satt status (§16–17).
 const DOLDA_OMRADEN = new Set<string>();
 
-// Kortetikett för manuellt satt status (chefens vokabulär: grön/gul/röd).
-const STATUS_ORD: Record<Status, string> = { good: "Grön", warn: "Gul", alert: "Röd" };
-
 export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
   const areas = dialogue.areas.filter((a) => !DOLDA_OMRADEN.has(a.area.key));
 
@@ -174,11 +171,11 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                     {/* Status (parallell till datakortens värde-rad → samma höjd) */}
                     <span className="flex items-end justify-between gap-12">
                       <span
-                        className={`font-header text-h1 font-bold leading-none tracking-tight ${
+                        className={`font-header text-h2 font-bold leading-tight tracking-tight ${
                           st ? st.text : "text-dark-secondary"
                         }`}
                       >
-                        {ms ? STATUS_ORD[ms.status] : "Ej satt"}
+                        {st ? st.legend : "Ej satt"}
                       </span>
                     </span>
 
