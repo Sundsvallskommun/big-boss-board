@@ -22,6 +22,9 @@ import { QuestionPanel } from "./QuestionPanel";
 // ledarskap visas som dialogfråge-kort utan mätdata, med manuellt satt status (§16–17).
 const DOLDA_OMRADEN = new Set<string>();
 
+// Kortetikett för manuellt satt status (chefens vokabulär: grön/gul/röd).
+const STATUS_ORD: Record<Status, string> = { good: "Grön", warn: "Gul", alert: "Röd" };
+
 export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
   const areas = dialogue.areas.filter((a) => !DOLDA_OMRADEN.has(a.area.key));
 
@@ -154,6 +157,7 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                 >
                   <span className={`h-4 w-full ${st ? st.solid : "bg-divider"}`} aria-hidden="true" />
                   <span className="flex h-full flex-col gap-16 p-20">
+                    {/* Rubrikrad (samma som datakorten) */}
                     <span className="flex items-center gap-10">
                       <span
                         className={`icon-chip grid h-40 w-40 shrink-0 place-items-center rounded-12 bg-background-content ${
@@ -166,27 +170,33 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                         {area.short ? `${area.namn} (${area.short})` : area.namn}
                       </span>
                     </span>
-                    <span className="mt-auto flex items-center justify-between gap-8">
-                      <span className="flex items-center gap-8 text-small text-dark-secondary">
-                        <MessagesSquare
-                          size={16}
-                          strokeWidth={2}
-                          aria-hidden="true"
-                          className="text-vattjom-text-primary"
-                        />
-                        {area.questions.length}{" "}
-                        {area.questions.length === 1 ? "fråga" : "frågor"}
+
+                    {/* Status (parallell till datakortens värde-rad → samma höjd) */}
+                    <span className="flex items-end justify-between gap-12">
+                      <span
+                        className={`font-header text-h1 font-bold leading-none tracking-tight ${
+                          st ? st.text : "text-dark-secondary"
+                        }`}
+                      >
+                        {ms ? STATUS_ORD[ms.status] : "Ej satt"}
                       </span>
-                      {st ? (
+                    </span>
+
+                    {/* Footer (parallell till mätare-raden) */}
+                    <span className="mt-auto flex items-center justify-between gap-8">
+                      <span className="eyebrow-sm flex items-center gap-6 text-dark-secondary">
+                        <MessagesSquare size={14} strokeWidth={2} aria-hidden="true" />
+                        {area.questions.length}{" "}
+                        {area.questions.length === 1 ? "dialogfråga" : "dialogfrågor"}
+                      </span>
+                      {st && (
                         <span className={`eyebrow-sm flex shrink-0 items-center gap-6 ${st.text}`}>
                           <span
                             className={`inline-block h-8 w-8 rounded-full ${st.solid}`}
                             aria-hidden="true"
                           />
-                          {st.legend}
+                          Manuell status
                         </span>
-                      ) : (
-                        <span className="eyebrow-sm shrink-0 text-dark-secondary">Ingen status</span>
                       )}
                     </span>
                   </span>

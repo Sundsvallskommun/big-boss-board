@@ -152,13 +152,13 @@ export function QuestionPanel({
                 role="radio"
                 aria-checked={active}
                 onClick={() => setVal(o.value)}
-                className={`inline-flex items-center gap-8 rounded-12 border px-16 py-10 text-base font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                className={`inline-flex items-center gap-10 rounded-12 border px-20 py-14 text-large font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
                   active
-                    ? `${os.soft} ${os.border} ${os.text}`
+                    ? `${os.soft} ${os.border} ${os.text} ring-1 ring-inset ring-current`
                     : "border-hairline text-dark-secondary hover:border-dark-primary"
                 }`}
               >
-                <span className={`inline-block h-10 w-10 rounded-full ${os.solid}`} aria-hidden="true" />
+                <span className={`inline-block h-14 w-14 rounded-full ${os.solid}`} aria-hidden="true" />
                 {o.label}
               </button>
             );
