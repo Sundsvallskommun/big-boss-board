@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MessagesSquare, SlidersHorizontal } from "lucide-react";
+import { History, MessagesSquare, SlidersHorizontal } from "lucide-react";
 import type { AreaStatus, DialogueArea, Status } from "@/lib/api";
 import { areaIcon } from "./icons";
 import { STATUS } from "./status";
@@ -11,7 +11,8 @@ type Feedback = { kind: "ok" | "err"; msg: string } | null;
 
 const STATUS_VAL: Status[] = ["good", "warn", "alert"];
 
-/** ISO-datetime → "2 jul 2026". Fritext/ogiltigt returneras oförändrat. */
+/** ISO-datetime → "2 jul 2026". Deterministiskt (ingen tidszon/locale) för att undvika
+ *  hydreringskrock. */
 const MANADER = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
 function visaDatum(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
@@ -21,27 +22,30 @@ function visaDatum(iso: string): string {
 }
 
 /** Dialogpanel för nyckeltal UTAN mätdata (BYGGPLAN §16–17): områdets namn, ett par
- *  frågeställningar att ha dialog kring, och en manuellt satt status + kommentar. */
+ *  frågeställningar att ha dialog kring, en statusväljare, och en historik över satta
+ *  statusar (nyast först, highlightad) längst ned. */
 export function QuestionPanel({
   item,
   index,
   total,
-  manuellStatus,
+  historik,
   onSaveStatus,
 }: {
   item: DialogueArea;
   index: number;
   total: number;
-  manuellStatus: AreaStatus | null;
+  historik: AreaStatus[];
   onSaveStatus: (status: Status, kommentar: string) => Promise<void>;
 }) {
   const { area } = item;
   const AreaIcon = areaIcon(area.ikon);
   const fragor = [...area.questions].sort((a, b) => a.ordning - b.ordning);
-  const st = manuellStatus ? STATUS[manuellStatus.status] : null;
+  const senaste = historik[0] ?? null;
+  const st = senaste ? STATUS[senaste.status] : null;
 
-  const [val, setVal] = useState<Status | null>(manuellStatus?.status ?? null);
-  const [kommentar, setKommentar] = useState(manuellStatus?.kommentar ?? "");
+  // Ny status skapas varje gång → formuläret börjar tomt och nollställs efter sparning.
+  const [val, setVal] = useState<Status | null>(null);
+  const [kommentar, setKommentar] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
 
@@ -54,6 +58,8 @@ export function QuestionPanel({
     setFeedback(null);
     try {
       await onSaveStatus(val, kommentar.trim());
+      setVal(null);
+      setKommentar("");
       setFeedback({ kind: "ok", msg: "Status sparad." });
     } catch (e) {
       setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Något gick fel." });
@@ -64,7 +70,7 @@ export function QuestionPanel({
 
   return (
     <section className="reveal divide-y divide-hairline overflow-hidden rounded-12 border border-hairline bg-background-content">
-      {/* Panelhuvud — tonas av aktuell status om satt, annars neutral vattjom-ton. */}
+      {/* Panelhuvud — tonas av senaste status om satt, annars neutral vattjom-ton. */}
       <div className={st ? `bg-gradient-to-b to-background-content ${st.gradient}` : "bg-vattjom-background-100"}>
         <div className="flex flex-wrap items-start justify-between gap-16 p-24 md:p-28">
           <div className="flex items-start gap-14">
@@ -120,21 +126,15 @@ export function QuestionPanel({
         )}
       </div>
 
-      {/* Manuell status + kommentar (sparas per förvaltning) */}
+      {/* Sätt ny status + kommentar (sparas per förvaltning som en ny post) */}
       <div className="p-24 md:p-28">
         <h3 className="eyebrow mb-4 flex items-center gap-8">
           <SlidersHorizontal size={14} aria-hidden="true" />
           Sätt status för området
         </h3>
         <p className="mb-16 text-small leading-relaxed text-dark-secondary">
-          Välj en status utifrån dialogen och motivera kort varför. Sparas för den här
-          förvaltningen.
-          {manuellStatus && (
-            <>
-              {" "}
-              Senast uppdaterad {visaDatum(manuellStatus.uppdaterad_at)}.
-            </>
-          )}
+          Välj en status utifrån dialogen och motivera kort varför. Varje sparning läggs
+          till i historiken nedan.
         </p>
 
         <div role="radiogroup" aria-label="Status" className="flex flex-wrap gap-8">
@@ -187,6 +187,55 @@ export function QuestionPanel({
           Spara status
         </Button>
       </div>
+
+      {/* Statushistorik — nyast först, senaste highlightad med sin kommentar */}
+      {historik.length > 0 && (
+        <div className="p-24 md:p-28">
+          <h3 className="eyebrow mb-16 flex items-center gap-8">
+            <History size={14} aria-hidden="true" />
+            Statushistorik
+          </h3>
+          <ol className="flex flex-col gap-8">
+            {historik.map((h, i) => {
+              const hs = STATUS[h.status];
+              const isSenaste = i === 0;
+              return (
+                <li
+                  key={h.id}
+                  className={`rounded-12 border p-16 ${
+                    isSenaste ? `${hs.soft} ${hs.border}` : "border-hairline bg-background-content"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-8">
+                    <span className={`eyebrow-sm flex items-center gap-6 ${hs.text}`}>
+                      <span
+                        className={`inline-block h-8 w-8 rounded-full ${hs.solid}`}
+                        aria-hidden="true"
+                      />
+                      {hs.legend}
+                      {isSenaste && (
+                        <span className="ml-2 rounded-full bg-background-content px-8 py-2 text-dark-secondary">
+                          Senaste
+                        </span>
+                      )}
+                    </span>
+                    <span className="eyebrow-sm text-dark-secondary">{visaDatum(h.satt_at)}</span>
+                  </div>
+                  {h.kommentar && (
+                    <p
+                      className={`mt-8 text-small leading-relaxed ${
+                        isSenaste ? "text-dark-primary" : "text-dark-secondary"
+                      }`}
+                    >
+                      {h.kommentar}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      )}
     </section>
   );
 }

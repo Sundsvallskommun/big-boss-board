@@ -445,11 +445,13 @@ class SjukResultat(BaseModel):
 
 
 class AreaStatusOut(ORMModel):
-    """Manuellt satt status + kommentar för ett område i en dialog (BYGGPLAN §16)."""
+    """En manuellt satt status + kommentar för ett område i en dialog (BYGGPLAN §16).
+    Append-only historik — en post per gång status sattes."""
 
+    id: int
     status: Status
     kommentar: str | None = None
-    uppdaterad_at: datetime
+    satt_at: datetime
 
 
 class AreaStatusIn(BaseModel):
@@ -468,8 +470,8 @@ class DialogueArea(BaseModel):
     area: KpiAreaOut
     # None för nyckeltal utan mätdata (följs upp via dialogfrågor, BYGGPLAN §17).
     measurement: MeasurementOut | None = None
-    # Manuellt satt status (BYGGPLAN §16) för nyckeltal utan mätdata. None = ej satt.
-    manuell_status: AreaStatusOut | None = None
+    # Historik av manuellt satta statusar (BYGGPLAN §16), nyast först. Tom = ej satt.
+    status_historik: list[AreaStatusOut] = []
     activities: list[ActivityOut] = []
 
 

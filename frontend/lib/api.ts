@@ -168,19 +168,21 @@ export interface Activity {
   klar_at: string | null;
 }
 
-/** Manuellt satt status + kommentar för ett område (BYGGPLAN §16), per förvaltning. */
+/** En manuellt satt status + kommentar för ett område (BYGGPLAN §16), per förvaltning.
+ *  Append-only historik — en post per gång status sattes. */
 export interface AreaStatus {
+  id: number;
   status: Status;
   kommentar: string | null;
-  uppdaterad_at: string;
+  satt_at: string;
 }
 
 export interface DialogueArea {
   area: KpiArea;
   /** null för nyckeltal utan mätdata (följs upp via dialogfrågor). */
   measurement: Measurement | null;
-  /** Manuellt satt status för nyckeltal utan mätdata. null = ej satt ännu. */
-  manuell_status: AreaStatus | null;
+  /** Historik av manuellt satta statusar (nyast först). Tom = ej satt ännu. */
+  status_historik: AreaStatus[];
   activities: Activity[];
 }
 
@@ -331,15 +333,16 @@ export async function createActivity(
   return res.json();
 }
 
-/** Sätt/uppdatera manuell status + kommentar för ett område (per förvaltning). */
-export async function setAreaStatus(
+/** Spara en ny manuell status + kommentar för ett område (per förvaltning). Append-only:
+ *  varje anrop skapar en ny post i historiken; den nya posten returneras. */
+export async function addAreaStatus(
   dialogueId: number,
   areaId: number,
   status: Status,
   kommentar: string,
 ): Promise<AreaStatus> {
   const res = await fetch(`/api/dialogues/${dialogueId}/areas/${areaId}/status`, {
-    method: "PUT",
+    method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status, kommentar }),
   });

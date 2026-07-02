@@ -88,18 +88,21 @@ async def get_dialogue(
         )
     ).scalars().all()
     meas_by_area = {m.kpi_area_id: m for m in dialogue.measurements}
-    # Manuellt satt status per område (BYGGPLAN §16), för nyckeltal utan mätdata.
-    status_by_area = {
-        s.kpi_area_id: s
-        for s in (
-            await session.execute(select(AreaStatus).filter_by(dialogue_id=dialogue_id))
-        ).scalars()
-    }
+    # Manuell status-historik per område (BYGGPLAN §16), nyast först.
+    historik_by_area: dict[int, list[AreaStatus]] = {}
+    for s in (
+        await session.execute(
+            select(AreaStatus)
+            .filter_by(dialogue_id=dialogue_id)
+            .order_by(AreaStatus.satt_at.desc(), AreaStatus.id.desc())
+        )
+    ).scalars():
+        historik_by_area.setdefault(s.kpi_area_id, []).append(s)
     areas = [
         DialogueArea(
             area=area,
             measurement=meas_by_area.get(area.id),
-            manuell_status=status_by_area.get(area.id),
+            status_historik=historik_by_area.get(area.id, []),
             activities=activities_by_area.get(area.id, []),
         )
         for area in all_areas

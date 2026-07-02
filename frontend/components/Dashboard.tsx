@@ -9,9 +9,9 @@ import {
   type Activity,
   type AreaStatus,
   type Status,
+  addAreaStatus,
   createActivity,
   markActivityKlar,
-  setAreaStatus,
 } from "@/lib/api";
 import { areaIcon } from "./icons";
 import { STATUS } from "./status";
@@ -30,9 +30,9 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
   const [activities, setActivities] = useState<Record<string, Activity[]>>(() =>
     Object.fromEntries(areas.map((a) => [a.area.key, a.activities ?? []])),
   );
-  // Manuellt satt status per område (§16), initierat från servern; uppdateras vid spara.
-  const [manuellStatus, setManuellStatus] = useState<Record<string, AreaStatus | null>>(() =>
-    Object.fromEntries(areas.map((a) => [a.area.key, a.manuell_status])),
+  // Manuell status-historik per område (§16), nyast först; initierat från servern.
+  const [historik, setHistorik] = useState<Record<string, AreaStatus[]>>(() =>
+    Object.fromEntries(areas.map((a) => [a.area.key, a.status_historik ?? []])),
   );
 
   const selectedIndex = Math.max(
@@ -59,8 +59,9 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
   }
 
   async function sparaStatus(key: string, areaId: number, status: Status, kommentar: string) {
-    const saved = await setAreaStatus(dialogue.id, areaId, status, kommentar);
-    setManuellStatus((prev) => ({ ...prev, [key]: saved }));
+    const saved = await addAreaStatus(dialogue.id, areaId, status, kommentar);
+    // Lägg nyaste posten först i historiken.
+    setHistorik((prev) => ({ ...prev, [key]: [saved, ...(prev[key] ?? [])] }));
   }
 
   return (
@@ -136,7 +137,7 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
 
             // Nyckeltal utan mätdata (§16–17) → dialogfråge-kort med manuellt satt status.
             if (!m) {
-              const ms = manuellStatus[area.key];
+              const ms = historik[area.key]?.[0] ?? null;
               const st = ms ? STATUS[ms.status] : null;
               return (
                 <button
@@ -294,7 +295,7 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                 item={current}
                 index={selectedIndex}
                 total={areas.length}
-                manuellStatus={manuellStatus[current.area.key] ?? null}
+                historik={historik[current.area.key] ?? []}
                 onSaveStatus={(status, kommentar) =>
                   sparaStatus(current.area.key, current.area.id, status, kommentar)
                 }
