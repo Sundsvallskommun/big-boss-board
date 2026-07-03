@@ -269,13 +269,13 @@ HME/Ekonomi/Sjukfrånvaro (som hämtas): inget diagram, ingen mätarbar.
   Åtgärd krävs*) + en **kommentar** om varför. Sparas i tabellen `area_status` som **append-only
   historik** — varje sparning blir en ny post; senaste gäller och highlightas, äldre visas som
   historik under. Kortets färg följer senaste posten.
+- **Verksamhet delas i två dimensioner** (`area_status.dimension`): **Grunduppdrag** och
+  **Fullmäktigemål**, var och en med egen statusväljare och historik (flikar i panelen). Kortets
+  färg styrs av den **värsta** av dimensionernas senaste status (grön < gul < röd) — se `kortStatus`
+  i `components/status.ts` och `AREA_DIMENSIONS`. Digital/Kommunikativt har fortsatt en enda status.
 - **Endpoint:** `POST /api/dialogues/{id}/areas/{area_id}/status` (del av dialogflödet, gatas av
-  access-koden). Seeden håller dessa områden fria från mätvärden (`DIALOG_ONLY_KEYS`).
-
-**Avvikelse från ursprungsskissen:** den tidigare idén med två separata bedömningar
-(**Kommunfullmäktigemål** + **Grunduppdrag**) med var sin status byggdes **inte** — vi landade i
-**en status per område** (enklare, samma modell för alla tre). Vill vi återinföra KF-mål/Grunduppdrag
-är det ett tillägg ovanpå `area_status`.
+  access-koden; tar valfri `dimension`). Seeden håller dessa områden fria från mätvärden
+  (`DIALOG_ONLY_KEYS`).
 
 ---
 
