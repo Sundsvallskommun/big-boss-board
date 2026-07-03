@@ -298,27 +298,23 @@ finns delvis framtagna till medarbetarenkäten.
 
 ---
 
-## 18. Organisation som master — frikoppla från HME-importen  *(ej byggt — nästa steg)*
+## 18. Organisation som master — frikoppla från HME-importen  ✅ *(byggt)*
 
-Idag **skapas** organisationerna (förvaltningarna) av **HME-importen** (`hme_import.py` gör
-`Organisation(...)`), och seeden sätter masterdata-koden i efterhand. Det gör HME till en implicit
-källa för själva förvaltningslistan.
+Förvaltningslistan är nu **master**, med **masterdata-koden** (`organisation.kod` = `orgId`) som den
+centrala nyckeln som nyckeltalen knyts till. HME/Ekonomi/Sjukfrånvaro **kopplar** bara mot befintliga
+förvaltningar — de skapar dem inte.
 
-**Mål:** vänd på det — gör **organisations-/förvaltningslistan till master**, med **masterdata-koden**
-(`organisation.kod`) som den centrala nyckeln som allt annat hänger på. HME/Ekonomi/Sjukfrånvaro blir
-**nyckeltal som kopplas till en befintlig organisation via koden**, inte något som skapar organisationer.
+**Levererat:**
 
-**Skiss (beslut tas gemensamt vid utveckling):**
+- **Master-källa:** `backend/app/seed_data/organisationer.json` (bundlad i imagen). Seeden skapar/
+  uppdaterar de 9 förvaltningarna (kod/namn/slug) + en dialog per förvaltning + fiktiva bootstrap-
+  mätvärden (bara om inget mätvärde finns; riktig import skriver över). Körs vid varje start.
+- **"Koppla, inte skapa":** HME-importen skapar inte längre org/dialog/fiktiva mätvärden. Den matchar
+  på **koden (orgId)** när filen har den (nya `HME_totalindex_medorg.json`), annars på slug.
+  Ekonomi/sjukfrånvaro kopplade redan på koden (Qlik-CSV:ns `Enhet`).
+- **Bortstädning:** förvaltningar utanför mastern (utan kod) tas bort med sina dialoger/mätvärden —
+  dvs **Räddningstjänsten** och **Stadsbacken** (inte aktuella att följa upp).
 
-- **Master-källa:** seeda organisationslistan (kod + namn + slug) från masterdata, oberoende av om
-  HME/ekonomi/sjukfrånvaro importerats.
-- **Import blir "koppla, inte skapa":** importerna matchar bara mot befintlig org via koden och
-  hoppar över/varnar om koden saknas (skapar aldrig nya orgrader).
-- **Konsekvens:** alla förvaltningar finns oavsett datatillgång; Räddningstjänsten/Stadsbacken (utan
-  kod idag) hanteras medvetet; org-id och kod blir stabila och centrala.
-
-**Öppna frågor:** var bor masterdatan (seed-lista vs egen import/endpoint)? hur hanteras förvaltningar
-utan kod (visa/dölja, egen märkning)? migreringssteg för befintliga org-rader (behåll id:n)? ska koden
-vara den publika identifieraren i URL:er/API:er?
-
-Bakgrund: beslut i projektminnet *"Datamodell: org som master, frikoppla HME"*.
+**Kvar/valfritt:** org-id (PK) är fortfarande en surrogatnyckel; `kod` är den nyckel data kopplas på.
+Vill man göra `kod` till den publika identifieraren i URL:er/API:er är det ett separat steg. Nya
+HME-filen kan importeras till drift när som helst (kopplar då på orgId) — prod har redan HME-data.
