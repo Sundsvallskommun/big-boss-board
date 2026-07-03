@@ -1,7 +1,36 @@
 # Byggplan — Dialogstöd för chefsuppföljning
 
 Arbetsnamn (internt, ej i UI): **Big Boss Board (bbb)**. Publik domän: `bbb.sundsvall.dev`.
-Den här planen beskriver hur prototypen (`uppfoljningsdialog.html`) byggs om till en skalbar fullstack-app som körs med dummydata, med Python-backend, PostgreSQL och en frontend byggd på Sundsvalls designsystem — deployad som Docker-stack via Dokploy.
+Den här planen beskriver hur prototypen (`uppfoljningsdialog.html`) byggdes om till en skalbar
+fullstack-app med Python-backend, PostgreSQL och en frontend i Sundsvalls visuella språk (eget
+token-lager) — driftsatt som Docker-stack via Dokploy.
+
+---
+
+## Status & nuläge
+
+Appen är **byggd och i drift** på `bbb.sundsvall.dev` (faserna 0–5 klara). Den här filen är den
+ursprungliga byggplanen + en levande roadmap. **För aktuell teknisk sanning, se
+[`ARCHITECTURE.md`](ARCHITECTURE.md), [`DEPLOY.md`](DEPLOY.md) och [`../README.md`](../README.md)** —
+§1–§14 nedan är den ursprungliga planen (som byggd, med avvikelserna nedan); §16– är roadmap.
+
+Viktiga **avvikelser/tillägg** sedan grundplanen:
+
+- **Eget token-lager, inte `@sk-web-gui`.** Designsystemets utseende återskapades i ett litet eget
+  Tailwind-token-lager + lokala UI-primitiver (`components/ui/`); `@sk-web-gui` avkopplades.
+  Statusfärgerna är en dokumenterad trafikljusskala (good/warn/alert) i `components/status.ts`.
+- **Datamodell utökad.** `agreement` ersatt av `activity` (aktiviteter/åtgärder per område). Nya
+  tabeller: `area_status` (manuell status, historik), `submission` (inkorg), `status_fraga` +
+  `statusrapport` (status-sidan). `organisation.kod` (masterdata) och `kpi_area.info` tillkom.
+- **Fler dataflöden.** Ekonomi och sjukfrånvaro importeras (token-skyddade CSV-endpoints + skript i
+  `scripts/`), utöver HME. Nyckeltal ↔ förvaltning kopplas via masterdata-koden.
+- **Status-sida + inkorg** (`/status`, `/status/skicka-in`) med kurerat innehåll i DB.
+- **Dialog-only-nyckeltal** (Verksamhet, Digital transformation, Kommunikativt ledarskap): inga
+  mätvärden — dialogfrågor + manuellt satt status/kommentar med historik (§16–17, byggt).
+- **UI:** "norra stjärnan"-rutan (Effekt/Resultat) borttagen; header i Verktyg-stil med officiell
+  logotyp; responsiv KPI-strip (alla sex kort på en rad på breda skärmar).
+- **Driftshärdning:** frontend på **glibc**-basimage (musl-DNS-fallgrop), diagram `ssr:false`,
+  loading/error-gränser + timeout på server-fetchar. Detaljer i `ARCHITECTURE.md`.
 
 ---
 
@@ -195,7 +224,7 @@ DNS: `bbb.sundsvall.dev` ska peka på Dokploy-värden innan TLS kan utfärdas.
 
 ---
 
-## 13. Faser (så här körs bygget i Claude Code)
+## 13. Faser (så här körs bygget i Claude Code)  ✅ *(alla genomförda — står kvar som historik)*
 
 - **Fas 0 — Skelett:** monorepo, `CLAUDE.md`, `docker-compose.yml`, hello-world frontend+backend+db som pratar ihop lokalt (`docker compose up`).
 - **Fas 1 — Backend & data:** SQLAlchemy-modeller, Alembic-migration, seed, läs-API (`/api/dialogues/{id}`, `/api/kpi-areas`, `/api/health`). OpenAPI verifierad.
@@ -223,3 +252,73 @@ Varje fas avslutas med commit + kort verifiering. Bygg en fas i taget.
 2. En domän med `/api`-proxy (rekommenderat) eller separat `api.`-subdomän.
 3. Hur perioder modelleras (fält vs. egen tabell) när historik/trender ska bli riktiga.
 4. Var dummydata slutar och riktiga källsystem börjar (vilka KPI:er kommer först).
+
+---
+
+## 16. Dialog-only-nyckeltal: manuell status per förvaltning  ✅ *(byggt)*
+
+**Verksamhet**, **Digital transformation** och **Kommunikativt ledarskap** visas som nyckeltal
+**utan mätdata** — de följs upp genom dialog i stället för importerade siffror. De skiljer sig från
+HME/Ekonomi/Sjukfrånvaro (som hämtas): inget diagram, ingen mätarbar.
+
+**Levererat:**
+
+- **Kort utan mätvärde** (`QuestionPanel`): visar ett par frågeställningar att ha dialog kring (§17)
+  och en **manuellt satt status** för området.
+- **Manuell status per förvaltning:** grön/gul/röd (visas med legendtexterna *Över mål / Bevaka /
+  Åtgärd krävs*) + en **kommentar** om varför. Sparas i tabellen `area_status` som **append-only
+  historik** — varje sparning blir en ny post; senaste gäller och highlightas, äldre visas som
+  historik under. Kortets färg följer senaste posten.
+- **Endpoint:** `POST /api/dialogues/{id}/areas/{area_id}/status` (del av dialogflödet, gatas av
+  access-koden). Seeden håller dessa områden fria från mätvärden (`DIALOG_ONLY_KEYS`).
+
+**Avvikelse från ursprungsskissen:** den tidigare idén med två separata bedömningar
+(**Kommunfullmäktigemål** + **Grunduppdrag**) med var sin status byggdes **inte** — vi landade i
+**en status per område** (enklare, samma modell för alla tre). Vill vi återinföra KF-mål/Grunduppdrag
+är det ett tillägg ovanpå `area_status`.
+
+---
+
+## 17. Dialogfrågor på nyckeltal utan data  ✅ *(byggt)*
+
+De tre dialog-only-nyckeltalen (§16) visar **frågeställningar att ha dialog kring** i stället för en
+mätare — samtalet är värdet. Återanvänder KPI-areans `questions` (Question-modellen, seedad per area).
+
+**Levererat:**
+
+- `verksamhet`, `digital` och `kommunikativt` är synliga (ur `DOLDA_OMRADEN`); `kommunikativt` lades
+  till som KPI-area i seed. `GET /api/dialogues/{id}` returnerar alla områden med `measurement = null`
+  för dessa.
+- **Kommunikativt ledarskap** har de fyra medarbetarenkätfrågorna inlagda. Seeden **reconcilerar**
+  frågor mot seed-listan (uppdaterar/lägger till/tar bort), så innehåll kan uppdateras via seed.
+
+**Kvar att göra (innehåll, utanför koden):** slutgiltiga frågeställningar för **Digital
+transformation** (med IT-direktör) och **Verksamhet** — byts in via seed när de är klara. Frågorna
+finns delvis framtagna till medarbetarenkäten.
+
+---
+
+## 18. Organisation som master — frikoppla från HME-importen  *(ej byggt — nästa steg)*
+
+Idag **skapas** organisationerna (förvaltningarna) av **HME-importen** (`hme_import.py` gör
+`Organisation(...)`), och seeden sätter masterdata-koden i efterhand. Det gör HME till en implicit
+källa för själva förvaltningslistan.
+
+**Mål:** vänd på det — gör **organisations-/förvaltningslistan till master**, med **masterdata-koden**
+(`organisation.kod`) som den centrala nyckeln som allt annat hänger på. HME/Ekonomi/Sjukfrånvaro blir
+**nyckeltal som kopplas till en befintlig organisation via koden**, inte något som skapar organisationer.
+
+**Skiss (beslut tas gemensamt vid utveckling):**
+
+- **Master-källa:** seeda organisationslistan (kod + namn + slug) från masterdata, oberoende av om
+  HME/ekonomi/sjukfrånvaro importerats.
+- **Import blir "koppla, inte skapa":** importerna matchar bara mot befintlig org via koden och
+  hoppar över/varnar om koden saknas (skapar aldrig nya orgrader).
+- **Konsekvens:** alla förvaltningar finns oavsett datatillgång; Räddningstjänsten/Stadsbacken (utan
+  kod idag) hanteras medvetet; org-id och kod blir stabila och centrala.
+
+**Öppna frågor:** var bor masterdatan (seed-lista vs egen import/endpoint)? hur hanteras förvaltningar
+utan kod (visa/dölja, egen märkning)? migreringssteg för befintliga org-rader (behåll id:n)? ska koden
+vara den publika identifieraren i URL:er/API:er?
+
+Bakgrund: beslut i projektminnet *"Datamodell: org som master, frikoppla HME"*.
