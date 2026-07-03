@@ -15,6 +15,7 @@ Prototyp/designreferens: [`docs/uppfoljningsdialog.html`](docs/uppfoljningsdialo
 - [Stack](#stack)
 - [Kom igång lokalt](#kom-igång-lokalt)
 - [Vanliga utvecklingsuppgifter](#vanliga-utvecklingsuppgifter)
+- [Datainläsning](#datainläsning)
 - [Projektstruktur](#projektstruktur)
 - [Vidare läsning](#vidare-läsning)
 
@@ -84,10 +85,54 @@ docker compose logs -f backend                                    # följ loggar
 | **Lint (backend)** | Dev-verktygen ligger **inte** i runtime-imagen. Lokalt i `backend/` (venv): `pip install -e ".[dev]" && ruff check app`. |
 | **Lint/typecheck (frontend)** | Körs automatiskt av `next build` — `docker compose build frontend` failar på lint-/typfel. Manuellt: lokalt i `frontend/` med `npm install && npm run lint`. |
 | **Tester** | pytest är konfigurerat (`backend/pyproject.toml`, dev-deps) men ingen svit än; körs lokalt med `.[dev]` i en venv. |
-| **Importera riktig data** | token-skyddade endpoints via skripten i [`scripts/`](scripts/) — se [ARCHITECTURE.md#datainflöden](docs/ARCHITECTURE.md#datainflöden). |
+| **Importera riktig data** | token-skyddade endpoints via skripten i [`scripts/`](scripts/) — se [Datainläsning](#datainläsning) nedan. |
 
-Data (HME/ekonomi/sjukfrånvaro) versionshanteras **aldrig** — den matas in via
-import-endpoints. Utan den kör appen vidare med enbart referens- och dummydata.
+## Datainläsning
+
+Ordningen spelar roll: **organisationerna (förvaltningarna) är master** och måste finnas
+först — nyckeltalen **kopplas** till dem via masterdata-koden (`orgId`), de skapar dem inte.
+
+### 1. Organisationer (master) — läses in automatiskt
+
+Förvaltningslistan bor i **[`backend/app/seed_data/organisationer.json`](backend/app/seed_data/organisationer.json)**
+och läses av seeden vid **varje backend-start** (bundlad i imagen). `orgId` är masterdata-koden
+som allt annat knyts till. Format:
+
+```json
+{
+  "meta": { "beskrivning": "…", "version": "1.0", "senastUppdaterad": "2026-07-03" },
+  "organisationer": [
+    { "orgId": 23, "namn": "Vård och omsorgsförvaltningen" },
+    { "orgId": 24, "namn": "Barn och utbildningsförvaltning" }
+  ]
+}
+```
+
+Seeden skapar/uppdaterar förvaltningarna (kod/namn/slug) + en dialog per förvaltning, och
+**tar bort** förvaltningar som inte finns i listan. Vill du ändra vilka förvaltningar som visas
+— redigera filen och starta om backend (`docker compose build backend && docker compose up -d backend`).
+
+### 2. Nyckeltal — importeras och kopplas på koden
+
+HME, Ekonomi och Sjukfrånvaro matas in via token-skyddade endpoints (`IMPORT_TOKEN`) med skripten
+i [`scripts/`](scripts/). De **upsertar** (säkra att köra om) och matchar varje rad mot rätt
+förvaltning på masterdata-koden (`orgId` / CSV:ns `Enhet`). Rådatan versionshanteras aldrig.
+
+```bash
+IMPORT_TOKEN=… python3 scripts/import_hme.py          --file hme-indata/HME_totalindex_medorg.json --url http://localhost:3000
+IMPORT_TOKEN=… python3 scripts/import_ekonomi_serie.py --dir ekonomi-indata      --url http://localhost:3000
+IMPORT_TOKEN=… python3 scripts/import_sjukfranvaro.py  --dir sjukfranvaro-indata --url http://localhost:3000
+```
+
+| Källa | Format | Kopplas på |
+| --- | --- | --- |
+| HME | JSON (`dimensioner.Enhet` med `orgId`) | `orgId` (annars namn/slug för äldre filer) |
+| Ekonomi | Qlik-CSV per period (månadsserie) | `Enhet` = kod |
+| Sjukfrånvaro | Qlik personal-CSV per period | `Enhet` = kod |
+
+Rader vars kod saknar en förvaltning i mastern **hoppas över** (skapar inget). Utan import
+kör appen vidare med fiktiva platshållar-mätvärden tills riktig data lästs in. Fördjupning:
+[`docs/ARCHITECTURE.md#datainflöden`](docs/ARCHITECTURE.md#datainflöden).
 
 ## Projektstruktur
 
@@ -110,7 +155,8 @@ bbb/
 │  │  ├─ schemas.py          # Pydantic-scheman
 │  │  ├─ routers/            # dialogues, kpi_areas, activities, import_data, admin, …
 │  │  ├─ services/           # import-/domänlogik (hme, ekonomi, sjukfranvaro, …)
-│  │  └─ seed.py             # idempotent seed (referensdata + dummydata)
+│  │  ├─ seed.py             # idempotent seed (org-master + referensdata + dummydata)
+│  │  └─ seed_data/           # organisationer.json (förvaltnings-master, orgId = kod)
 │  ├─ alembic/versions/      # migrationer
 │  └─ entrypoint.sh          # migrate → seed → gunicorn
 ├─ frontend/                 # Next.js-app (App Router)

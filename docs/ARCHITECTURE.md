@@ -117,6 +117,11 @@ Bakgrund/roadmap för dialog-only-nyckeltalen finns i [`BYGGPLAN.md`](BYGGPLAN.m
 
 ## Datainflöden
 
+**Organisationerna är master** (BYGGPLAN §18): förvaltningslistan bor i
+[`../backend/app/seed_data/organisationer.json`](../backend/app/seed_data/organisationer.json)
+(`orgId` = `organisation.kod`) och läses av seeden vid varje start. Nyckeltalen nedan **kopplar**
+mot dessa via koden — de skapar aldrig förvaltningar. Förvaltningar utanför mastern tas bort.
+
 Riktig data (HME, ekonomi, sjukfrånvaro) **versionshanteras aldrig** och matas in via
 token-skyddade endpoints (`IMPORT_TOKEN`). Alla är **idempotenta upsertar** — säkra att
 köra om. Skripten i [`../scripts/`](../scripts/) använder enbart Python-stdlib.
