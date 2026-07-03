@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "beskrivning": "Masterfil för organisationer. orgId (= organisation.kod) är nyckeln som nyckeltal från övriga källor knyts till. Läses av seeden vid uppstart.",
+    "version": "1.0",
+    "senastUppdaterad": "2026-07-03"
+  },
+  "organisationer": [
+    { "orgId": 23, "namn": "Vård och omsorgsförvaltningen" },
+    { "orgId": 24, "namn": "Barn och utbildningsförvaltning" },
+    { "orgId": 25, "namn": "Miljökontoret" },
+    { "orgId": 26, "namn": "Stadsbyggnadskontoret" },
+    { "orgId": 27, "namn": "Lantmäterikontoret" },
+    { "orgId": 28, "namn": "Kommunstyrelsekontoret" },
+    { "orgId": 29, "namn": "Överförmyndarkontoret" },
+    { "orgId": 30, "namn": "Kultur och fritid" },
+    { "orgId": 31, "namn": "Individ och arbetsmarknadsförvaltning" }
+  ]
+}

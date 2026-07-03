@@ -40,6 +40,7 @@ build/
 
 # Rå indata (HME-källfiler).
 indata/
+hme-indata/
 
 # Rå ekonomi-CSV (Qlik-uttag per period) — kommunens ekonomidata, versionshanteras
 # aldrig. Matas in via scripts/import_ekonomi_serie.py mot import-endpointen.

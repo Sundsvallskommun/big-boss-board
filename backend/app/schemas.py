@@ -215,6 +215,8 @@ class HmeForvaltning(BaseModel):
     """En förvaltnings HME-serie: år -> index (null = ingen mätning det året)."""
 
     namn: str
+    # Masterdata-kod (orgId) om filen har den — då kopplas HME robust på kod (BYGGPLAN §18).
+    kod: str | None = None
     matningar: dict[str, float | None]
     antal_svar: int | None = None
 

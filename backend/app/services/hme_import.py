@@ -21,7 +21,6 @@ from app.models import (
     KpiArea,
     Measurement,
     Organisation,
-    Person,
     Status,
     TrendDir,
 )
@@ -134,6 +133,7 @@ def report_to_payload(
         "forvaltningar": [
             {
                 "namn": f["grupp"],
+                "kod": str(f["orgId"]) if f.get("orgId") is not None else None,
                 "matningar": {str(k): v for k, v in f.get("matningar", {}).items()},
                 "antal_svar": f.get("antal_svar_2025"),
             }
@@ -201,46 +201,36 @@ async def import_hme(session: AsyncSession, payload: HmeImport) -> dict:
     if hme_area is None:
         raise RuntimeError("KPI-området 'hme' saknas — referensdata måste seedas först.")
 
-    # Gemensam, generisk ansvarig chef (anonym — inga personuppgifter).
-    person = (
-        await session.execute(select(Person).filter_by(namn="Förvaltningschef (exempel)"))
-    ).scalar_one_or_none()
-    if person is None:
-        person = Person(namn="Förvaltningschef (exempel)", roll="Ansvarig chef", initialer="FC")
-        session.add(person)
-        await session.flush()
-
-    skapade = uppdaterade = 0
+    skapade = uppdaterade = hoppade_over = 0
     rader: list[dict] = []
 
     for f in payload.forvaltningar:
         fields, senaste = _measurement_fields(f, payload.enhet, payload.mal, payload.kalla)
 
-        # Organisation (på slug).
-        slug = slugify(f.namn)
-        org = (
-            await session.execute(select(Organisation).filter_by(slug=slug))
-        ).scalar_one_or_none()
+        # Koppla mot befintlig förvaltning (org är master, BYGGPLAN §18) — skapa inte org/dialog.
+        # Matcha på masterdata-koden när filen har den (robust), annars på slug (äldre filer).
+        if f.kod:
+            org = (
+                await session.execute(select(Organisation).filter_by(kod=f.kod))
+            ).scalar_one_or_none()
+            matchnyckel = f"kod {f.kod}"
+        else:
+            org = (
+                await session.execute(select(Organisation).filter_by(slug=slugify(f.namn)))
+            ).scalar_one_or_none()
+            matchnyckel = f"slug {slugify(f.namn)!r}"
         if org is None:
-            org = Organisation(namn=f.namn, slug=slug)
-            session.add(org)
-            await session.flush()
-
-        # En dialog per förvaltning (period speglar senaste mätår).
-        period = f"Senaste mätning {senaste}"
+            print(f"[import] hoppar över {f.namn!r}: ingen organisation ({matchnyckel}).")
+            hoppade_over += 1
+            continue
         dialogue = (
             await session.execute(select(Dialogue).filter_by(organisation_id=org.id))
         ).scalars().first()
-        ny_dialog = dialogue is None
-        if ny_dialog:
-            dialogue = Dialogue(
-                organisation_id=org.id, ansvarig_chef_id=person.id,
-                period=period, status="pagaende",
-            )
-            session.add(dialogue)
-            await session.flush()
-        else:
-            dialogue.period = period
+        if dialogue is None:
+            print(f"[import] hoppar över {f.namn!r}: ingen dialog för organisationen.")
+            hoppade_over += 1
+            continue
+        dialogue.period = f"Senaste mätning {senaste}"
 
         # HME-mätvärde: uppdatera befintligt eller skapa nytt.
         m = (
@@ -257,13 +247,6 @@ async def import_hme(session: AsyncSession, payload: HmeImport) -> dict:
                 setattr(m, key, val)
             uppdaterade += 1
             atgard = "uppdaterad"
-
-        # Fiktiva platshållare för övriga KPI:er — bara när dialogen är ny.
-        if ny_dialog:
-            for key, data in FICTIV_MEASUREMENTS.items():
-                area = areas.get(key)
-                if area is not None:
-                    session.add(Measurement(dialogue_id=dialogue.id, kpi_area_id=area.id, **data))
 
         rad = {
             "namn": f.namn,
@@ -283,5 +266,8 @@ async def import_hme(session: AsyncSession, payload: HmeImport) -> dict:
         )
 
     await session.commit()
-    print(f"[import] klart: {skapade} skapade, {uppdaterade} uppdaterade, {len(rader)} förvaltningar.")
+    print(
+        f"[import] klart: {skapade} skapade, {uppdaterade} uppdaterade, "
+        f"{hoppade_over} hoppade över, {len(rader)} förvaltningar kopplade."
+    )
     return {"skapade": skapade, "uppdaterade": uppdaterade, "forvaltningar": rader}

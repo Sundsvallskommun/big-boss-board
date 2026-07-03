@@ -15,10 +15,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import SessionLocal
 from app.models import (
+    Activity,
+    AreaStatus,
+    Dialogue,
     KpiArea,
     Measurement,
     Organisation,
+    Person,
     Question,
+    Status,
     Statusrapport,
     StatusFraga,
     SupportFunction,
@@ -28,7 +33,7 @@ from app.schemas import EkonomiImport, HmeImport, SjukImport
 from app.services.ekonomi_import import csv_to_payload as ekonomi_csv_to_payload
 from app.services.ekonomi_import import import_ekonomi
 from app.services.ekonomi_import import report_to_payload as ekonomi_report_to_payload
-from app.services.hme_import import import_hme, report_to_payload
+from app.services.hme_import import FICTIV_MEASUREMENTS, import_hme, report_to_payload, slugify
 from app.services.sjukfranvaro_import import csv_to_payload as sjuk_csv_to_payload
 from app.services.sjukfranvaro_import import import_sjukfranvaro
 
@@ -337,6 +342,108 @@ KOD_TILL_SLUG: dict[str, str] = {
     "27": "lantmaterikontoret",
 }
 
+# Organisationsmaster (BYGGPLAN §18): kanonisk förvaltningslista. orgId = organisation.kod
+# är nyckeln som nyckeltal knyts mot. Bundlad i imagen så seeden alltid kan läsa den.
+ORG_MASTER_PATH = Path(__file__).resolve().parent / "seed_data" / "organisationer.json"
+
+# Fiktiva bootstrap-mätvärden för de DATADRIVNA nyckeltalen, så korten renderas i en färsk
+# miljö innan riktig data importerats. Skrivs bara om inget mätvärde finns — riktig import
+# (HME/ekonomi/sjukfrånvaro) skriver över. Dialog-only-nyckeltal (§16–17) får inga.
+BOOTSTRAP_MEASUREMENTS: dict[str, dict] = {
+    "hme": {
+        "value_text": "77", "value_num": 77, "unit": "", "target_text": "≥ 75",
+        "target_num": 75, "bar_max": 100, "status": Status.good,
+        "trend_dir": None, "trend_good": None, "trend_text": "Ingen jämförelseperiod",
+        "interpretation": "Fiktiv platshållare tills HME importerats via /api/import/hme.",
+    },
+    "ekonomi": FICTIV_MEASUREMENTS["ekonomi"],
+    "sjukfranvaro": FICTIV_MEASUREMENTS["sjukfranvaro"],
+}
+
+
+def _load_org_master() -> list[dict]:
+    """Läs organisationsmastern (organisationer.json). Tom lista om filen saknas."""
+    if not ORG_MASTER_PATH.exists():
+        print(f"[seed] {ORG_MASTER_PATH.name} saknas — hoppar över organisationsmaster.")
+        return []
+    data = json.loads(ORG_MASTER_PATH.read_text(encoding="utf-8"))
+    return data.get("organisationer", [])
+
+
+async def _seed_organisationer(session: AsyncSession, area_by_key: dict[str, KpiArea]) -> None:
+    """Organisationslistan är master (BYGGPLAN §18): skapas/uppdateras ur organisationer.json,
+    med en dialog per förvaltning och fiktiva bootstrap-mätvärden. Importerna (HME/ekonomi/
+    sjukfrånvaro) kopplar sedan bara mot dessa via masterdata-koden. Förvaltningar som inte
+    finns i mastern (t.ex. utan kod) tas bort med sina dialoger/mätvärden."""
+    master = _load_org_master()
+    if not master:
+        return
+    master_kods = {str(o["orgId"]) for o in master}
+
+    # Generisk, anonym chef (inga personuppgifter).
+    person, _ = await _get_or_create(
+        session, Person, {"roll": "Ansvarig chef", "initialer": "FC"},
+        namn="Förvaltningschef (exempel)",
+    )
+
+    for o in master:
+        kod = str(o["orgId"])
+        namn = o["namn"]
+        slug = KOD_TILL_SLUG.get(kod) or slugify(namn)
+        org, _ = await _get_or_create(
+            session, Organisation, {"namn": namn, "slug": slug, "kod": kod}, kod=kod,
+        )
+        org.namn, org.slug = namn, slug  # håll i synk mot mastern
+
+        dialogue = (
+            await session.execute(select(Dialogue).filter_by(organisation_id=org.id))
+        ).scalars().first()
+        if dialogue is None:
+            dialogue = Dialogue(
+                organisation_id=org.id, ansvarig_chef_id=person.id,
+                period="Senaste period", status="pagaende",
+            )
+            session.add(dialogue)
+            await session.flush()
+
+        for key, data in BOOTSTRAP_MEASUREMENTS.items():
+            area = area_by_key.get(key)
+            if area is None:
+                continue
+            finns = (
+                await session.execute(
+                    select(Measurement).filter_by(dialogue_id=dialogue.id, kpi_area_id=area.id)
+                )
+            ).scalar_one_or_none()
+            if finns is None:
+                session.add(Measurement(dialogue_id=dialogue.id, kpi_area_id=area.id, **data))
+
+    # Ta bort förvaltningar utanför mastern (utan kod eller okänd kod) + deras data.
+    extra = (
+        await session.execute(
+            select(Organisation).where(
+                Organisation.kod.is_(None) | Organisation.kod.notin_(master_kods)
+            )
+        )
+    ).scalars().all()
+    for org in extra:
+        dlg_ids = [
+            d.id
+            for d in (
+                await session.execute(select(Dialogue).filter_by(organisation_id=org.id))
+            ).scalars()
+        ]
+        if dlg_ids:
+            await session.execute(delete(Measurement).where(Measurement.dialogue_id.in_(dlg_ids)))
+            await session.execute(delete(AreaStatus).where(AreaStatus.dialogue_id.in_(dlg_ids)))
+            await session.execute(delete(Activity).where(Activity.dialogue_id.in_(dlg_ids)))
+            await session.execute(delete(Dialogue).where(Dialogue.id.in_(dlg_ids)))
+        await session.delete(org)
+        print(f"[seed] tog bort förvaltning utanför mastern: {org.namn} (kod {org.kod}).")
+
+    await session.commit()
+    print(f"[seed] organisationsmaster: {len(master)} förvaltningar säkerställda.")
+
 
 async def _get_or_create(session: AsyncSession, model, defaults: dict | None = None, **filters):
     """Hämta rad på filters eller skapa den. Returnerar (objekt, skapad?)."""
@@ -437,10 +544,14 @@ async def seed(session: AsyncSession) -> None:
     # Status-sidans kort (Fas B) — engångs-bootstrap av startinnehållet.
     await _bootstrap_status_content(session)
 
-    # HME-rapporten levereras utanför git (monteras lokalt/vid deploy). Finns den
-    # importeras förvaltningsdialogerna via samma väg som /api/import/hme. Saknas den
-    # kör appen vidare med enbart referensdata (väljaren visar tomt läge) — i drift
-    # fylls HME på via import-endpointen.
+    # Organisationsmaster (BYGGPLAN §18): skapa förvaltningarna ur organisationer.json innan
+    # importerna, så de bara kopplar mot befintliga orgar (skapar dem inte). Tar bort orgar
+    # utanför mastern (t.ex. utan kod).
+    await _seed_organisationer(session, area_by_key)
+
+    # HME-rapporten levereras utanför git (monteras lokalt/vid deploy). Finns den kopplas
+    # HME-mätvärdet till befintliga förvaltningar via samma väg som /api/import/hme. Saknas
+    # den kör appen vidare med bootstrap-platshållaren tills HME importerats via endpointen.
     if HME_REPORT_PATH.exists():
         report = json.loads(HME_REPORT_PATH.read_text(encoding="utf-8"))
         payload = HmeImport(**report_to_payload(report))
@@ -455,13 +566,7 @@ async def seed(session: AsyncSession) -> None:
             "(importera via /api/import/hme)."
         )
 
-    # Sätt masterdata-kod på förvaltningsorganisationerna (kanonisk nyckel som dataset kopplar mot).
-    # Körs alltid (även utan HME-fil) så att redan seedade orgs får sin kod och ekonomi kan kopplas.
-    for kod, slug in KOD_TILL_SLUG.items():
-        org = (await session.execute(select(Organisation).filter_by(slug=slug))).scalar_one_or_none()
-        if org is not None and org.kod != kod:
-            org.kod = kod
-    await session.commit()
+    # (Masterdata-koden sätts nu i _seed_organisationer ovan — inte längre i efterhand.)
 
     # Ekonomirapporten levereras utanför git (samma som HME). Finns den importeras ekonomidata
     # per förvaltning via samma väg som /api/import/ekonomi (matchar på masterdata-koden).
