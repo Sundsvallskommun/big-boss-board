@@ -1,7 +1,7 @@
 # Deploy — `bbb.sundsvall.dev` via Dokploy
 
-Operativ checklista för att driftsätta stacken. Bakgrund och motivering finns i
-[`BYGGPLAN.md`](BYGGPLAN.md) §9–§12.
+Operativ checklista för att driftsätta stacken. Teknisk översikt finns i
+[`ARCHITECTURE.md`](ARCHITECTURE.md); bakgrund/motivering i [`BYGGPLAN.md`](BYGGPLAN.md) §9–§12.
 
 ## Arkitektur i drift
 
@@ -44,6 +44,9 @@ Operativ checklista för att driftsätta stacken. Bakgrund och motivering finns 
    - **Fil vid uppstart (bootstrap):** lägg `HME_totalindex.json` i en värdkatalog och peka
      `HME_DATA_DIR` dit; seed läser den vid start. Saknas både fil och import startar appen ändå
      med enbart referensdata (väljaren visar tomt läge tills HME importerats).
+   - **Ekonomi & sjukfrånvaro** matas in på samma sätt (token-skyddade endpoints, upsert) med
+     `scripts/import_ekonomi_serie.py` resp. `scripts/import_sjukfranvaro.py`. Se
+     [`ARCHITECTURE.md`](ARCHITECTURE.md#datainflöden).
 6. **Deploya.** Vid start kör backend automatiskt `alembic upgrade head` → seed
    (idempotent) → Gunicorn. Kör därefter importen (steg 5) om du inte använt fil-bootstrap.
 
