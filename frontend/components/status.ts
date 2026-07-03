@@ -1,4 +1,4 @@
-import type { Status } from "@/lib/api";
+import type { AreaStatus, Status } from "@/lib/api";
 
 /** KPI-statusskala mappad mot designsystemets semantiska tokens (designbeslut, BYGGPLAN §6):
  *  good→success, warn→warning, alert→error. Ingen egen hex — endast SK-tokens. */
@@ -57,3 +57,35 @@ export const STATUS: Record<Status, StatusTokens> = {
     legend: "Åtgärd krävs",
   },
 };
+
+/** En underdimension för ett nyckeltal vars manuella status delas i flikar (BYGGPLAN §16). */
+export interface StatusDimension {
+  key: string;
+  label: string;
+}
+
+/** Nyckeltal vars manuella status delas i flikar. Övriga dialog-only-nyckeltal = en status. */
+export const AREA_DIMENSIONS: Record<string, StatusDimension[]> = {
+  verksamhet: [
+    { key: "grunduppdrag", label: "Grunduppdrag" },
+    { key: "fullmaktigemal", label: "Fullmäktigemål" },
+  ],
+};
+
+const SEVERITY: Record<Status, number> = { good: 0, warn: 1, alert: 2 };
+
+/** Senaste posten i historiken för en viss dimension (historik är nyast först). */
+export function senastePerDimension(historik: AreaStatus[], dim: string | null): AreaStatus | null {
+  return historik.find((h) => (h.dimension ?? null) === dim) ?? null;
+}
+
+/** Effektiv kortstatus: värsta av dimensionernas senaste status (grön < gul < röd),
+ *  eller senaste posten för nyckeltal med en enda status. null = inget satt. */
+export function kortStatus(historik: AreaStatus[], dims: StatusDimension[] | null): Status | null {
+  if (!dims) return historik[0]?.status ?? null;
+  const senaste = dims
+    .map((d) => senastePerDimension(historik, d.key)?.status)
+    .filter((s): s is Status => !!s);
+  if (senaste.length === 0) return null;
+  return senaste.reduce((worst, s) => (SEVERITY[s] > SEVERITY[worst] ? s : worst));
+}

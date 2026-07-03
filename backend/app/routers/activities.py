@@ -69,6 +69,7 @@ async def add_area_status(
     row = AreaStatus(
         dialogue_id=dialogue_id,
         kpi_area_id=area_id,
+        dimension=(body.dimension or None),
         status=body.status,
         kommentar=(body.kommentar or "").strip() or None,
     )

@@ -214,6 +214,9 @@ class AreaStatus(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     dialogue_id: Mapped[int] = mapped_column(ForeignKey("dialogue.id"))
     kpi_area_id: Mapped[int] = mapped_column(ForeignKey("kpi_area.id"))
+    # Underdimension för nyckeltal som delas upp (Verksamhet: "grunduppdrag"/"fullmaktigemal").
+    # None för nyckeltal med en enda status (Digital, Kommunikativt). Historik per dimension.
+    dimension: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status: Mapped[Status] = mapped_column(Enum(Status, name="status"))
     kommentar: Mapped[str | None] = mapped_column(Text, nullable=True)
     satt_at: Mapped[datetime] = mapped_column(

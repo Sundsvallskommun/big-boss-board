@@ -451,6 +451,8 @@ class AreaStatusOut(ORMModel):
     Append-only historik — en post per gång status sattes."""
 
     id: int
+    # Underdimension (Verksamhet: "grunduppdrag"/"fullmaktigemal"), None för enkel status.
+    dimension: str | None = None
     status: Status
     kommentar: str | None = None
     satt_at: datetime
@@ -461,6 +463,7 @@ class AreaStatusIn(BaseModel):
 
     status: Status
     kommentar: str | None = None
+    dimension: str | None = None
 
 
 class DialogueArea(BaseModel):

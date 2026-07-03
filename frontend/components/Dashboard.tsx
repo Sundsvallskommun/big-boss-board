@@ -14,7 +14,7 @@ import {
   markActivityKlar,
 } from "@/lib/api";
 import { areaIcon } from "./icons";
-import { STATUS } from "./status";
+import { AREA_DIMENSIONS, STATUS, kortStatus } from "./status";
 import { DetailPanel } from "./DetailPanel";
 import { QuestionPanel } from "./QuestionPanel";
 
@@ -58,8 +58,14 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
     }));
   }
 
-  async function sparaStatus(key: string, areaId: number, status: Status, kommentar: string) {
-    const saved = await addAreaStatus(dialogue.id, areaId, status, kommentar);
+  async function sparaStatus(
+    key: string,
+    areaId: number,
+    status: Status,
+    kommentar: string,
+    dimension: string | null,
+  ) {
+    const saved = await addAreaStatus(dialogue.id, areaId, status, kommentar, dimension);
     // Lägg nyaste posten först i historiken.
     setHistorik((prev) => ({ ...prev, [key]: [saved, ...(prev[key] ?? [])] }));
   }
@@ -135,9 +141,10 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
             const isSel = area.key === selected;
 
             // Nyckeltal utan mätdata (§16–17) → dialogfråge-kort med manuellt satt status.
+            // Verksamhet har flera dimensioner → kortets färg = värsta av dem.
             if (!m) {
-              const ms = historik[area.key]?.[0] ?? null;
-              const st = ms ? STATUS[ms.status] : null;
+              const effektiv = kortStatus(historik[area.key] ?? [], AREA_DIMENSIONS[area.key] ?? null);
+              const st = effektiv ? STATUS[effektiv] : null;
               return (
                 <button
                   key={area.key}
@@ -295,8 +302,9 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
                 index={selectedIndex}
                 total={areas.length}
                 historik={historik[current.area.key] ?? []}
-                onSaveStatus={(status, kommentar) =>
-                  sparaStatus(current.area.key, current.area.id, status, kommentar)
+                dimensions={AREA_DIMENSIONS[current.area.key] ?? null}
+                onSaveStatus={(status, kommentar, dimension) =>
+                  sparaStatus(current.area.key, current.area.id, status, kommentar, dimension)
                 }
               />
             ))}

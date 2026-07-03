@@ -172,6 +172,8 @@ export interface Activity {
  *  Append-only historik — en post per gång status sattes. */
 export interface AreaStatus {
   id: number;
+  /** Underdimension (Verksamhet: "grunduppdrag"/"fullmaktigemal"), null för enkel status. */
+  dimension: string | null;
   status: Status;
   kommentar: string | null;
   satt_at: string;
@@ -340,11 +342,12 @@ export async function addAreaStatus(
   areaId: number,
   status: Status,
   kommentar: string,
+  dimension: string | null = null,
 ): Promise<AreaStatus> {
   const res = await fetch(`/api/dialogues/${dialogueId}/areas/${areaId}/status`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status, kommentar }),
+    body: JSON.stringify({ status, kommentar, dimension }),
   });
   if (!res.ok) {
     throw new Error("Kunde inte spara statusen.");
