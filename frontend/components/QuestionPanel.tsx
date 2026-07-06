@@ -84,6 +84,7 @@ function StatusSektion({
           id={`kommentar-${uid}`}
           value={kommentar}
           onChange={(e) => setKommentar(e.target.value)}
+          maxLength={2000}
           rows={3}
           placeholder="Kort motivering till statusen…"
         />

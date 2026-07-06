@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BrandLockup } from "@/components/BrandLockup";
+import { UserMenu } from "@/components/UserMenu";
 import { TrendingUp, TrendingDown, ChevronLeft, MessagesSquare } from "lucide-react";
 import {
   type DialogueDetail,
@@ -22,7 +23,14 @@ import { QuestionPanel } from "./QuestionPanel";
 // ledarskap visas som dialogfråge-kort utan mätdata, med manuellt satt status (§16–17).
 const DOLDA_OMRADEN = new Set<string>();
 
-export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
+export function Dashboard({
+  dialogue,
+  sessionUser,
+}: {
+  dialogue: DialogueDetail;
+  /** Inloggad användare (saml-läget) — skickas från server-sidan; null döljer menyn. */
+  sessionUser?: { name: string; email: string; role: "admin" | "user" } | null;
+}) {
   const areas = dialogue.areas.filter((a) => !DOLDA_OMRADEN.has(a.area.key));
 
   const [selected, setSelected] = useState(areas[0]?.area.key ?? "");
@@ -76,13 +84,16 @@ export function Dashboard({ dialogue }: { dialogue: DialogueDetail }) {
       <header className="sticky top-0 z-30 border-b border-hairline bg-background-content">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-16 px-24 py-16 md:px-32 xl:max-w-[1440px]">
           <BrandLockup />
-          <Link
-            href="/"
-            className="inline-flex items-center gap-4 truncate rounded-md text-base font-semibold tracking-tight text-dark-secondary transition hover:text-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            <ChevronLeft size={16} aria-hidden="true" />
-            Alla förvaltningar
-          </Link>
+          <span className="flex items-center gap-16">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-4 truncate rounded-md text-base font-semibold tracking-tight text-dark-secondary transition hover:text-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <ChevronLeft size={16} aria-hidden="true" />
+              Alla förvaltningar
+            </Link>
+            {sessionUser && <UserMenu user={sessionUser} />}
+          </span>
         </div>
       </header>
 

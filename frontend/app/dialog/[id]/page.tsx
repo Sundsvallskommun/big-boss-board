@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { ApiError, getDialogue } from "@/lib/api";
+import { getSessionUser } from "@/lib/auth";
 import { Dashboard } from "@/components/Dashboard";
 
 // Alltid färsk data (dialogen ändras under samtalet).
@@ -25,5 +26,11 @@ export default async function DialoguePage({
     throw err;
   }
 
-  return <Dashboard dialogue={dialogue} />;
+  const user = await getSessionUser();
+  return (
+    <Dashboard
+      dialogue={dialogue}
+      sessionUser={user && { name: user.name, email: user.email, role: user.role }}
+    />
+  );
 }

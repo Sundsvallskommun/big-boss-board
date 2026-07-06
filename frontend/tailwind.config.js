@@ -72,6 +72,7 @@ module.exports = {
         // --- Vattjom (kommunens primära blå) ---
         vattjom: {
           "surface-primary": "#0055B8", // ytor/ramar/fyllnad
+          "surface-primary-hover": "#004A99", // hover på primära knappar/länkar
           "text-primary": "#00427D", // text/ikoner (mörkare → AA)
           "background-100": "#E6EEF7", // ljus blå ton
         },

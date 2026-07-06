@@ -11,6 +11,16 @@ type Preview =
   | { error: string }
   | null;
 
+type JsonObject = Record<string, unknown>;
+
+function isObject(value: unknown): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
 const KIND_ETIKETT: Record<"hme" | "ekonomi" | "sjukfranvaro", string> = {
   hme: "HME",
   ekonomi: "Ekonomi",
@@ -34,20 +44,29 @@ function previewOf(text: string): Preview {
     return { kind, count: enheter.size, info: period ? `period ${period} · CSV` : "CSV" };
   }
   try {
-    const d = JSON.parse(text);
+    const d = JSON.parse(text) as unknown;
+    if (!isObject(d)) return { error: "JSON-filen måste innehålla ett objekt." };
     // Ekonomi: rå rapport med poster/dataset.
-    if (Array.isArray(d?.poster) || d?.dataset) {
-      const enheter = (d?.metadata?.enheter ?? []).filter((e: any) => e?.niva === "förvaltning");
-      const period = d?.dataset?.period ?? "";
+    if (Array.isArray(d.poster) || d.dataset) {
+      const metadata = isObject(d.metadata) ? d.metadata : {};
+      const dataset = isObject(d.dataset) ? d.dataset : {};
+      const enheter = asArray(metadata.enheter)
+        .filter(isObject)
+        .filter((e) => e.niva === "förvaltning");
+      const period = typeof dataset.period === "string" ? dataset.period : "";
       return { kind: "ekonomi", count: enheter.length, info: period ? `period ${period}` : "ekonomi" };
     }
     // HME: dimensioner eller redan normaliserad forvaltningar.
-    const forv = Array.isArray(d?.forvaltningar)
+    const dimensioner = isObject(d.dimensioner) ? d.dimensioner : {};
+    const forv = Array.isArray(d.forvaltningar)
       ? d.forvaltningar
-      : d?.dimensioner?.["Enhet"] ?? d?.dimensioner?.["Förvaltning"] ?? [];
+      : asArray(dimensioner["Enhet"] ?? dimensioner["Förvaltning"]);
     if (!Array.isArray(forv) || forv.length === 0) return { error: "Hittar inga förvaltningar i filen." };
     const ar = new Set<string>();
-    for (const f of forv) for (const y of Object.keys(f.matningar ?? {})) ar.add(y);
+    for (const f of forv) {
+      if (!isObject(f)) continue;
+      for (const y of Object.keys(isObject(f.matningar) ? f.matningar : {})) ar.add(y);
+    }
     const sorted = [...ar].sort();
     const span = sorted.length ? `${sorted[0]}–${sorted[sorted.length - 1]}` : "–";
     return { kind: "hme", count: forv.length, info: `år ${span}` };

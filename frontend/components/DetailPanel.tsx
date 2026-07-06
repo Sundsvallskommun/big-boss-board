@@ -179,6 +179,7 @@ function ActivityRow({
                 <Input
                   value={notering}
                   onChange={(e) => setNotering(e.target.value)}
+                  maxLength={1000}
                   placeholder="Kort notering om vad som gjorts…"
                 />
               </FormControl>
@@ -760,6 +761,7 @@ export function DetailPanel({
               rows={3}
               value={nyText}
               onChange={(e) => setNyText(e.target.value)}
+              maxLength={4000}
               placeholder="t.ex. Ta fram åtgärdsplan tillsammans med controller inför nästa avstämning."
             />
           </FormControl>

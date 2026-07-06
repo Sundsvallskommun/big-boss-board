@@ -11,7 +11,7 @@ type ButtonProps = Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "color"> 
 };
 
 const VARIANT: Record<NonNullable<ButtonProps["variant"]>, string> = {
-  primary: "bg-vattjom-surface-primary text-white hover:bg-[#004A99]",
+  primary: "bg-vattjom-surface-primary text-white hover:bg-vattjom-surface-primary-hover",
   ghost: "bg-transparent text-vattjom-text-primary hover:bg-vattjom-background-100",
 };
 
