@@ -25,7 +25,8 @@ Operativ checklista för att driftsätta stacken. Teknisk översikt finns i
 3. **Env/secrets** i Dokploy (committa aldrig — se [`.env.example`](../.env.example)):
    - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
    - `DATABASE_URL=postgresql+asyncpg://<user>:<password>@db:5432/<db>`
-   - `ACCESS_CODE` — sätt ett värde för att kräva åtkomstkod (tom = öppen tjänst).
+   - `ACCESS_CODE` — åtkomstkod för UI:t. Tom kod släpper inte igenom trafik om inte
+     `ALLOW_OPEN_ACCESS=true` sätts uttryckligen; sätt aldrig den flaggan i drift.
    - `ADMIN_ACCESSCODE` — separat kod som visar import-GUI:t på `/admin/import`. Vanlig
      `ACCESS_CODE` ser inte GUI:t. Sätts på frontend.
    - `BACKEND_INTERNAL_URL=http://backend:8000` (default räcker normalt).

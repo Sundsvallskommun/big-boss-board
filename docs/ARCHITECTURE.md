@@ -206,7 +206,8 @@ aldrig i repo.
 | `IMPORT_TOKEN` | backend + frontend | Nyckel för `/api/import/*` och `/api/admin/*`. Tom = import avstängd. |
 | `HME_DATA_DIR` | backend | Valfri värdkatalog med `HME_totalindex.json` för fil-bootstrap vid start. |
 | `BACKEND_INTERNAL_URL` | frontend | Intern backend-URL för SSR/rewrites (default `http://backend:8000`). |
-| `ACCESS_CODE` | frontend + backend | Åtkomstkod. Tom = öppen tjänst. |
+| `ACCESS_CODE` | frontend + backend | Åtkomstkod. Tom kod kräver `ALLOW_OPEN_ACCESS=true`, annars fail-closed. |
+| `ALLOW_OPEN_ACCESS` | frontend | Explicit lokal/demo-flagga för öppen access. Ska aldrig vara `true` i drift. |
 | `ADMIN_ACCESSCODE` | frontend | Admin-kod som dessutom visar import-GUI:t (`/admin/import`). |
 | `NODE_ENV` / `PORT` | frontend | Standard `production` / `3000`. |
 | `FRONTEND_PORT` | (lokalt) | Host-port i override-filen. Används inte i Dokploy. |

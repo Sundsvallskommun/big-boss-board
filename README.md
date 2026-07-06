@@ -40,6 +40,7 @@ vill köra en tjänst utanför Docker eller köra importskripten.)
 git clone git@github.com:jarikoponen/bbb.git
 cd bbb
 cp .env.example .env          # sätt POSTGRES_PASSWORD (och matcha den i DATABASE_URL)
+# sätt även ACCESS_CODE, eller ALLOW_OPEN_ACCESS=true för en öppen lokal/demo-körning
 docker compose up --build
 ```
 
@@ -63,10 +64,12 @@ Dokploy kör) utan override-filen:
 docker compose -f docker-compose.yml up --build
 ```
 
-### Åtkomstkod (valfritt lokalt)
+### Åtkomstkod
 
-Med tomma `ACCESS_CODE`/`ADMIN_ACCESSCODE` är tjänsten öppen. Sätt dem i `.env` för att
-kräva inloggning; `ADMIN_ACCESSCODE` ger dessutom import-GUI:t på `/admin/import`.
+Sätt `ACCESS_CODE` i `.env` för vanlig inloggning. `ADMIN_ACCESSCODE` ger dessutom
+import-GUI:t på `/admin/import`. Tomma koder släpper inte längre igenom trafik av
+misstag; för en helt öppen lokal/demo-körning krävs `ALLOW_OPEN_ACCESS=true`
+uttryckligen. Sätt aldrig den flaggan i drift.
 
 ## Vanliga utvecklingsuppgifter
 
@@ -173,5 +176,10 @@ bbb/
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — hur allt hänger ihop: tjänster, request-flöde,
   datamodell, dataflöden, det visuella token-lagret och viktiga designbeslut/fallgropar.
 - [`docs/DEPLOY.md`](docs/DEPLOY.md) — driftsättning på `bbb.sundsvall.dev` via Dokploy.
+- [`docs/OPENSHIFT_PROD_PLAN.md`](docs/OPENSHIFT_PROD_PLAN.md) — plan för GitHub → Tekton →
+  GitLab-manifest → ArgoCD → OpenShift.
+- [`docs/SAML_SSO_PLAN.md`](docs/SAML_SSO_PLAN.md) — plan för SAML/SSO, sessioner och gruppstyrning.
+- [`docs/EXTERNAL_DATABASE_PLAN.md`](docs/EXTERNAL_DATABASE_PLAN.md) — plan för extern intern
+  Postgres i prod.
 - [`CLAUDE.md`](CLAUDE.md) — konventioner (svenskt UI, imperativ knapptext, token-regler, dataregel).
 - [`docs/BYGGPLAN.md`](docs/BYGGPLAN.md) — ursprunglig byggplan och roadmap.
