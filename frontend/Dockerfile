@@ -15,6 +15,9 @@ RUN npm ci
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# CI-mönstret (delade pipelinen bygger EN image för alla miljöer): bygg med
+# platshållare ur .env-cicd; entrypoint.sh ersätter dem vid containerstart.
+RUN cp .env-cicd .env.local
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
@@ -24,12 +27,19 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0
-RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs nextjs
+# uid 1001 i GRUPP 0: OpenShift (restricted SCC) ignorerar USER och kör godtyckligt
+# UID i grupp 0 — därför ägs filerna av 1001:0 och .next är gruppskrivbar så
+# entrypointens sed-ersättning fungerar för vilket UID som helst.
+RUN useradd --system --uid 1001 --gid 0 nextjs
 
-COPY --from=build /app/public ./public
-COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=build --chown=1001:0 /app/public ./public
+COPY --from=build --chown=1001:0 /app/.next/standalone ./
+COPY --from=build --chown=1001:0 /app/.next/static ./.next/static
+RUN chmod -R g+w /app/.next
 
-USER nextjs
+COPY --chown=1001:0 entrypoint.sh ./
+RUN chmod 0555 entrypoint.sh && sed -i 's/\r$//' ./entrypoint.sh
+
+USER 1001
 EXPOSE 3000
-CMD ["node", "server.js"]
+ENTRYPOINT ["/app/entrypoint.sh"]

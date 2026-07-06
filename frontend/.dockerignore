@@ -5,4 +5,6 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+# CI-platshållarfilen MÅSTE med i byggkontexten (kopieras till .env.local i bygget).
+!.env-cicd
 .DS_Store

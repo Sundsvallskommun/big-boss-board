@@ -47,13 +47,20 @@ Prod behöver gå via kommunens etablerade deploykedja för att få rätt nät, 
 
 ## Lokala Repoändringar Innan Onboarding
 
-1. Lägg till en strikt readiness endpoint i backend, till exempel `/api/ready`, som returnerar felstatus om databasen inte går att nå.
-2. Bestäm hur `BACKEND_INTERNAL_URL` ska hanteras i OpenShift:
-   - antingen namnge backend-servicen så att `http://backend:8000` fungerar;
-   - eller införa runtime-placeholder/entrypoint för Next.js enligt CI-guiden.
+1. ~~Readiness endpoint~~ — byggt: `/api/ready` (503 utan databas) + oprefixade alias
+   `/health`/`/ready` eftersom kustomize-basens probes antar Node-apparnas rotvägar.
+2. ~~`BACKEND_INTERNAL_URL` i OpenShift~~ — byggt enligt CI-guidens runtime-mönster:
+   `frontend/.env-cicd` bakar in platshållaren `http://backend-internal-url-placeholder`
+   (gemen — Next normaliserar hostnamn till gemener vid bygge) och
+   `frontend/entrypoint.sh` sed-ersätter i `.next` (både `*.js` och `*.json` —
+   rewrite-destinationerna bor i routes-manifest.json) vid containerstart.
+   Dessutom OpenShift-anpassade Dockerfiles (uid:GRUPP 0, gruppskrivbar `.next`,
+   verifierat med godtyckligt UID) och PORT-konfigurerbar Gunicorn-bind
+   (compose kör 8000; OpenShift sätter PORT=3000 så basens service/probes stämmer).
 3. Uppdatera `docs/DEPLOY.md` eller skapa separat deploydoc när OpenShift-flödet är verkligt, så Dokploy och OpenShift inte blandas ihop.
 4. Lägg till OpenShift-prodvariabler i `.env.example` när namn och env-kontrakt är beslutade.
-5. När SAML införs: ta bort eller fasa ut access-kodstubben som prod-auth.
+5. ~~När SAML införs~~ — SAML är byggt (`AUTH_MODE=saml`, se `docs/SAML_SSO_PLAN.md`);
+   access-kodstubben finns kvar som lokalt fallback-läge och ska inte användas i prod.
 
 ## Vad Som Inte Ska Ändras Nu
 

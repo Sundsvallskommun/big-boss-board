@@ -46,7 +46,8 @@ async function samlGate(req: NextRequest) {
   if (pathname.startsWith("/login")) return NextResponse.next();
   // SAML-flödets egna endpoints måste vara nåbara utloggad (login/callback/metadata).
   if (pathname.startsWith("/api/auth")) return NextResponse.next();
-  if (pathname.startsWith("/api/health")) return NextResponse.next();
+  if (pathname.startsWith("/api/health") || pathname.startsWith("/api/ready"))
+    return NextResponse.next();
   // Import/admin är maskin-till-maskin med egen token-auth (IMPORT_TOKEN) i backend.
   if (pathname.startsWith("/api/import") || pathname.startsWith("/api/admin"))
     return NextResponse.next();
