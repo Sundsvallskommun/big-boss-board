@@ -6,9 +6,9 @@ prototypens AREAS-objekt (område + mätvärde + verktyg + frågor + ev. överen
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import Status, TrendDir
 
@@ -83,13 +83,13 @@ class ActivityOut(ORMModel):
 class ActivityCreate(BaseModel):
     """Indata för att lägga till en aktivitet (endast fri text)."""
 
-    text: str
+    text: str = Field(min_length=1, max_length=4000)
 
 
 class ActivityKlar(BaseModel):
     """Indata för att klarrapportera en aktivitet med en kort notering."""
 
-    notering: str = ""
+    notering: str = Field(default="", max_length=1000)
 
 
 # ---- Inkorg: inkomna synpunkter/frågor/aktiviteter (intake) --------------
@@ -98,7 +98,7 @@ class ActivityKlar(BaseModel):
 class SubmissionCreate(BaseModel):
     """Indata från det publika formuläret — endast fri text."""
 
-    text: str
+    text: str = Field(min_length=1, max_length=4000)
 
 
 class SubmissionOut(ORMModel):
@@ -462,8 +462,8 @@ class AreaStatusIn(BaseModel):
     """Sätt/uppdatera manuell status för ett område (per förvaltning)."""
 
     status: Status
-    kommentar: str | None = None
-    dimension: str | None = None
+    kommentar: str | None = Field(default=None, max_length=2000)
+    dimension: str | None = Field(default=None, max_length=32)
 
 
 class DialogueArea(BaseModel):
