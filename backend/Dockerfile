@@ -36,8 +36,12 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 COPY . .
 RUN chmod +x entrypoint.sh
 
-# Kör som icke-root.
-RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
+# Kör som icke-root. OpenShift ignorerar USER och kör med godtyckligt UID i grupp 0
+# (restricted SCC) — därför grupp 0 + gruppläsrättigheter i stället för egen grupp.
+# Appen skriver inget i /app (SAML-nycklar materialiseras i /tmp).
+RUN useradd --create-home --uid 10001 --gid 0 appuser \
+    && chgrp -R 0 /app \
+    && chmod -R g=u /app
 USER appuser
 
 EXPOSE 8000

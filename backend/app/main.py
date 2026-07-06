@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from sqlalchemy import text
 
 from app.auth.router import router as auth_router
@@ -53,8 +53,10 @@ app.include_router(admin.router)
 
 
 @app.get("/api/health", tags=["system"])
+@app.get("/health", include_in_schema=False)  # oprefixat alias för plattformsprobes
 async def health() -> dict[str, str]:
-    """Healthcheck för compose/Dokploy. Verifierar även databasanslutning."""
+    """Liveness för compose/Dokploy/OpenShift. Svarar alltid 200 — rapporterar
+    db-status men fäller inte podden (det gör readiness)."""
     db_status = "ok"
     try:
         async with engine.connect() as conn:
@@ -63,3 +65,18 @@ async def health() -> dict[str, str]:
         db_status = "unavailable"
 
     return {"status": "ok", "service": "bbb-backend", "db": db_status}
+
+
+@app.get("/api/ready", tags=["system"])
+@app.get("/ready", include_in_schema=False)  # oprefixat alias för plattformsprobes
+async def ready() -> dict[str, str]:
+    """Readiness för OpenShift: 503 när databasen inte nås — podden ska inte få
+    trafik förrän den kan svara med data (OPENSHIFT_PROD_PLAN §readiness).
+    Oprefixade alias finns eftersom kustomize-basens probes antar Node-apparnas
+    rotvägar; via frontend-proxyn exponeras bara /api/*."""
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail="Databasen nås inte.") from exc
+    return {"status": "ready"}
