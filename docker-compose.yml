@@ -30,6 +30,33 @@ services:
       ACCESS_CODE: ${ACCESS_CODE:-}
       # Hemlig nyckel för /api/import/hme. Tom = import-endpoint avstängd (503).
       IMPORT_TOKEN: ${IMPORT_TOKEN:-}
+      # Auth-läge: access_code (stub) eller saml (kommunens IdP). Se .env.example.
+      AUTH_MODE: ${AUTH_MODE:-access_code}
+      SECRET_KEY: ${SECRET_KEY:-}
+      REDIS_HOST: ${REDIS_HOST:-}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      SAML_ISSUER: ${SAML_ISSUER:-}
+      SAML_ENTRY_SSO: ${SAML_ENTRY_SSO:-}
+      SAML_IDP_ENTITY_ID: ${SAML_IDP_ENTITY_ID:-}
+      SAML_CALLBACK_URL: ${SAML_CALLBACK_URL:-}
+      SAML_LOGOUT_CALLBACK_URL: ${SAML_LOGOUT_CALLBACK_URL:-}
+      SAML_SUCCESS_REDIRECT: ${SAML_SUCCESS_REDIRECT:-}
+      SAML_FAILURE_REDIRECT: ${SAML_FAILURE_REDIRECT:-}
+      SAML_IDP_PUBLIC_CERT: ${SAML_IDP_PUBLIC_CERT:-}
+      SAML_IDP_LOGOUT_URL: ${SAML_IDP_LOGOUT_URL:-}
+      SAML_STRICT: ${SAML_STRICT:-true}
+      SAML_WANT_ASSERTIONS_SIGNED: ${SAML_WANT_ASSERTIONS_SIGNED:-true}
+      SAML_WANT_MESSAGES_SIGNED: ${SAML_WANT_MESSAGES_SIGNED:-false}
+      SAML_REJECT_DEPRECATED_ALG: ${SAML_REJECT_DEPRECATED_ALG:-true}
+      SAML_PUBLIC_KEY: ${SAML_PUBLIC_KEY:-}
+      SAML_PRIVATE_KEY: ${SAML_PRIVATE_KEY:-}
+      SAML_ALLOWED_GROUPS: ${SAML_ALLOWED_GROUPS:-}
+      SAML_ADMIN_GROUPS: ${SAML_ADMIN_GROUPS:-}
+      # WSO2/api.sundsvall.se (maskin-till-maskin) — används först vid API-anrop.
+      API_BASE_URL: ${API_BASE_URL:-https://api-test.sundsvall.se}
+      CLIENT_KEY: ${CLIENT_KEY:-}
+      CLIENT_SECRET: ${CLIENT_SECRET:-}
     # HME-aggregatet versionshanteras inte. Lokalt monteras ./backend/app/data
     # (innehåller hme_2025.json) read-only. På Dokploy sätts HME_DATA_DIR till en
     # värdkatalog dit aggregatet laddats upp. Saknas filen kör appen vidare med
@@ -57,10 +84,14 @@ services:
       BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-3000}
-      # Access-kod-stub: gatar UI:t server-side. Tom = öppen tjänst.
+      # Access-kod-stub: gatar UI:t server-side. Tom kräver ALLOW_OPEN_ACCESS=true.
       ACCESS_CODE: ${ACCESS_CODE:-}
       # Separat admin-kod: visar import-GUI:t (/admin/import). Tom = inget admin-läge.
       ADMIN_ACCESSCODE: ${ADMIN_ACCESSCODE:-}
+      # Explicit lokal escape hatch. Sätt aldrig true i drift.
+      ALLOW_OPEN_ACCESS: ${ALLOW_OPEN_ACCESS:-false}
+      # I saml-läget gatar middleware via backend-sessionen i stället för access-kod.
+      AUTH_MODE: ${AUTH_MODE:-access_code}
       # Import-GUI:ts server-action anropar backend med detta token (hålls server-side).
       IMPORT_TOKEN: ${IMPORT_TOKEN:-}
     depends_on:

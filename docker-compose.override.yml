@@ -5,3 +5,8 @@ services:
   frontend:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
+  backend:
+    environment:
+      # Lokala SAML-sessioner utan Redis bor i processminnet — kör EN worker så
+      # inloggningen inte studsar mellan workers. Prod använder Redis (delat).
+      WEB_CONCURRENCY: 1
