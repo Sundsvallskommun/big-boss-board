@@ -10,11 +10,10 @@ Endast öppen och publik information — inga personuppgifter (även dummydata �
 from __future__ import annotations
 
 import enum
-from datetime import date, datetime
+from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
-    Date,
     DateTime,
     Enum,
     Float,

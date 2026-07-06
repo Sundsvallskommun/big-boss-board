@@ -16,23 +16,39 @@ export type ImportState = {
   rader?: ImportRad[];
 };
 
+type JsonObject = Record<string, unknown>;
+
+function isObject(value: unknown): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asText(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : value == null ? fallback : String(value);
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
 /** Officiella HME-rapporten (`dimensioner.Enhet/Förvaltning`) → normaliserad payload.
  *  Accepterar även en redan normaliserad payload (innehåller `forvaltningar`). */
-function hmeToPayload(obj: Record<string, any>): { forvaltningar: unknown[] } & Record<string, unknown> {
-  if (Array.isArray(obj.forvaltningar)) return obj as never;
-  const dims = obj?.dimensioner ?? {};
-  const forv = dims["Enhet"] ?? dims["Förvaltning"] ?? [];
+function hmeToPayload(obj: JsonObject): { forvaltningar: unknown[] } & JsonObject {
+  if (Array.isArray(obj.forvaltningar)) {
+    return obj as { forvaltningar: unknown[] } & JsonObject;
+  }
+  const dims = isObject(obj.dimensioner) ? obj.dimensioner : {};
+  const forv = asArray(dims["Enhet"] ?? dims["Förvaltning"]);
   return {
     kpi: "hme",
     enhet: "index",
     mal: 75,
     kalla: "HME-mätning (officiell rapport)",
-    forvaltningar: (forv as any[]).map((f) => ({
-      namn: f.grupp,
+    forvaltningar: forv.filter(isObject).map((f) => ({
+      namn: asText(f.grupp),
       matningar: Object.fromEntries(
-        Object.entries(f.matningar ?? {}).map(([k, v]) => [String(k), v]),
+        Object.entries(isObject(f.matningar) ? f.matningar : {}).map(([k, v]) => [String(k), v]),
       ),
-      antal_svar: f.antal_svar_2025 ?? null,
+      antal_svar: typeof f.antal_svar_2025 === "number" ? f.antal_svar_2025 : null,
     })),
   };
 }
@@ -53,12 +69,12 @@ async function postBody(path: string, body: string, contentType: string): Promis
   }
 }
 
-function ekonomiRader(enheter: any[]): ImportRad[] {
-  return enheter.map((e) => ({
-    namn: e.namn,
-    value: e.value ?? "–",
-    status: e.status ?? "",
-    atgard: e.atgard,
+function ekonomiRader(enheter: unknown[]): ImportRad[] {
+  return enheter.filter(isObject).map((e) => ({
+    namn: asText(e.namn),
+    value: asText(e.value, "–"),
+    status: asText(e.status),
+    atgard: asText(e.atgard),
   }));
 }
 
@@ -88,36 +104,39 @@ export async function importData(_prev: ImportState, formData: FormData): Promis
     const res = await postBody(path, text, "text/csv");
     if (!res) return { ok: false, message: "Kunde inte nå tjänsten. Försök igen." };
     if (!res.ok) return { ok: false, message: `Import misslyckades (HTTP ${res.status}).` };
-    const r = await res.json();
+    const r = (await res.json()) as JsonObject;
     return {
       ok: true,
       kind: personal ? "sjukfranvaro" : "ekonomi",
       message: `${etikett}-import (CSV) klar: ${r.skapade} skapade, ${r.uppdaterade} uppdaterade, ${r.hoppade_over} hoppade över.`,
-      rader: ekonomiRader(r.enheter ?? []),
+      rader: ekonomiRader(asArray(r.enheter)),
     };
   }
 
-  let data: any;
+  let data: unknown;
   try {
     data = JSON.parse(text);
   } catch {
     return { ok: false, message: "Filen är varken giltig JSON eller en igenkänd CSV." };
   }
+  if (!isObject(data)) {
+    return { ok: false, message: "JSON-filen måste innehålla ett objekt." };
+  }
 
   // Ekonomi JSON (rå rapport med poster/dataset).
-  if (Array.isArray(data?.poster) || data?.dataset) {
-    if (!Array.isArray(data?.poster) || data.poster.length === 0) {
+  if (Array.isArray(data.poster) || data.dataset) {
+    if (!Array.isArray(data.poster) || data.poster.length === 0) {
       return { ok: false, message: "Hittar inga poster i ekonomifilen." };
     }
     const res = await postBody("/api/import/ekonomi", JSON.stringify(data), "application/json");
     if (!res) return { ok: false, message: "Kunde inte nå tjänsten. Försök igen." };
     if (!res.ok) return { ok: false, message: `Import misslyckades (HTTP ${res.status}).` };
-    const r = await res.json();
+    const r = (await res.json()) as JsonObject;
     return {
       ok: true,
       kind: "ekonomi",
       message: `Ekonomi-import klar: ${r.skapade} skapade, ${r.uppdaterade} uppdaterade, ${r.hoppade_over} hoppade över.`,
-      rader: ekonomiRader(r.enheter ?? []),
+      rader: ekonomiRader(asArray(r.enheter)),
     };
   }
 
@@ -129,16 +148,16 @@ export async function importData(_prev: ImportState, formData: FormData): Promis
   const res = await postBody("/api/import/hme", JSON.stringify(payload), "application/json");
   if (!res) return { ok: false, message: "Kunde inte nå tjänsten. Försök igen." };
   if (!res.ok) return { ok: false, message: `Import misslyckades (HTTP ${res.status}).` };
-  const r = await res.json();
+  const r = (await res.json()) as JsonObject;
   return {
     ok: true,
     kind: "hme",
-    message: `HME-import klar: ${r.skapade} skapade, ${r.uppdaterade} uppdaterade (${r.forvaltningar.length} förvaltningar).`,
-    rader: (r.forvaltningar as any[]).map((f) => ({
-      namn: f.namn,
-      value: f.value,
-      status: f.status,
-      atgard: f.atgard,
+    message: `HME-import klar: ${r.skapade} skapade, ${r.uppdaterade} uppdaterade (${asArray(r.forvaltningar).length} förvaltningar).`,
+    rader: asArray(r.forvaltningar).filter(isObject).map((f) => ({
+      namn: asText(f.namn),
+      value: asText(f.value),
+      status: asText(f.status),
+      atgard: asText(f.atgard),
     })),
   };
 }

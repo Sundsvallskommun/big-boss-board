@@ -353,7 +353,7 @@ export default async function StatusPage() {
           </p>
           <Link
             href="/status/skicka-in"
-            className="mt-16 inline-flex items-center gap-8 rounded-12 bg-vattjom-surface-primary px-16 py-10 text-base font-semibold leading-none text-white transition hover:bg-[#004A99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="mt-16 inline-flex items-center gap-8 rounded-12 bg-vattjom-surface-primary px-16 py-10 text-base font-semibold leading-none text-white transition hover:bg-vattjom-surface-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <MessageSquarePlus size={16} aria-hidden="true" />
             Lämna en fråga eller synpunkt

@@ -133,6 +133,34 @@ Serien ligger i mätvärdets `details.serie` (per förvaltning) och byggs ur fle
   seed) finns kvar; utan serie faller grafen tillbaka på senaste perioden.
 - **`ekonomi-indata/` versionshanteras aldrig** (gitignorerad, som HME/ekonomi-rådata).
 
+## Inloggning (AUTH_MODE: access_code | saml)
+
+Två lägen, valt med `AUTH_MODE` (frontend-middleware och backend läser samma variabel):
+
+- **access_code** (default): stubben — `ACCESS_CODE`/`ADMIN_ACCESSCODE`, cookie `bbb_access`,
+  gating i `frontend/middleware.ts`.
+- **saml**: backend äger SAML mot kommunens IdP (draken-mönstret, portat till FastAPI +
+  **python3-saml** — inte pysaml2, som saknar knappar för test-IdP:ns kvirkar; se
+  `docs/SAML_SSO_PLAN.md`). Kod i `backend/app/auth/`: `router.py` (`/api/auth/saml/
+  {login,callback,metadata,logout,logout/callback}` + `/api/me`), `sessions.py`
+  (session-id i HMAC-signerad cookie `bbb_session`; data i Redis — utan `REDIS_HOST`
+  minnesstore, endast lokalt med `WEB_CONCURRENCY=1`; satt-men-onåbar Redis = vägrad
+  start), `claims.py` (ADFS/Onegate-dubbelmappning, grupper → roll `admin`/`user`),
+	  `redirects.py` (RelayState/origin-validering), `saml.py` (`SAML_STRICT=true` i drift,
+	  signerad assertion krävs som standard; toleransläge används endast mot test-IdP; IdP beskrivs av
+  `SAML_ENTRY_SSO`/`SAML_IDP_ENTITY_ID`/`SAML_IDP_PUBLIC_CERT`). Utloggning: avatar-menyn
+  i headern (`components/UserMenu` + server-wrapper `UserBadge`, initial-avatar i
+  `ui/Avatar` — shadcn-mönstret i eget token-lager, INTE shadcn/Radix som beroende)
+  → `/api/auth/saml/logout` som rensar sessionen lokalt och, om `SAML_IDP_LOGOUT_URL`
+  är satt, även IdP-sessionen (test-IdP:ns `/logout?RelayState=` — den kan inte parsa
+  riktiga SLO-requests). Frontend-middleware validerar
+  sessionen mot `/api/me`; `isAdmin()` läser rollen därifrån; login-sidan visar
+  SAML-knapp och `?failMessage=<KOD>`-fel. Env-namnen följer draken (se `.env.example`)
+  så OpenShift-secrets kan återanvändas. `IMPORT_TOKEN`-spåret är oförändrat och skilt
+  från användarauth i båda lägena. Tester i `backend/tests/`. Plan: `docs/SAML_SSO_PLAN.md`.
+  WSO2-tokentjänsten (OAuth2 client credentials, Redis-cachad) ligger vilande i
+  `app/services/gateway_token.py`.
+
 ## Faser (bygg en i taget, commit + verifiering per fas)
 
 - **Fas 0 — Skelett:** monorepo, denna fil, `docker-compose.yml`, hello-world som pratar ihop.

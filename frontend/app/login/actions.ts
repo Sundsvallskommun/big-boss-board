@@ -9,8 +9,11 @@ export type LoginState = { error?: string };
 export async function login(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const code = process.env.ACCESS_CODE;
   const admin = process.env.ADMIN_ACCESSCODE;
-  // Ingen kod konfigurerad alls → tjänsten är öppen.
-  if (!code && !admin) redirect("/");
+  // Ingen kod konfigurerad alls → endast öppen när det uttryckligen tillåts lokalt.
+  if (!code && !admin) {
+    if (process.env.ALLOW_OPEN_ACCESS === "true") redirect("/");
+    return { error: "Inloggning är inte konfigurerad." };
+  }
 
   const entered = String(formData.get("code") ?? "");
   // Giltig om koden matchar vanlig access-kod eller admin-kod (om de är satta).

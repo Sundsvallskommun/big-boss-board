@@ -12,13 +12,23 @@ dependencies = [
     "alembic>=1.14",
     "pydantic>=2.10",
     "pydantic-settings>=2.6",
+    # SAML SP. python3-saml valdes framför pysaml2: test-IdP:n (driftad fake-sso-idp)
+    # skickar fel issuer/audience/tomt Recipient och pysaml2 saknar knappar för att
+    # tolerera det — python3-samls strict:false är exakt drakens toleransprofil
+    # (signaturen verifieras alltid). Se app/auth/saml.py.
+    "python3-saml>=1.16",
+    # Starlette-formulärparsning (SAML-callbacken är en form-POST från IdP:n).
+    "python-multipart>=0.0.18",
+    # Sessioner (Redis i prod) + WSO2-tokencache.
+    "redis>=5.2",
+    # WSO2-tokentjänsten (gateway_token).
+    "httpx>=0.28",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
-    "httpx>=0.28",
     "ruff>=0.8",
 ]
 

@@ -1,7 +1,27 @@
-import { Logo } from "@/components/ui";
+import { Button, Logo } from "@/components/ui";
+import { isSamlMode } from "@/lib/auth";
 import { LoginForm } from "./LoginForm";
 
-export default function LoginPage() {
+/** Felkoder från backendens SAML-callback (?failMessage=...) → saklig svensk text. */
+const FAIL_MESSAGES: Record<string, string> = {
+  SAML_MISSING_GROUP: "Ditt konto saknar behörighet till dialogstödet.",
+  SAML_MISSING_ATTRIBUTES:
+    "Inloggningen kunde inte slutföras — nödvändiga kontouppgifter saknas.",
+  SAML_UNKNOWN_ERROR: "Inloggningen misslyckades. Försök igen.",
+  NO_USER: "Inloggningen misslyckades. Försök igen.",
+};
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ failMessage?: string }>;
+}) {
+  const saml = isSamlMode();
+  const { failMessage } = await searchParams;
+  const fel = failMessage
+    ? (FAIL_MESSAGES[failMessage] ?? FAIL_MESSAGES.SAML_UNKNOWN_ERROR)
+    : null;
+
   return (
     <main
       id="huvudinnehall"
@@ -13,9 +33,27 @@ export default function LoginPage() {
       </span>
       <h1 className="font-header text-h3 font-bold tracking-tight">Logga in</h1>
       <p className="mb-6 mt-2 text-base leading-relaxed text-dark-secondary">
-        Ange åtkomstkoden för att öppna dialogstödet.
+        {saml
+          ? "Logga in med ditt konto i kommunen för att öppna dialogstödet."
+          : "Ange åtkomstkoden för att öppna dialogstödet."}
       </p>
-      <LoginForm />
+      {saml ? (
+        <>
+          {fel && (
+            <p role="alert" className="mb-4 text-base text-error-text">
+              {fel}
+            </p>
+          )}
+          {/* GET-formulär → backendens SAML-login (302 till IdP). Funkar utan JS. */}
+          <form action="/api/auth/saml/login" method="get">
+            <Button type="submit" className="w-full">
+              Logga in
+            </Button>
+          </form>
+        </>
+      ) : (
+        <LoginForm />
+      )}
       <p className="mt-8 text-small text-dark-secondary">
         Använd endast öppen och publik information i dialogen.
       </p>

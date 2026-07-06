@@ -1,8 +1,14 @@
 """FastAPI-app för Big Boss Board. Alla endpoints under prefix /api."""
 
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from app.auth.router import router as auth_router
+from app.auth.sessions import create_session_store
+from app.config import get_settings, validate_runtime_settings
 from app.db import engine
 from app.routers import (
     activities,
@@ -14,14 +20,29 @@ from app.routers import (
     submissions,
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = get_settings()
+    validate_runtime_settings(settings)
+    # Sessionstore (Redis i prod, minne lokalt). Kastar vid start om REDIS_HOST är
+    # satt men Redis inte nås — hellre en pod som aldrig blir ready än tysta
+    # minnessessioner som tappas vid rollout.
+    app.state.session_store = await create_session_store(settings)
+    yield
+    await app.state.session_store.close()
+
+
 app = FastAPI(
     title="Big Boss Board API",
     description="Dialogstöd för chefsuppföljning. Endast öppen och publik information.",
     version="0.1.0",
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
+    lifespan=lifespan,
 )
 
+app.include_router(auth_router)
 app.include_router(dialogues.router)
 app.include_router(kpi_areas.router)
 app.include_router(activities.router)
