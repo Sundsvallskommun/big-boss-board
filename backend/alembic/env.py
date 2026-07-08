@@ -9,14 +9,17 @@ from alembic import context
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy import pool
 
-from app.config import get_settings
+from app.config import database_url_for_alembic_config, get_settings
 from app.db import Base
 
 # Importeras för att registrera alla tabeller på Base.metadata.
 from app import models  # noqa: F401
 
 config = context.config
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+config.set_main_option(
+    "sqlalchemy.url",
+    database_url_for_alembic_config(get_settings().database_url),
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

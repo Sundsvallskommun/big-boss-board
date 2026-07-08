@@ -14,6 +14,10 @@ def normalize_database_url(database_url: str) -> str:
     return database_url
 
 
+def database_url_for_alembic_config(database_url: str) -> str:
+    return normalize_database_url(database_url).replace("%", "%%")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
