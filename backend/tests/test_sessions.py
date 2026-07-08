@@ -1,6 +1,9 @@
 """Sessionslagret: cookie-signering och minnesstorens TTL."""
 
+import redis.asyncio as aioredis
+
 from app.auth import sessions
+from app.config import Settings
 
 
 def test_cookie_roundtrip():
@@ -32,3 +35,28 @@ async def test_minnesstore_delete():
     await store.set("sid", {"a": 1}, ttl=100)
     await store.delete("sid")
     assert await store.get("sid") is None
+
+
+async def test_redisstore_anvander_korta_timeouter(monkeypatch):
+    captured_kwargs = {}
+
+    class FakeRedis:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+        async def ping(self):
+            return True
+
+    monkeypatch.setattr(aioredis, "Redis", FakeRedis)
+
+    store = await sessions.create_session_store(
+        Settings(
+            redis_host="redis.example.test",
+            redis_port=6379,
+            redis_password="hemlis",
+        )
+    )
+
+    assert isinstance(store, sessions.RedisSessionStore)
+    assert captured_kwargs["socket_connect_timeout"] == 2
+    assert captured_kwargs["socket_timeout"] == 2

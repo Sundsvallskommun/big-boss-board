@@ -1,6 +1,7 @@
 """FastAPI-app för Big Boss Board. Alla endpoints under prefix /api."""
 
 from contextlib import asynccontextmanager
+import logging
 from typing import AsyncIterator
 
 from fastapi import FastAPI, HTTPException
@@ -20,17 +21,24 @@ from app.routers import (
     submissions,
 )
 
+logger = logging.getLogger("uvicorn.error")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+    logger.info("Startar backend-lifespan.")
     validate_runtime_settings(settings)
+    logger.info("Runtime-konfiguration validerad.")
     # Sessionstore (Redis i prod, minne lokalt). Kastar vid start om REDIS_HOST är
     # satt men Redis inte nås — hellre en pod som aldrig blir ready än tysta
     # minnessessioner som tappas vid rollout.
     app.state.session_store = await create_session_store(settings)
-    yield
-    await app.state.session_store.close()
+    logger.info("Sessionstore initierad.")
+    try:
+        yield
+    finally:
+        await app.state.session_store.close()
 
 
 app = FastAPI(

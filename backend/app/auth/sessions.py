@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import time
 from typing import Any, Protocol
@@ -22,6 +23,10 @@ from fastapi import Request, Response
 from app.config import Settings, get_settings
 
 SESSION_COOKIE = "bbb_session"
+REDIS_CONNECT_TIMEOUT_SECONDS = 2
+REDIS_SOCKET_TIMEOUT_SECONDS = 2
+
+logger = logging.getLogger("uvicorn.error")
 
 
 def _sign(sid: str, secret: str) -> str:
@@ -107,14 +112,19 @@ async def create_session_store(settings: Settings) -> SessionStore:
             port=settings.redis_port,
             password=settings.redis_password or None,
             decode_responses=True,
+            socket_connect_timeout=REDIS_CONNECT_TIMEOUT_SECONDS,
+            socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
         )
         try:
+            logger.info("Ansluter till Redis för sessioner: %s:%s", settings.redis_host, settings.redis_port)
             await client.ping()
         except Exception as exc:
+            await client.aclose()
             raise RuntimeError(
                 "REDIS_HOST är satt men Redis nås inte — vägrar falla tillbaka på "
                 "minnessessioner. Kontrollera REDIS_HOST/REDIS_PORT/REDIS_PASSWORD."
             ) from exc
+        logger.info("Redis-sessionstore redo.")
         return RedisSessionStore(client)
     return MemorySessionStore()
 
