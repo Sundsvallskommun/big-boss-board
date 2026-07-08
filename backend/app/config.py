@@ -2,7 +2,16 @@
 
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def normalize_database_url(database_url: str) -> str:
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if database_url.startswith("postgres://"):
+        return database_url.replace("postgres://", "postgresql+asyncpg://", 1)
+    return database_url
 
 
 class Settings(BaseSettings):
@@ -63,6 +72,11 @@ class Settings(BaseSettings):
     api_base_url: str = "https://api-test.sundsvall.se"
     client_key: str = ""
     client_secret: str = ""
+
+    @field_validator("database_url")
+    @classmethod
+    def use_asyncpg_for_postgres_urls(cls, database_url: str) -> str:
+        return normalize_database_url(database_url)
 
 
 @lru_cache
