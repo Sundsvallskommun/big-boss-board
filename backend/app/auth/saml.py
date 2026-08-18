@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit, urlunsplit
 
 from app.config import Settings, get_settings
 
@@ -144,9 +144,42 @@ def _auth(get_data: dict[str, str] | None = None, post_data: dict[str, str] | No
     )
 
 
+def _normalize_signed_redirect_query(url: str) -> str:
+    """Lägg SAML Redirect-signaturen i den ordning som ADFS accepterar.
+
+    python3-saml 1.16 lägger ``Signature`` före ``SigAlg`` i URL:en trots att
+    signaturunderlaget byggs i ordningen SAMLRequest, RelayState, SigAlg. Den
+    aktuella ADFS-miljön avvisar den URL:en innan inloggning. Arbeta därför med
+    de råa query-delarna: decode/re-encode skulle ändra det signerade underlaget.
+    """
+    parsed = urlsplit(url)
+    query_parts = parsed.query.split("&") if parsed.query else []
+    parts_by_name: dict[str, list[str]] = {}
+    for part in query_parts:
+        name, _, _ = part.partition("=")
+        parts_by_name.setdefault(name, []).append(part)
+
+    required_names = ("SAMLRequest", "SigAlg", "Signature")
+    if any(len(parts_by_name.get(name, [])) != 1 for name in required_names):
+        return url
+    if len(parts_by_name.get("RelayState", [])) > 1:
+        return url
+
+    signed_names = {"SAMLRequest", "RelayState", "SigAlg", "Signature"}
+    ordered_parts = [parts_by_name["SAMLRequest"][0]]
+    if "RelayState" in parts_by_name:
+        ordered_parts.append(parts_by_name["RelayState"][0])
+    ordered_parts.extend((parts_by_name["SigAlg"][0], parts_by_name["Signature"][0]))
+    ordered_parts.extend(
+        part for part in query_parts if part.partition("=")[0] not in signed_names
+    )
+
+    return urlunsplit(parsed._replace(query="&".join(ordered_parts)))
+
+
 def login_redirect(relay_state: str) -> str:
     """URL till IdP:n med (signerad) AuthnRequest + RelayState."""
-    return _auth().login(return_to=relay_state)
+    return _normalize_signed_redirect_query(_auth().login(return_to=relay_state))
 
 
 def parse_callback(post_data: dict[str, str]) -> CallbackResult:
