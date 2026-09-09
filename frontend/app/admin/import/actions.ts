@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 export type ImportRad = { namn: string; value: string; status: string; atgard: string };
 export type ImportState = {
   ok?: boolean;
+  incomplete?: boolean;
   kind?: "hme" | "ekonomi" | "sjukfranvaro";
   message?: string;
   rader?: ImportRad[];
@@ -82,7 +83,7 @@ export async function importData(_prev: ImportState, formData: FormData): Promis
     const labels = { hme: "HME", ekonomi: "Ekonomi", sjukfranvaro: "Sjukfrånvaro" };
     revalidatePath("/", "layout");
     return {
-      ok: true, kind,
+      ok: true, kind, incomplete: Number(result.hoppade_over ?? 0) > 0,
       message: `${labels[kind]} importerad: ${result.skapade} skapade, ${result.uppdaterade} uppdaterade, ${result.hoppade_over ?? 0} hoppade över.`,
       rader: Array.isArray(rows) ? rows.filter(isObject).map((r) => ({
         namn: text(r.namn), value: text(r.value), status: text(r.status), atgard: text(r.atgard),

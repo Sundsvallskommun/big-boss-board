@@ -98,7 +98,7 @@ function kortDatum(iso: string | null): string {
  *  — men inte på varje tick: tolv etiketter à "aug 25" ryms inte i panelen på en telefon.
  *  Året sätts därför ut på seriens första punkt och på varje januari, som är precis där
  *  det byter. */
-function sjukManadKort(iso: string | undefined, medAr: boolean): string {
+function manadKort(iso: string | undefined, medAr: boolean): string {
   const mm = iso ? /^(\d{4})-(\d{2})/.exec(iso) : null;
   if (!mm) return "Period";
   const namn = MANADER[Number(mm[2]) - 1] ?? "";
@@ -122,14 +122,6 @@ function ekonomiManadEtikett(period?: string): string {
   return `${namn.charAt(0).toUpperCase()}${namn.slice(1)} ${mm[1]}`;
 }
 
-/** Kort månadsetikett ("Jun") för X-axeln när serien har flera månader. */
-function ekonomiManadKort(period?: string): string {
-  const mm = period ? /^(\d{4})-(\d{2})/.exec(period) : null;
-  if (!mm) return "Period";
-  const namn = MANADER[Number(mm[2]) - 1] ?? "";
-  return `${namn.charAt(0).toUpperCase()}${namn.slice(1)}`;
-}
-
 function ActivityRow({
   activity,
   onMarkKlar,
@@ -140,11 +132,15 @@ function ActivityRow({
   const [open, setOpen] = useState(false);
   const [notering, setNotering] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function spara() {
     setBusy(true);
+    setError(null);
     try {
       await onMarkKlar(activity.id, notering);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Kunde inte klarrapportera aktiviteten.");
     } finally {
       setBusy(false);
     }
@@ -195,6 +191,7 @@ function ActivityRow({
                   placeholder="Kort notering om vad som gjorts…"
                 />
               </FormControl>
+              {error && <p role="alert" className="mt-8 text-small text-error-text">{error}</p>}
               <div className="mt-10 flex flex-wrap gap-8">
                 <Button
                   color="vattjom"
@@ -280,7 +277,7 @@ export function DetailPanel({
   // skulle bara komprimera x-axeln utan att tillföra något i samtalet.
   const sjukAllaPunkter = sjuk?.serie ?? [];
   const sjukSerie = sjukAllaPunkter.slice(-12).map((p, i) => ({
-    period: sjukManadKort(p.period, i === 0 || p.period.slice(5, 7) === "01"),
+    period: manadKort(p.period, i === 0 || p.period.slice(5, 7) === "01"),
     total: p.total ?? null,
     kvinnor: p.kvinnor ?? null,
     man: p.man ?? null,
@@ -293,7 +290,7 @@ export function DetailPanel({
   });
   const ekManad =
     ekonomi?.serie && ekonomi.serie.length > 0
-      ? ekonomi.serie.map((p) => ekPunkt(ekonomiManadKort(p.period), p))
+      ? ekonomi.serie.map((p, i) => ekPunkt(manadKort(p.period, i === 0 || p.period.slice(5, 7) === "01"), p))
       : ekNetto
       ? [ekPunkt(ekonomiManadEtikett(ekonomi?.period), { diff: m.value_num })]
       : [];
@@ -553,18 +550,18 @@ export function DetailPanel({
             <InfoPopover title="Om diagrammet" bredd={440}>
               <p>
                 Total sjukfrånvaro i % av ordinarie arbetstid (svart linje), med kvinnors och
-                mäns nivå. Den gula linjen är målnivån {fmt(SJUK_MAL)} %.
+                mäns nivå. Den grå streckade linjen är målnivån {fmt(SJUK_MAL)} %.
               </p>
               <p>
                 <b className="text-dark-primary">Varje punkt är ett helt år.</b> Punkten för en
-                månad är snittet av de tolv månader som slutar där — inte månadens eget utfall.
+                månad sammanfattar de tolv månader som slutar där — inte månadens eget utfall.
                 Kurvan visar alltså inte om december var värre än juli, utan om nivån som helhet
                 är på väg upp eller ner.
               </p>
               <p className="text-dark-secondary">
-                Det gör serien trög med flit: en enskild månad kan bara flytta värdet en
-                tolftedel. En rörelse som syns här är därför sällan en tillfällighet — men den
-                syns också senare än i en månadskurva.
+                Rullande 12 månader jämnar ut kortsiktiga variationer. Förändringar kan därför
+                synas senare än i en månadskurva. Bedöm utvecklingen tillsammans med
+                verksamhetens övriga underlag.
               </p>
               {sjukAllaPunkter.length > 0 && (
                 <p className="text-dark-secondary">
@@ -612,107 +609,20 @@ export function DetailPanel({
                   bredd={460}
                 >
                   <p>
-                    Beräkningen bygger på arbetsmiljöekonomisk forskning från Karolinska
-                    Institutet (Malin Lohela Karlsson) och SKR:s ekonomiska schabloner för
-                    kommunal sektor. Den omfattar allt arbetsgivaren är skyldig att betala
-                    enligt lag och kollektivavtal — kostnaden ser olika ut beroende på hur
-                    länge frånvaron varar:
+                    Uppskattad årskostnad = antal tillsvidareanställda × sjukfrånvaro i
+                    procent × {KR_PER_ANSTALLD_PE_AR.toLocaleString("sv-SE")} kr.
+                    Schablonen motsvarar {KR_PER_ANSTALLD_PE_MANAD} kr per anställd,
+                    procentenhet och månad.
                   </p>
-
-                  {[
-                    {
-                      dagar: "Dag 1–14",
-                      niva: "≈ 180 %",
-                      av: "av personalkostnaden",
-                      rubrik: "Korttidsfrånvaro",
-                      text:
-                        "Sjuklön med 80 %, arbetsgivaravgifter och försäkrings- och " +
-                        "pensionspålägg (PO-pålägg). Därtill vikarie eller övertid för att " +
-                        "säkerställa driften.",
-                    },
-                    {
-                      dagar: "Dag 15–90",
-                      niva: "10 %",
-                      av: "sjuklön enligt avtal",
-                      rubrik: "Mellanperioden",
-                      text:
-                        "Försäkringskassan tar över grundansvaret, men kommunen betalar " +
-                        "fortsatt sjuklön enligt kollektivavtalet. Dolda kostnader för " +
-                        "rehabmöten, facklig samverkan och chefsadministration tillkommer.",
-                    },
-                    {
-                      dagar: "Dag 91+",
-                      niva: "≈ 10 %",
-                      av: "av lönekostnaden",
-                      rubrik: "Långtidsfrånvaro",
-                      text:
-                        "Sjuklöneansvaret upphör och ersättning utgår via kollektivavtalad " +
-                        "försäkring (Afa). Kvar står produktionstapp, vikarieslitage, " +
-                        "rehabiliteringsinsatser och administration.",
-                    },
-                  ].map((rad) => (
-                    <div
-                      key={rad.dagar}
-                      className="rounded-8 border border-hairline bg-background-200 p-12"
-                    >
-                      <div className="flex items-baseline justify-between gap-8">
-                        <span className="eyebrow-sm">{rad.dagar}</span>
-                        <span className="text-right">
-                          <b className="font-header text-base text-dark-primary">{rad.niva}</b>{" "}
-                          <span className="text-[11px]">{rad.av}</span>
-                        </span>
-                      </div>
-                      <p className="mt-4 font-semibold text-dark-primary">{rad.rubrik}</p>
-                      <p className="mt-2">{rad.text}</p>
-                    </div>
-                  ))}
-
-                  <div className="rounded-8 border border-vattjom-background-100 bg-vattjom-background-100 p-12">
-                    <p className="eyebrow-sm text-vattjom-text-primary">Så räknas det här kortet</p>
-                    <p className="mt-6 font-mono text-[12px] leading-relaxed text-dark-primary">
-                      12 000 000 kr ÷ 8 000 anställda ÷ {fmt(SJUK_MAL)} procentenheter
-                      <br />= {KR_PER_ANSTALLD_PE_MANAD} kr per anställd och procentenhet och månad
-                      <br />× 12 månader ={" "}
-                      <b>{KR_PER_ANSTALLD_PE_AR.toLocaleString("sv-SE")} kr</b> per anställd och
-                      procentenhet och <b>år</b>
-                    </p>
-                    <p className="mt-6">
-                      Nyckeltalet är satt för kommunen som helhet: vid målnivån {fmt(SJUK_MAL)} %
-                      kostar sjukfrånvaron cirka 12 mnkr per månad — 144 mnkr per år — för omkring 8 000 anställda.{" "}
-                      {sjukKost && m.value_num !== null ? (
-                        <>
-                          För den här förvaltningen räknas det upp med{" "}
-                          {sjukKost.anstallda.toLocaleString("sv-SE")} tillsvidareanställda
-                          {sjukKost.franData ? (
-                            <>
-                              {" "}
-                              ur samma uttag som sjukfrånvaron
-                              {sjukPeriodText ? ` (${sjukPeriodText})` : ""}
-                            </>
-                          ) : (
-                            <> (fast underlag per 2026-04-30 — antalet saknas i importen)</>
-                          )}{" "}
-                          och förvaltningens faktiska sjukfrånvaro.
-                        </>
-                      ) : (
-                        <>
-                          Beräkningen kräver antalet tillsvidareanställda för förvaltningen.
-                          Saknas det visas ingen summa.
-                        </>
-                      )}
-                    </p>
-                    <p className="mt-6">
-                      Kortet visar en <b className="text-dark-primary">uppskattad årskostnad</b>
-                      {" "}utifrån R12-nivån och ett personalantal. Personalstyrkan kan ha varierat
-                      under året. Schablonen och personalunderlaget gör att beloppet inte är
-                      ett uppmätt historiskt kostnadsutfall.
-                    </p>
-                  </div>
-
-                  <p className="text-[11px] leading-relaxed">
-                    Beloppet använder en samlad schablon och delas inte upp på korttids- och
-                    långtidsfrånvaro, trots att de kostar olika enligt tabellen ovan. Det är en
-                    uppskattning för dialogen, inte en bokförd kostnad.
+                  <p>
+                    Modellen utgår från antagandet 12 mnkr per månad vid 6 % sjukfrånvaro
+                    och 8 000 anställda. Den beräknar inte faktiska löner, sjuklön,
+                    vikariekostnader eller kostnader för enskilda sjukfall.
+                  </p>
+                  <p>
+                    Personalantalet är en ögonblicksbild och kan ha varierat under året.
+                    Beloppet är ett samtalsunderlag, inte en bokförd kostnad eller en
+                    säker besparing vid lägre sjukfrånvaro.
                   </p>
                 </InfoPopover>
               </div>
@@ -724,6 +634,11 @@ export function DetailPanel({
                     <span className="font-sans text-base font-semibold text-dark-secondary">
                       per år
                     </span>
+                  </p>
+                  <p className="mt-8 text-small text-dark-secondary">
+                    Personalunderlag: {sjukKost.franData
+                      ? sjukPeriodText || "samma uttag som sjukfrånvaron"
+                      : "30 april 2026 (reservunderlag; antal saknas i importen)"}.
                   </p>
                   <p className="mt-8 text-small leading-snug text-dark-secondary">
                     {fmt(m.value_num)} % sjukfrånvaro rullande 12 månader bland{" "}

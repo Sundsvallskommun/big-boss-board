@@ -32,9 +32,13 @@ export function ImportForm() {
       </Button>
 
       {state.ok ? (
-        <div className="rounded-12 bg-success-background-200 p-16 text-success-text">
+        <div className={`rounded-12 p-16 ${state.incomplete
+          ? "bg-warning-background-100 text-warning-text"
+          : "bg-success-background-200 text-success-text"}`}>
           <p role="status" aria-live="polite" className="flex items-center gap-8 text-small font-semibold">
-            <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
+            {state.incomplete
+              ? <AlertTriangle size={16} className="shrink-0" aria-hidden="true" />
+              : <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />}
             {state.message}
           </p>
 

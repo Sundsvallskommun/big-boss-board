@@ -59,8 +59,13 @@ export function InfoPopover({
       return;
     }
     placera();
-    panelRef.current?.focus({ preventScroll: true });
   }, [open, placera]);
+
+  // Panelen är dold under första mätningen och kan då inte ta emot fokus.
+  const visible = open && pos !== null;
+  useLayoutEffect(() => {
+    if (visible) panelRef.current?.focus({ preventScroll: true });
+  }, [visible]);
 
   useEffect(() => {
     if (!open) return;

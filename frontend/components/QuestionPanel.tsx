@@ -75,20 +75,18 @@ function StatusSektion({
             const os = STATUS[v];
             const active = val === v;
             return (
-              <button
+              <label
                 key={v}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => setVal(v)}
                 /* Vald status fylls med sin egen färg — det är hela poängen: man ser
                    vilken färg kortet kommer att få innan man sparar. */
-                className={`inline-flex items-center justify-center gap-10 rounded-12 border-2 px-16 py-16 text-large font-semibold transition focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                className={`relative inline-flex cursor-pointer items-center justify-center gap-10 rounded-12 border-2 px-16 py-16 text-large font-semibold transition focus-within:outline-solid focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring ${
                   active
                     ? `${os.solidAA} ${os.onSolid} border-transparent shadow-md`
                     : `${os.soft} ${os.text} border-transparent hover:border-current`
                 }`}
               >
+                <input type="radio" name={`status-${uid}`} value={v} checked={active}
+                  disabled={busy} onChange={() => setVal(v)} className="sr-only" />
                 {/* Vald status fylls helt; ovald bär samma färg i mjuk ton. Bocken gör
                     valet läsbart utan att förlita sig på färgen ensam. */}
                 {active ? (
@@ -100,7 +98,7 @@ function StatusSektion({
                   />
                 )}
                 {os.legend}
-              </button>
+              </label>
             );
           })}
         </div>
@@ -132,6 +130,7 @@ function StatusSektion({
           <Textarea
             id={`kommentar-${uid}`}
             value={kommentar}
+            disabled={busy}
             onChange={(e) => setKommentar(e.target.value)}
             maxLength={2000}
             rows={3}
@@ -242,6 +241,7 @@ export function QuestionPanel({
   onSaveStatus: (status: Status, kommentar: string, dimension: string | null) => Promise<void>;
 }) {
   const { area } = item;
+  const uid = useId();
   const AreaIcon = areaIcon(area.ikon);
   const fragor = [...area.questions].sort((a, b) => a.ordning - b.ordning);
   const effektiv = kortStatus(historik, dimensions);
@@ -350,7 +350,7 @@ export function QuestionPanel({
         {dimensions ? (
           <>
             <div role="tablist" aria-label="Statusdimensioner" className="mb-20 flex flex-wrap gap-4 border-b border-divider">
-              {dimensions.map((d) => {
+              {dimensions.map((d, i) => {
                 const ds = senastePerDimension(historik, d.key);
                 const dcol = ds ? STATUS[ds.status] : null;
                 const active = aktivFlik === d.key;
@@ -359,7 +359,19 @@ export function QuestionPanel({
                     key={d.key}
                     type="button"
                     role="tab"
+                    id={`${uid}-tab-${d.key}`}
+                    aria-controls={`${uid}-panel-${d.key}`}
                     aria-selected={active}
+                    tabIndex={active ? 0 : -1}
+                    onKeyDown={(e) => {
+                      const next = e.key === "ArrowRight" ? (i + 1) % dimensions.length
+                        : e.key === "ArrowLeft" ? (i - 1 + dimensions.length) % dimensions.length
+                        : e.key === "Home" ? 0 : e.key === "End" ? dimensions.length - 1 : null;
+                      if (next === null) return;
+                      e.preventDefault();
+                      setAktivFlik(dimensions[next].key);
+                      document.getElementById(`${uid}-tab-${dimensions[next].key}`)?.focus();
+                    }}
                     onClick={() => setAktivFlik(d.key)}
                     className={`-mb-px inline-flex items-center gap-8 border-b-2 px-12 py-10 text-base font-semibold transition focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${
                       active
@@ -379,11 +391,13 @@ export function QuestionPanel({
             {dimensions.map(
               (d) =>
                 aktivFlik === d.key && (
+                  <div key={d.key} role="tabpanel" id={`${uid}-panel-${d.key}`}
+                    aria-labelledby={`${uid}-tab-${d.key}`}>
                   <StatusSektion
-                    key={d.key}
                     historik={historik.filter((h) => h.dimension === d.key)}
                     onSave={(status, kommentar) => onSaveStatus(status, kommentar, d.key)}
                   />
+                  </div>
                 ),
             )}
           </>

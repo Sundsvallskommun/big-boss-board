@@ -58,7 +58,7 @@ export interface SjukKostnad {
   /** Kom antalet ur importen (true) eller ur reservtabellen ovan (false)? Styr om rutan
    *  får skriva ut vilken period underlaget gäller. */
   franData: boolean;
-  /** Uppskattad kostnad för de senaste tolv månaderna, kr. */
+  /** Uppskattad årskostnad vid aktuell R12-nivå, kr. */
   kostnad: number;
   /** Vad samma förvaltning skulle kosta på ett år vid målnivån 6,0 %, kr. */
   vidMal: number;
@@ -72,17 +72,17 @@ export interface SjukKostnad {
  *  `anstalldaFranData` är antalet ur importen (SK.P.AM.001). Finns det används det;
  *  annars faller beräkningen tillbaka på reservtabellen.
  *
- *  Sjukfrånvaroprocenten är ett rullande 12-månadersvärde, så summan är **kostnaden för de
- *  årsmodell** med ett personalantal och en schablon, inte ett bokfört utfall. */
+ *  Årsmodellen använder R12-nivån och ett personalantal, inte bokförda kostnader. */
 export function sjukKostnad(
   kod: string | null | undefined,
   procent: number | null | undefined,
   anstalldaFranData?: number | null,
 ): SjukKostnad | null {
   if (procent == null || !Number.isFinite(procent) || procent < 0 || procent > 100) return null;
-  const franData = typeof anstalldaFranData === "number" && Number.isFinite(anstalldaFranData) && anstalldaFranData > 0;
+  if (anstalldaFranData != null && (!Number.isInteger(anstalldaFranData) || anstalldaFranData < 0)) return null;
+  const franData = anstalldaFranData != null;
   const anstallda = franData ? anstalldaFranData! : kod ? ANSTALLDA[kod] : 0;
-  if (!anstallda) return null;
+  if (!franData && !anstallda) return null;
   const kostnad = anstallda * procent * KR_PER_ANSTALLD_PE_AR;
   const vidMal = anstallda * SJUK_MAL * KR_PER_ANSTALLD_PE_AR;
   return { anstallda, franData, kostnad, vidMal, merkostnad: kostnad - vidMal };

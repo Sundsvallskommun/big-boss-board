@@ -11,16 +11,9 @@ import {
   ReferenceLine,
 } from "recharts";
 
-/** Färger i kommunens palett (samma tokens som globals.css).
- *
- *  Mållinjen är neutralt grå, inte gul. Punkterna färgas redan grönt över och rött under
- *  målet, och ett statusgult vid själva brytpunkten hade antytt en gul mellanzon som inte
- *  finns i den tvåfärgade skalan. Linjen är en referens, inte ett utfall — den bär därför
- *  samma kromfärg som axeltexten. Samma behandling som i sjukfrånvarografen. */
+/** Neutrala seriefärger; nivåkortet visar bedömningen mot målet. */
 const C = {
   vattjom: "#0055B8", // vattjom-surface-primary
-  good: "#1E8A4E", // status-good
-  alert: "#D32F2F", // status-alert
   mal: "#51515C", // dark-secondary — mållinjen är kromdetalj, inte status
   grid: "#E5E5E5", // gray-200
   axis: "#51515C", // dark-secondary
@@ -41,11 +34,10 @@ export function HmeLineChart({ data, target }: { data: HmePoint[]; target: numbe
   const hi = Math.min(100, Math.ceil((Math.max(...vals, target) + 6) / 10) * 10);
   const lastAr = data[data.length - 1].ar;
 
-  /** Punkt färgad efter mål: grön över, röd under; senaste punkten större. */
+  /** Senaste mätpunkten är större. */
   function renderDot(props: DotProps) {
     const { cx, cy, payload } = props;
     if (cx == null || cy == null || !payload) return <g key="tom" />;
-    const over = payload.value >= target;
     const isLast = payload.ar === lastAr;
     return (
       <circle
@@ -53,7 +45,7 @@ export function HmeLineChart({ data, target }: { data: HmePoint[]; target: numbe
         cx={cx}
         cy={cy}
         r={isLast ? 6 : 4.5}
-        fill={over ? C.good : C.alert}
+        fill={C.vattjom}
         stroke="#fff"
         strokeWidth={2}
       />

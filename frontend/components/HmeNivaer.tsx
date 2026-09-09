@@ -135,7 +135,7 @@ export function HmeNivaer({
                     {visa(sist.value)}
                   </span>
                   <span className="mt-4 block text-small leading-snug text-dark-secondary">
-                    {t ?? `Endast ${sist.ar}`}
+                    {sist.ar}{t ? ` · ${t}` : " · Inget jämförelseår"}
                   </span>
                 </span>
                 <span className={`eyebrow-sm mt-auto flex items-center gap-6 ${st.text}`}>

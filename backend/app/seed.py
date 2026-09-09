@@ -93,17 +93,11 @@ KPI_AREAS: list[dict] = [
         "key": "sjukfranvaro", "namn": "Sjukfrånvaro", "short": None, "ikon": "heart-pulse",
         "lower_better": True, "support": "HR",
         "info": (
-            "Sjukfrånvaron visas som rullande 12 månader: varje månadsstängning är snittet "
-            "för de tolv månader som slutar där. Det tar bort säsongsvängningarna — vinterns "
-            "toppar och sommarens dalar — och gör i stället nivåskiften synliga. Priset är "
-            "tröghet: en enskild månad kan bara flytta värdet en tolftedel, så en förändring "
-            "syns senare men är desto mer verklig när den syns.\n\n"
-            "Lönekörning sker en gång per månad, runt den 20:e, och då genereras statistiken "
-            "för den senaste perioden. Frånvaro som medarbetare ännu inte registrerat, eller "
-            "som chef inte hunnit attestera före lönekörningen, kommer inte med — den senaste "
-            "månaden fångar erfarenhetsmässigt bara 70–80 % av den slutliga bilden. Med "
-            "rullande 12 slår det bara igenom på en tolftedel av värdet, men den nyaste "
-            "punkten i kurvan är ändå den minst färdiga."
+            "Sjukfrånvaron visas som rullande 12 månader: varje månadsstängning "
+            "sammanfattar de tolv månader som slutar där. Det jämnar ut kortsiktiga "
+            "variationer, men förändringar kan synas med eftersläpning.\n\n"
+            "Statistiken påverkas av när frånvaron registreras och attesteras. Den "
+            "senaste perioden kan därför vara ofullständig och ändras i senare uttag."
         ),
         "questions": [
             "Är det kort- eller långtidsfrånvaro som ökar?",

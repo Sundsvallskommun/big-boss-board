@@ -134,7 +134,7 @@ export interface SjukAldersgrupp {
 }
 
 /** Sjukfrånvaro en månadsstängning: total %, kvinnors %, mäns % — en punkt i R12-serien.
- *  Varje punkt är ett rullande 12-månadersvärde (snittet för de tolv månader som slutar
+ *  Varje punkt är ett rullande 12-månadersvärde (samlat värde för de tolv månader som slutar
  *  på `period`), inte månadens eget utfall. */
 export interface SjukPunkt {
   period: string;

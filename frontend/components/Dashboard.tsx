@@ -91,7 +91,7 @@ export function Dashboard({
               className="inline-flex items-center gap-4 truncate rounded-md text-base font-semibold tracking-tight text-dark-secondary transition hover:text-dark-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <ChevronLeft size={16} aria-hidden="true" />
-              Alla förvaltningar
+              Alla verksamheter
             </Link>
             {sessionUser && <UserMenu user={sessionUser} />}
           </span>
@@ -161,7 +161,6 @@ export function Dashboard({
                 <button
                   key={area.key}
                   type="button"
-                  aria-selected={isSel}
                   aria-pressed={isSel}
                   onClick={() => {
                     setSelected(area.key);
@@ -236,7 +235,6 @@ export function Dashboard({
               <button
                 key={area.key}
                 type="button"
-                aria-selected={isSel}
                 aria-pressed={isSel}
                 onClick={() => {
                   setSelected(area.key);
@@ -346,7 +344,7 @@ export function Dashboard({
 
         <footer className="mt-40 text-center">
           <p className="eyebrow-sm opacity-70">
-            Använd endast öppen och publik information i dialogen. All data i tjänsten är fiktiv.
+            Använd endast öppen och publik information i dialogen.
           </p>
         </footer>
       </main>

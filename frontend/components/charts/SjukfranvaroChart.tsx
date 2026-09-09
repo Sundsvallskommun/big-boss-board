@@ -1,7 +1,5 @@
 "use client";
 
-import { useId } from "react";
-
 import {
   CartesianGrid,
   Legend,
@@ -27,26 +25,9 @@ export interface SjukChartPunkt {
   man: number | null;
 }
 
-/** Färger i kommunens palett (samma tokens som globals.css).
- *
- *  **Färg betyder måluppfyllelse, inget annat.** Totalen ritas grön under målet och röd
- *  över det, och byter exakt vid mållinjen. Därför får könslinjerna inte bära kulör: det
- *  tidigare paret lila/grönt hade satt ett andra grönt i rutan, och legendens gröna prick
- *  hade betytt både "Män" och "under målet". De är i stället två gråtoner som skiljs åt av
- *  streckning, och vid hover av fylld kontra ihålig prick — former, inte färg, så
- *  uppdelningen överlever både färgblindhet och en svartvit utskrift.
- *
- *  Mållinjen är neutralt grå, till skillnad från HME-grafens gula. Här bär grönt och rött
- *  redan nivån, och ett tredje statusgult vid brytpunkten hade antytt en gul zon som inte
- *  finns i den tvåfärgade skalan. Linjen är en referens, inte ett utfall — den bär därför
- *  samma kromfärg som axeltexten och sin egen etikett "Mål".
- *
- *  Grönt/rött ensamt vore annars ett klassiskt färgblindhetsfel. Här är det redundant:
- *  samma sak sägs av punktens läge i förhållande till den streckade mållinjen och av
- *  talet som står utskrivet vid varje punkt. */
+/** Neutrala seriefärger: statusbedömningen visas i kortet och nivåförklaringen. */
 const C = {
-  god: "#1E8A4E", // status-good — på eller under målet
-  larm: "#D32F2F", // status-alert — över målet
+  total: "#1F1F25", // dark-primary
   kvinnor: "#51515C", // dark-secondary, heldragen + fylld prick
   man: "#86868F", // ljusare grå, streckad + ihålig prick
   mal: "#51515C", // dark-secondary — mållinjen är kromdetalj, inte status
@@ -180,49 +161,19 @@ function Direktetiketter({ data }: { data: SjukChartPunkt[] }) {
   return <g>{ut}</g>;
 }
 
-/** Totalens punkter färgas av sitt eget värde, så en prick aldrig kan hamna på fel sida
- *  om mållinjen färgmässigt. Linjen mellan dem sköts av gradienten nedan. */
-function totalPunkt(data: SjukChartPunkt[], mal: number) {
+/** Markerar totalens mätpunkter även när könsserierna överlappar. */
+function totalPunkt(data: SjukChartPunkt[]) {
   return function Prick({ cx, cy, index }: PrickProps) {
     if (cx == null || cy == null || index == null) return <g />;
     const v = data[index]?.total;
     if (typeof v !== "number") return <g />;
-    return <circle cx={cx} cy={cy} r={3} fill={v > mal ? C.larm : C.god} stroke={C.yta} strokeWidth={1.5} />;
+    return <circle cx={cx} cy={cy} r={3} fill={C.total} stroke={C.yta} strokeWidth={1.5} />;
   };
 }
 
-/** Färgar totalens linje efter var den går i förhållande till målet.
- *
- *  Två hårda stopp på samma offset ger ett skarpt skifte i stället för en toning, och
- *  eftersom gradienten läggs i ritytans egna pixelkoordinater (`userSpaceOnUse`) ligger
- *  skiftet exakt på mållinjen — även mitt i ett segment där kurvan korsar den. Ett
- *  alternativ hade varit att dela serien i två, men då måste korsningspunkterna räknas
- *  fram för hand och varje hål i serien hanteras två gånger. */
-function MalGradient({ id, mal, ymax }: { id: string; mal: number; ymax: number }) {
-  const offset = useOffset();
-  const rityta = usePlotArea();
-  const topp = offset?.top ?? 0;
-  const hojd = rityta?.height ?? 0;
-  if (!hojd) return <g />;
-  // Andel av ritytans höjd, uppifrån räknat, där målet ligger.
-  const brytning = Math.min(Math.max(1 - mal / ymax, 0), 1);
-  return (
-    <defs>
-      <linearGradient id={id} gradientUnits="userSpaceOnUse" x1={0} y1={topp} x2={0} y2={topp + hojd}>
-        <stop offset={brytning} stopColor={C.larm} />
-        <stop offset={brytning} stopColor={C.god} />
-      </linearGradient>
-    </defs>
-  );
-}
-
-/** Egen legend. Totalens linje byter färg vid målet, så ett enda färgprov kan inte
- *  stå för den — och Recharts standardlegend skulle rita gradientens `url(...)` som
- *  ikon. Nycklarna visar därför både färgen och formen som skiljer serierna åt. */
 function LegendInnehall() {
   const nycklar = [
-    { text: "Totalt — under målet", farg: C.god, streckad: false, prick: "ingen" as const },
-    { text: "Totalt — över målet", farg: C.larm, streckad: false, prick: "ingen" as const },
+    { text: "Totalt", farg: C.total, streckad: false, prick: "ingen" as const },
     { text: "Kvinnor", farg: C.kvinnor, streckad: false, prick: "ingen" as const },
     { text: "Män", farg: C.man, streckad: true, prick: "ingen" as const },
   ];
@@ -261,8 +212,6 @@ function LegendInnehall() {
 
 /** Sjukfrånvaro rullande 12 månader: total (bläcklinje) med kvinnors och mäns nivå. */
 export function SjukfranvaroChart({ data, mal }: { data: SjukChartPunkt[]; mal: number }) {
-  // Eget id per instans — två diagram på samma sida får aldrig dela gradient.
-  const gradientId = useId().replace(/:/g, "") + "-sjuk-mal";
   if (data.length === 0) return null;
 
   const vals = data.flatMap((d) =>
@@ -286,7 +235,7 @@ export function SjukfranvaroChart({ data, mal }: { data: SjukChartPunkt[]; mal: 
     (typeof senaste.total === "number"
       ? `Senaste värdet ${fmt(senaste.total)} procent` +
         (typeof forsta.total === "number" ? `, mot ${fmt(forsta.total)} procent i början av serien` : "") +
-        `. Målnivå ${fmt(mal)} procent — kurvan är grön under målet och röd över det.`
+        `. Målnivå ${fmt(mal)} procent.`
       : "");
 
   return (
@@ -294,7 +243,6 @@ export function SjukfranvaroChart({ data, mal }: { data: SjukChartPunkt[]; mal: 
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 24, right: 40, bottom: 4, left: 0 }}>
           {/* Recharts 3 ritar godtyckliga element direkt i diagrammet; 2.x krävde <Customized>. */}
-          <MalGradient id={gradientId} mal={mal} ymax={ymax} />
           <CartesianGrid vertical={false} stroke={C.grid} strokeDasharray="3 3" />
           <XAxis
             dataKey="period"
@@ -360,9 +308,9 @@ export function SjukfranvaroChart({ data, mal }: { data: SjukChartPunkt[]; mal: 
             type="monotone"
             dataKey="total"
             name="Totalt %"
-            stroke={`url(#${gradientId})`}
+            stroke={C.total}
             strokeWidth={2.5}
-            dot={totalPunkt(data, mal)}
+            dot={totalPunkt(data)}
             activeDot={{ r: 6, stroke: C.yta, strokeWidth: 2 }}
             connectNulls={false}
             isAnimationActive={false}

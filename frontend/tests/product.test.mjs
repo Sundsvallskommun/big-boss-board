@@ -36,3 +36,11 @@ test('annual cost uses imported staffing and retains the sign relative to target
   assert.equal(sjukKostnad('23', -1), null);
   assert.equal(krText(963_200), '963 tkr');
 });
+
+test('zero imported staffing must not fall back to an older nonzero snapshot', () => {
+  const result = sjukKostnad('23', 7, 0);
+  assert.equal(result.franData, true);
+  assert.equal(result.anstallda, 0);
+  assert.equal(result.kostnad, 0);
+  assert.equal(sjukKostnad('23', 7, -1), null);
+});
