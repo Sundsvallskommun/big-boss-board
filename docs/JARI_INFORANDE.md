@@ -83,3 +83,11 @@ befintliga innehåll skrivs inte över. Fältet återstående aktiviteter fylls 
 Återtagning: återställ kodversion och databassnapshot tillsammans om importer hunnit köras.
 Nullable-migrationens downgrade vägrar om nullvärden finns; den fabricerar inte en gammal
 status. Senare importer har också ändrat mätmetoden, vilket enbart schema-downgrade inte återställer.
+
+### Etapp 2, slutgranskning — redan lagrade enkelperioder
+
+Ett databasprov visade ytterligare ett övergångsfall: en äldre mätning kan ha ett aktuellt
+huvudvärde utan någon sparad serie. Vid historisk påfyllning måste även dess aktuella punkt
+föras in i serien. Importresultatet projiceras också genom samma MeasurementOut-kontrakt,
+så gammal lagrad ackumulerad status inte läcker ut i importsvaret. 26 produkt-/importtester
+passerar efter tillägget. Detta ligger i en separat korrigeringscommit före biblioteksetappen.

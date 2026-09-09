@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dialogue, KpiArea, Measurement, Organisation
 from app.services.ekonomi import bedom_ekonomi, korrigering_for
-from app.schemas import EkonomiEnhet, EkonomiImport, ExportFil
+from app.schemas import EkonomiEnhet, EkonomiImport, EkonomiSeriePunkt, ExportFil, MeasurementOut
 
 # Resultaträkningens mått (RR.005 = Verksamhetens nettokostnad är kortets huvudvärde).
 NETTOKOSTNAD = "SK.EK.RR.005"
@@ -380,6 +380,14 @@ async def import_ekonomi(session: AsyncSession, payload: EkonomiImport) -> dict:
         # Befintlig månadsserie plockas fram före uppdateringen — enkelperiod-import
         # ska bygga vidare på den, inte skriva över den med tomt.
         befintlig_serie = list((m.details or {}).get("serie") or []) if m is not None else []
+        # Äldre enkelperiodimporter lagrade bara resultaträkningen, ingen serie.
+        # Bevara även den senaste punkten när en historisk period fylls på första gången.
+        if m is not None and m.details and m.details.get("period"):
+            aktuell_period = m.details["period"]
+            netto = next((r for r in m.details.get("resultatrakning", [])
+                          if r.get("matt_kod") == NETTOKOSTNAD), None)
+            if netto and not any(p.get("period") == aktuell_period for p in befintlig_serie):
+                befintlig_serie.append(EkonomiSeriePunkt(period=aktuell_period, **netto).model_dump())
 
         try:
             fields = _measurement_fields(enhet, payload.period, payload.kalla, befintlig_serie)
@@ -400,13 +408,13 @@ async def import_ekonomi(session: AsyncSession, payload: EkonomiImport) -> dict:
             uppdaterade += 1
             atgard = "uppdaterad"
 
+        resultat = MeasurementOut.model_validate(m) if m is not None else MeasurementOut(**fields)
         rader.append(
             {
                 "namn": enhet.namn,
                 "kod": enhet.kod,
-                "value": m.value_text if m is not None else fields["value_text"],
-                "status": ((m.status if m is not None else fields["status"]).value
-                           if (m.status if m is not None else fields["status"]) else None),
+                "value": resultat.value_text,
+                "status": resultat.status.value if resultat.status else None,
                 "atgard": atgard,
             }
         )

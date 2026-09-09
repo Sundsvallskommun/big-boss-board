@@ -190,3 +190,16 @@ async def test_seed_can_restart_with_old_personnel_file_without_importing_it(db,
     for org in (await db.scalars(select(Organisation))).all():
         if org.kod in ("14", "4705"):
             assert not org.ar_forvaltning
+
+
+async def test_backfill_of_pre_upgrade_measurement_keeps_headline_point_and_projects_result(db):
+    await import_ekonomi(db, EkonomiImport(**csv_to_payload(export("2026-06-30").replace("K18,-1200", "K18,-1300"))))
+    m = await db.scalar(select(Measurement))
+    from app.models import Status
+    m.details = {**m.details, "serie": []}  # Persisted shape before series-preserving imports.
+    m.value_text, m.value_num, m.status = "Gammalt ackumulerat värde", 100, Status.good
+    await db.commit()
+    result = await import_ekonomi(db, EkonomiImport(**csv_to_payload(export("2026-04-30"))))
+    assert [p["period"] for p in m.details["serie"]] == ["2026-04-30", "2026-06-30"]
+    assert result["enheter"][0]["value"] == "−100 mnkr"
+    assert result["enheter"][0]["status"] == "alert"
