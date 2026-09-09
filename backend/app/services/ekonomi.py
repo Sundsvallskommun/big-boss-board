@@ -49,17 +49,22 @@ class Prognoskorrigering:
     orsak: str
 
 
-# Dokumenterad rättning från Jaris ekonomiunderlag. Omprövas när källans export
+# Dokumenterad rättning av saknad prognos. Omprövas när källans export
 # av april 2026 rättas; får aldrig träffa andra perioder eller en annan budget.
 APRIL_2026 = Prognoskorrigering(
     "24", "2026-04-30", -2972.31, -2972.31,
     "Prognos inlämnad efter uttagsfönstret. Satt till helårsbudget enligt "
-    "avstämning med ekonom 2026-08-14 (Jaris källcommit 792b7b9).",
+    "avstämning med ekonom 2026-08-14 (källcommit 792b7b9).",
 )
 
 
-def korrigering_for(kod: str, period: str, budget: float | None) -> Prognoskorrigering | None:
+def korrigering_for(
+    kod: str, period: str, budget: float | None, prognos: float | None,
+) -> Prognoskorrigering | None:
     if (kod, period) != (APRIL_2026.kod, APRIL_2026.period):
+        return None
+    # Ett faktiskt källvärde har företräde framför den tidsbegränsade ersättningen.
+    if prognos is not None and prognos != 0:
         return None
     if budget is None or abs(budget - APRIL_2026.budget) > 0.005:
         raise ValueError("Aprilrättningen för Barn och utbildning kräver omprövning: budgeten har ändrats.")

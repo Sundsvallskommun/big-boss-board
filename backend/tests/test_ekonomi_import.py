@@ -72,6 +72,7 @@ def test_april_correction_is_scoped_and_rejects_changed_budget():
     data = csv_to_payload(export())["enheter"][0]
     data["kod"] = "24"
     data["matt"][NETTOKOSTNAD]["budget_helar"] = -2972.31
+    data["matt"][NETTOKOSTNAD]["prognos"] = 0
     entity = EkonomiEnhet(**data)
     corrected = korrigerat_underlag(entity, "2026-04-30")
     assert corrected.matt[NETTOKOSTNAD].prognos == -2972.31
@@ -80,3 +81,13 @@ def test_april_correction_is_scoped_and_rejects_changed_budget():
     entity.matt[NETTOKOSTNAD].budget_helar = -3000
     with pytest.raises(ValueError, match="omprövning"):
         korrigerat_underlag(entity, "2026-04-30")
+
+
+def test_real_forecast_has_priority_over_dated_april_replacement():
+    from app.services.ekonomi_import import korrigerat_underlag
+    data = csv_to_payload(export())["enheter"][0]
+    data["kod"] = "24"
+    data["matt"][NETTOKOSTNAD].update(budget_helar=-2972.31, prognos=-3100)
+    corrected = korrigerat_underlag(EkonomiEnhet(**data), "2026-04-30")
+    assert corrected.matt[NETTOKOSTNAD].prognos == -3100
+    assert not corrected.matt[NETTOKOSTNAD].korrigerad

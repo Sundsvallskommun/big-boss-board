@@ -22,6 +22,8 @@ from __future__ import annotations
 import csv
 import io
 import re
+from datetime import date
+from math import isfinite
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,7 +99,7 @@ def csv_to_payload(text: str, kalla: str = "Personaluppföljning (Qlik-export, C
     if not re.search(r"SK\.P\.AM\.", text):
         raise SjukExportMetodError("Gammal eller okänd personalexport. Använd ett R12-uttag med personalmått (SK.P.AM.).")
     reader = las_rader(text)
-    if reader.fieldnames is None or "Enhet" not in reader.fieldnames or "Mått" not in reader.fieldnames:
+    if not {"Period", "Enhet", "Mått", "Kolumn", "Mätvärde"}.issubset(reader.fieldnames or []):
         raise ValueError("CSV saknar förväntade kolumner (Period, Enhet, Mått, Kolumn, Mätvärde).")
 
     # kod -> period -> mått -> {kolumn: värde}
@@ -108,19 +110,26 @@ def csv_to_payload(text: str, kalla: str = "Personaluppföljning (Qlik-export, C
         if not kod or kod == "13":
             continue
         period = (row.get("Period") or "").strip()
+        date.fromisoformat(period)
         alla_perioder.add(period)
         matt = (row.get("Mått") or "").strip()
         kol = (row.get("Kolumn") or "").strip()
         ravarde = (row.get("Mätvärde") or "").strip()
         try:
             varde = float(ravarde) if ravarde else None
-        except ValueError:
-            varde = None
+        except ValueError as exc:
+            raise ValueError(f"Ogiltigt mätvärde för {kod}, {period}: {ravarde!r}.") from exc
+        if varde is not None and not isfinite(varde):
+            raise ValueError("Mätvärden måste vara ändliga tal.")
         raw.setdefault(kod, {}).setdefault(period, {}).setdefault(matt, {})[kol] = varde
 
     enheter = []
     for kod, perioder in raw.items():
-        sorterade = sorted(perioder)
+        # Personalantal kan finnas för en nyare månad än sjukfrånvaron. Det får
+        # varken dölja sista sjukmätningen eller skapa en tom punkt efter den.
+        sorterade = sorted(p for p, matt in perioder.items() if matt.get(TOTAL, {}).get("K20") is not None)
+        if not sorterade:
+            continue
         serie = [
             {
                 "period": p,
@@ -136,6 +145,8 @@ def csv_to_payload(text: str, kalla: str = "Personaluppföljning (Qlik-export, C
         # Antalet tillsvidareanställda finns bara i den nyare exporten. Saknas det får
         # kostnadsrutan falla tillbaka på sin egen tabell hellre än att gissa.
         antal = lm.get(ANSTALLDA, {}).get("K9")
+        if antal is not None and (antal < 0 or not antal.is_integer()):
+            raise ValueError("Antal anställda måste vara ett icke-negativt heltal.")
         enheter.append(
             {
                 "kod": kod,
@@ -205,6 +216,11 @@ def _serie_med_perioder(befintlig: dict | None, enhet: SjukEnhet) -> list[dict]:
                 "kvinnor": punkt.kvinnor,
                 "man": punkt.man,
             }
+    # Normaliserade importer behöver inte skicka en separat serie för huvudvärdet.
+    per_period[enhet.period] = {
+        "period": enhet.period, "total": enhet.total,
+        "kvinnor": enhet.kvinnor, "man": enhet.man,
+    }
     return [per_period[p] for p in sorted(per_period)]
 
 

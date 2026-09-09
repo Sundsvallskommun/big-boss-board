@@ -140,12 +140,19 @@ def delindex_till_uppslag(delindex: dict | None) -> dict[str, dict[str, dict]]:
     if not delindex:
         return {}
     ut: dict[str, dict[str, dict]] = {}
-    for namn, rader in (delindex.get("perspektiv") or {}).items():
+    perspektiv = delindex.get("perspektiv")
+    if not isinstance(perspektiv, dict):
+        raise ValueError("Delindexrapporten saknar perspektivobjekt.")
+    for namn, rader in perspektiv.items():
         nyckel = namn.strip().lower()
         if nyckel not in PERSPEKTIV:
             print(f"[import] okänt HME-perspektiv {namn!r} — hoppas över.")
             continue
-        for rad in rader or []:
+        if not isinstance(rader, list):
+            raise ValueError("Varje perspektiv ska innehålla en lista med verksamheter.")
+        for rad in rader:
+            if not isinstance(rad, dict):
+                raise ValueError("Delindexraden måste vara ett objekt.")
             grupp = rad.get("grupp")
             if grupp and isinstance(rad.get("matningar"), dict):
                 ut.setdefault(grupp, {})[nyckel] = rad["matningar"]
@@ -166,7 +173,13 @@ def report_to_payload(
     av dem bär orgId.
     """
     dims = report.get("dimensioner", {})
+    if not isinstance(dims, dict):
+        raise ValueError("dimensioner måste vara ett objekt.")
     forv = dims.get("Enhet") or dims.get("Förvaltning") or []
+    if not isinstance(forv, list) or any(not isinstance(f, dict) for f in forv):
+        raise ValueError("Enhet/Förvaltning måste vara en lista med objekt.")
+    if any(not isinstance(f.get("matningar"), dict) for f in forv):
+        raise ValueError("Varje verksamhet måste innehålla ett matningar-objekt.")
     per_grupp = delindex_till_uppslag(delindex)
     if per_grupp:
         okanda = sorted(set(per_grupp) - {f["grupp"] for f in forv})
@@ -284,6 +297,9 @@ async def import_hme(session: AsyncSession, payload: HmeImport) -> dict:
     rader: list[dict] = []
 
     for f in payload.forvaltningar:
+        if not any(v is not None for v in f.matningar.values()):
+            hoppade_over += 1
+            continue
         fields, senaste = _measurement_fields(f, payload.enhet, payload.mal, payload.kalla)
 
         # Koppla mot befintlig verksamhet (org är master, BYGGPLAN §18) — skapa inte org/dialog.
@@ -355,4 +371,4 @@ async def import_hme(session: AsyncSession, payload: HmeImport) -> dict:
         f"[import] klart: {skapade} skapade, {uppdaterade} uppdaterade, "
         f"{hoppade_over} hoppade över, {len(rader)} förvaltningar kopplade."
     )
-    return {"skapade": skapade, "uppdaterade": uppdaterade, "forvaltningar": rader}
+    return {"skapade": skapade, "uppdaterade": uppdaterade, "hoppade_over": hoppade_over, "forvaltningar": rader}

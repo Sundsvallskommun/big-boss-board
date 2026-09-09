@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Skicka HME-data till import-endpointen.
 
-Läser den officiella HME-rapporten (JSON), normaliserar den och POSTar till
-`/api/import/hme` med import-token. Körs lokalt/i CI vid ny mätning — rapportfilen
+Skickar den officiella HME-rapporten och valfria delindex till
+`/api/import/hme-rapport` med import-token. Backend normaliserar underlaget. Rapportfilen
 behöver aldrig läggas i repot eller på servern.
 
     IMPORT_TOKEN=... python3 scripts/import_hme.py --url https://bbb.sundsvall.dev
@@ -37,7 +37,7 @@ def main() -> None:
     if not args.file.exists():
         raise SystemExit(f"Hittar inte rapportfilen: {args.file}")
 
-    report = json.loads(args.file.read_text(encoding="utf-8"))
+    report = json.loads(args.file.read_text(encoding="utf-8-sig"))
     payload = {"rapport": report, "delindex": (
         json.loads(args.delindex.read_text(encoding="utf-8-sig")) if args.delindex else None
     )}
@@ -49,7 +49,7 @@ def main() -> None:
         method="POST",
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {args.token}"},
     )
-    print(f"POST {endpoint} — {len(payload['forvaltningar'])} förvaltningar")
+    print(f"POST {endpoint} — {args.file.name}")
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
             data = json.loads(resp.read().decode("utf-8"))

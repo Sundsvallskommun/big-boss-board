@@ -51,7 +51,10 @@ async def import_ekonomi_endpoint(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Upserta ekonomi per förvaltning ur den råa resultaträkningsrapporten (long-format)."""
-    payload = EkonomiImport(**report_to_payload(rapport.model_dump()))
+    try:
+        payload = EkonomiImport(**report_to_payload(rapport.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return await import_ekonomi(session, payload)
 
 
@@ -61,8 +64,8 @@ async def import_ekonomi_csv_endpoint(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Upserta ekonomi från Qlik CSV-export (Period,Enhet,Mått,Kolumn,Mätvärde). Rå CSV i body."""
-    text = (await request.body()).decode("utf-8-sig")
     try:
+        text = (await request.body()).decode("utf-8-sig")
         payload = EkonomiImport(**csv_to_payload(text))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -92,8 +95,8 @@ async def import_sjukfranvaro_csv_endpoint(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Upserta sjukfrånvaro från personal-CSV (Period,Enhet,Mått,Kolumn,Mätvärde). Rå CSV i body."""
-    text = (await request.body()).decode("utf-8-sig")
     try:
+        text = (await request.body()).decode("utf-8-sig")
         payload = SjukImport(**sjuk_csv_to_payload(text))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -110,7 +113,7 @@ async def import_ekonomi_filer_endpoint(
         payload = EkonomiImport(**csvs_to_serie_payload(valj_ekonomifiler(body.filer)))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return await import_ekonomi(session, payload)
+    return await import_ekonomi(session, payload, bevara_historik=True)
 
 
 @router.post("/hme-rapport", response_model=ImportResultat, dependencies=[Depends(require_import_token)])

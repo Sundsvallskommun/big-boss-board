@@ -6,10 +6,10 @@ prototypens AREAS-objekt (område + mätvärde + verktyg + frågor + ev. överen
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Literal
+from datetime import date, datetime
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, FiniteFloat, JsonValue, model_validator
 
 from app.models import Status, TrendDir
 from app.services.ekonomi import bedom_ekonomi
@@ -248,6 +248,18 @@ class StatusrapportUpdate(BaseModel):
 # ---- Dataimport ----------------------------------------------------------
 
 
+def _rapportperiod(value: str) -> str:
+    if date.fromisoformat(value).isoformat() != value:
+        raise ValueError("Rapportperiod ska anges som YYYY-MM-DD.")
+    return value
+
+
+Rapportperiod = Annotated[str, AfterValidator(_rapportperiod)]
+Matningsar = Annotated[str, Field(pattern=r"^[0-9]{4}$")]
+Procent = Annotated[float, Field(ge=0, le=100, allow_inf_nan=False)]
+
+
+
 class HmeRapportImport(BaseModel):
     rapport: dict[str, JsonValue]
     delindex: dict[str, JsonValue] | None = None
@@ -259,12 +271,12 @@ class HmeForvaltning(BaseModel):
     namn: str
     # Masterdata-kod (orgId) om filen har den — då kopplas HME robust på kod (BYGGPLAN §18).
     kod: str | None = None
-    matningar: dict[str, float | None]
-    antal_svar: int | None = None
+    matningar: dict[Matningsar, Procent | None]
+    antal_svar: int | None = Field(default=None, ge=0)
     # HME-talet byggs av tre delperspektiv (motivation, ledarskap, styrning). Var och ett
     # har en egen årsserie med samma mätår som totalen: {"motivation": {"2025": 80.0, …}}.
     # Saknas de visas bara totalen — nyckeln är valfri så äldre rapporter fungerar oförändrat.
-    perspektiv: dict[str, dict[str, float | None]] | None = None
+    perspektiv: dict[str, dict[Matningsar, Procent | None]] | None = None
 
 
 class HmeImport(BaseModel):
@@ -273,7 +285,7 @@ class HmeImport(BaseModel):
     kpi: str = "hme"
     enhet: str = "index"
     kalla: str = ""
-    mal: float = 75.0
+    mal: Procent = 75.0
     forvaltningar: list[HmeForvaltning]
 
 
@@ -286,7 +298,7 @@ class ImportRad(BaseModel):
     senaste_ar: int
     trend: str
     status: str
-    antal_svar: int | None = None
+    antal_svar: int | None = Field(default=None, ge=0)
     ar: list[str] = []
 
 
@@ -295,6 +307,7 @@ class ImportResultat(BaseModel):
 
     skapade: int
     uppdaterade: int
+    hoppade_over: int = 0
     forvaltningar: list[ImportRad]
 
 
@@ -337,11 +350,11 @@ class EkonomiMatt(BaseModel):
     """Ett resultaträkningsmått för en enhet (kolumnvärden i mnkr; null = saknas)."""
 
     namn: str
-    budget_helar: float | None = None
-    budget_ack: float | None = None
-    utfall: float | None = None
-    utfall_fg: float | None = None
-    prognos: float | None = None
+    budget_helar: FiniteFloat | None = None
+    budget_ack: FiniteFloat | None = None
+    utfall: FiniteFloat | None = None
+    utfall_fg: FiniteFloat | None = None
+    prognos: FiniteFloat | None = None
     korrigerad: bool = False
     korrigering_orsak: str | None = None
 
@@ -351,20 +364,20 @@ class EkonomiOmrade(BaseModel):
 
     omrade_kod: str | None = None
     namn: str | None = None
-    utfall: float | None = None
-    budget_ack: float | None = None
+    utfall: FiniteFloat | None = None
+    budget_ack: FiniteFloat | None = None
 
 
 class EkonomiSeriePunkt(BaseModel):
     """Nettokostnad (RR.005) en rapportperiod — en punkt i månadsserien (mnkr)."""
 
-    period: str
-    budget_helar: float | None = None
-    budget_ack: float | None = None
-    utfall: float | None = None
-    utfall_fg: float | None = None
-    prognos: float | None = None
-    # Sant när punkten är manuellt korrigerad (se KORRIGERINGAR i ekonomi_import).
+    period: Rapportperiod
+    budget_helar: FiniteFloat | None = None
+    budget_ack: FiniteFloat | None = None
+    utfall: FiniteFloat | None = None
+    utfall_fg: FiniteFloat | None = None
+    prognos: FiniteFloat | None = None
+    # Sant när punkten är manuellt korrigerad (se services/ekonomi.py).
     # Följer med ut i API:t så gränssnittet kan märka ut månaden.
     korrigerad: bool = False
     korrigering_orsak: str | None = None
@@ -374,6 +387,8 @@ class EkonomiEnhet(BaseModel):
     """En förvaltning: huvudmått (per mått_kod) + nettokostnad per område."""
 
     kod: str
+    # Senaste underlaget för just denna enhet kan vara äldre än filsamlingens senaste period.
+    period: Rapportperiod | None = None
     namn: str
     niva: str = "förvaltning"
     matt: dict[str, EkonomiMatt]
@@ -386,7 +401,7 @@ class EkonomiImport(BaseModel):
     """Normaliserad importpayload för ekonomi (per förvaltning)."""
 
     kpi: str = "ekonomi"
-    period: str = ""
+    period: Rapportperiod
     kalla: str = ""
     enheter: list[EkonomiEnhet]
 
@@ -401,6 +416,12 @@ class ExportFil(BaseModel):
 class ExportFiler(BaseModel):
     filer: list[ExportFil] = Field(min_length=1, max_length=100)
 
+    @model_validator(mode="after")
+    def total_storlek(self):
+        if sum(len(f.text.encode("utf-8")) for f in self.filer) > 15_000_000:
+            raise ValueError("Filerna får sammanlagt vara högst 15 MB.")
+        return self
+
 
 class EkonomiCsvSerie(BaseModel):
     """Flera CSV-perioder i ett anrop → månadsserie. En rå CSV-text per rapportperiod."""
@@ -412,7 +433,7 @@ class EkonomiCsvSerie(BaseModel):
 class EkonomiPost(BaseModel):
     """En rad i den råa ekonomirapporten (long-format)."""
 
-    period: str | None = None
+    period: Rapportperiod | None = None
     enhet_kod: str
     enhet_namn: str
     niva: str
@@ -422,7 +443,7 @@ class EkonomiPost(BaseModel):
     omrade_kod: str | None = None
     kolumn_kod: str
     kolumn_namn: str
-    matvarde_mnkr: float | None = None
+    matvarde_mnkr: FiniteFloat | None = None
 
 
 class EkonomiRapport(BaseModel):
@@ -459,7 +480,7 @@ class SjukAldersgrupp(BaseModel):
     """Sjukfrånvaro (% av ordinarie arbetstid) för en åldersgrupp."""
 
     grupp: str
-    varde: float | None = None
+    varde: Procent | None = None
 
 
 class SjukPunkt(BaseModel):
@@ -470,10 +491,10 @@ class SjukPunkt(BaseModel):
     tolftedel av underlaget.
     """
 
-    period: str
-    total: float | None = None
-    kvinnor: float | None = None
-    man: float | None = None
+    period: Rapportperiod
+    total: Procent | None = None
+    kvinnor: Procent | None = None
+    man: Procent | None = None
 
 
 class SjukEnhet(BaseModel):
@@ -481,13 +502,13 @@ class SjukEnhet(BaseModel):
 
     kod: str
     namn: str
-    period: str = ""
-    total: float | None = None
-    kvinnor: float | None = None
-    man: float | None = None
-    langtidsandel: float | None = None
+    period: Rapportperiod
+    total: Procent | None = None
+    kvinnor: Procent | None = None
+    man: Procent | None = None
+    langtidsandel: Procent | None = None
     # Antal tillsvidareanställda (SK.P.AM.001/K9) — underlag för kostnadsuppskattningen.
-    anstallda: int | None = None
+    anstallda: int | None = Field(default=None, ge=0)
     aldersgrupper: list[SjukAldersgrupp] = []
     serie: list[SjukPunkt] = []
 
@@ -502,7 +523,7 @@ class SjukImport(BaseModel):
     """
 
     kpi: str = "sjukfranvaro"
-    period: str = ""
+    period: Rapportperiod
     kalla: str = ""
     matmetod: Literal["rullande12"]
     enheter: list[SjukEnhet]

@@ -203,3 +203,133 @@ async def test_backfill_of_pre_upgrade_measurement_keeps_headline_point_and_proj
     assert [p["period"] for p in m.details["serie"]] == ["2026-04-30", "2026-06-30"]
     assert result["enheter"][0]["value"] == "−100 mnkr"
     assert result["enheter"][0]["status"] == "alert"
+
+
+@pytest.fixture
+async def import_client(db, monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app
+    from app.db import get_session
+    from app.config import get_settings
+    monkeypatch.setenv("IMPORT_TOKEN", "test-import-token")
+    get_settings.cache_clear()
+
+    async def database():
+        yield db
+
+    app.dependency_overrides[get_session] = database
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test",
+                               headers={"Authorization": "Bearer test-import-token"}) as client:
+            yield client
+    finally:
+        app.dependency_overrides.pop(get_session, None)
+        get_settings.cache_clear()
+
+
+async def test_file_uploads_merge_history_and_keep_newest_headline(import_client, db):
+    for period, value in [("2026-06-30", -130), ("2026-04-30", -100), ("2026-04-30", -105)]:
+        response = await import_client.post("/api/import/ekonomi-filer", json={"filer": [
+            {"namn": "ekonomi.csv", "text": export(period, value)},
+        ]})
+        assert response.status_code == 200
+    m = await db.scalar(select(Measurement))
+    assert m.details["period"] == "2026-06-30"
+    assert [(p["period"], p["utfall"]) for p in m.details["serie"]] == [
+        ("2026-04-30", -105), ("2026-06-30", -130),
+    ]
+    # The separately documented explicit replacement endpoint still replaces.
+    response = await import_client.post("/api/import/ekonomi-serie", json={"perioder": [export()]})
+    assert response.status_code == 200
+    assert len(m.details["serie"]) == 1
+
+
+def test_multi_period_economy_retains_organisations_missing_from_last_file():
+    from app.services.ekonomi_import import csvs_to_serie_payload
+    from app.schemas import EkonomiImport
+    april = export().replace(',23,', ',25,')
+    payload = EkonomiImport(**csvs_to_serie_payload([april, export("2026-06-30")]))
+    assert {e.kod: e.period for e in payload.enheter} == {"25": "2026-04-30", "23": "2026-06-30"}
+
+
+@pytest.mark.parametrize("report", [
+    {"dimensioner": []},
+    {"dimensioner": {"Enhet": ["invalid"]}},
+    {"dimensioner": {"Enhet": [{"grupp": "test", "matningar": None}]}},
+    {"dimensioner": {"Enhet": [{"grupp": "test", "matningar": {"invalid": 70}}]}},
+])
+async def test_malformed_hme_is_a_client_error(import_client, report):
+    response = await import_client.post("/api/import/hme-rapport", json={"rapport": report})
+    assert response.status_code == 400
+
+
+async def test_hme_suppressed_unit_does_not_abort_valid_units(import_client):
+    report = {"dimensioner": {"Enhet": [
+        {"grupp": "Testförbund", "orgId": 14, "matningar": {"2025": None}},
+        {"grupp": "Testförvaltning", "orgId": 23, "matningar": {"2025": 80}},
+    ]}}
+    response = await import_client.post("/api/import/hme-rapport", json={"rapport": report})
+    assert response.status_code == 200
+    assert response.json()["skapade"] == 1
+    assert response.json()["hoppade_over"] == 1
+
+
+@pytest.mark.parametrize("bad_value", ["NaN", "Infinity", "felskrivet"])
+async def test_non_numeric_import_cannot_poison_stored_data(import_client, db, bad_value):
+    for path, content in [
+        ("ekonomi-csv", export().replace("K18,-1200", f"K18,{bad_value}")),
+        ("sjukfranvaro-csv", personnel("2026-07-31", bad_value)),
+    ]:
+        response = await import_client.post(f"/api/import/{path}", content=content)
+        assert response.status_code == 400
+    assert await db.scalar(select(Measurement)) is None
+
+
+def test_staff_only_newer_period_does_not_hide_last_sickness_measurement():
+    payload = sjuk_payload(personnel("2026-06-30", 7) + "\n2026-07-31,23,SK.P.AM.001,K9,110")
+    e = payload["enheter"][0]
+    assert e["period"] == "2026-06-30" and e["total"] == 7
+    assert len(e["serie"]) == 1
+
+
+async def test_normalized_sickness_import_preserves_headline_in_series(db):
+    for period, total in [("2026-07-31", 7.2), ("2026-04-30", 5.5)]:
+        await import_sjukfranvaro(db, SjukImport(period=period, matmetod="rullande12", enheter=[{
+            "kod": "23", "namn": "Test", "period": period, "total": total,
+        }]))
+    m = await db.scalar(select(Measurement))
+    assert m.value_num == 7.2 and m.status.value == "alert"
+    assert [p["period"] for p in m.details["serie"]] == ["2026-04-30", "2026-07-31"]
+
+
+def test_hme_cli_posts_total_and_perspectives(tmp_path, monkeypatch):
+    import importlib.util
+    import io
+    import json
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("hme_cli", Path(__file__).parents[2] / "scripts/import_hme.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    total = tmp_path / "total.json"
+    total.write_text('\ufeff{"dimensioner": {"Enhet": []}}', encoding="utf-8")
+    perspectives = tmp_path / "perspectives.json"
+    perspectives.write_text('{"perspektiv": {}}')
+    monkeypatch.setattr("sys.argv", ["import_hme.py", "--file", str(total), "--delindex", str(perspectives), "--token", "test"])
+    sent = []
+
+    def post(request, timeout):
+        sent.append(json.loads(request.data))
+        assert request.full_url.endswith("/api/import/hme-rapport")
+        return io.BytesIO(b'{"skapade":0,"uppdaterade":0,"forvaltningar":[]}')
+
+    monkeypatch.setattr(cli.urllib.request, "urlopen", post)
+    cli.main()
+    assert sent == [{"rapport": {"dimensioner": {"Enhet": []}}, "delindex": {"perspektiv": {}}}]
+
+
+async def test_invalid_report_period_and_encoding_return_client_errors(import_client):
+    response = await import_client.post("/api/import/ekonomi", json={"dataset": {"period": "fel"}, "poster": []})
+    assert response.status_code == 400
+    for path in ("ekonomi-csv", "sjukfranvaro-csv"):
+        response = await import_client.post(f"/api/import/{path}", content=b'\xff')
+        assert response.status_code == 400

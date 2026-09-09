@@ -131,7 +131,7 @@ def csv_to_payload(text: str, kalla: str = "Ekonomisk uppföljning (Qlik-export,
     (ingen dialog).
     """
     reader = las_rader(text)
-    if reader.fieldnames is None or "Enhet" not in reader.fieldnames or "Mått" not in reader.fieldnames:
+    if not {"Period", "Enhet", "Mått", "Kolumn", "Mätvärde"}.issubset(reader.fieldnames or []):
         raise ValueError("CSV saknar förväntade kolumner (Period, Enhet, Mått, Kolumn, Mätvärde).")
 
     enheter: dict[str, dict] = {}
@@ -144,6 +144,7 @@ def csv_to_payload(text: str, kalla: str = "Ekonomisk uppföljning (Qlik-export,
         if not falt:
             continue
         rad_period = (row.get("Period") or "").strip()
+        date.fromisoformat(rad_period)
         if period and rad_period != period:
             raise ValueError("Ekonomifilen innehåller flera rapportperioder. Använd en fil per period.")
         period = rad_period
@@ -151,8 +152,8 @@ def csv_to_payload(text: str, kalla: str = "Ekonomisk uppföljning (Qlik-export,
         ravarde = (row.get("Mätvärde") or "").strip()
         try:
             varde = float(ravarde) if ravarde else None
-        except ValueError:
-            varde = None
+        except ValueError as exc:
+            raise ValueError(f"Ogiltigt mätvärde för {kod}, {rad_period}: {ravarde!r}.") from exc
 
         e = enheter.setdefault(
             kod,
@@ -234,7 +235,12 @@ def csvs_to_serie_payload(
                 }
             )
 
-    latest = per_period[-1]
+    senaste_per_kod = {}
+    for p in per_period:
+        for e in p["enheter"]:
+            e["period"] = p["period"]
+            senaste_per_kod[e["kod"]] = e
+    latest = {**per_period[-1], "enheter": list(senaste_per_kod.values())}
     for e in latest["enheter"]:
         e["serie"] = serie_by_kod.get(e["kod"], [])
     return latest
@@ -269,12 +275,12 @@ def korrigerat_underlag(enhet: EkonomiEnhet, period: str) -> EkonomiEnhet:
     enhet = enhet.model_copy(deep=True)
     netto = enhet.matt.get(NETTOKOSTNAD)
     if netto is not None:
-        korr = korrigering_for(enhet.kod, period, netto.budget_helar)
+        korr = korrigering_for(enhet.kod, period, netto.budget_helar, netto.prognos)
         if korr:
             netto.prognos = korr.prognos
             netto.korrigerad, netto.korrigering_orsak = True, korr.orsak
     for punkt in enhet.serie:
-        korr = korrigering_for(enhet.kod, punkt.period, punkt.budget_helar)
+        korr = korrigering_for(enhet.kod, punkt.period, punkt.budget_helar, punkt.prognos)
         if korr:
             punkt.prognos = korr.prognos
             punkt.korrigerad, punkt.korrigering_orsak = True, korr.orsak
@@ -286,6 +292,7 @@ def _measurement_fields(
     period: str,
     kalla: str,
     befintlig_serie: list[dict] | None = None,
+    *, bevara_historik: bool = False,
 ) -> dict:
     """Bygg mätvärdesfält: nettokostnad mot budget + resultaträkning/områden i details."""
     enhet = korrigerat_underlag(enhet, period)
@@ -316,6 +323,10 @@ def _measurement_fields(
     # Serieimport (flera perioder) är auktoritativ och ersätter serien. Enkelperiod-import
     # har tom serie i payloaden — då behålls den befintliga och periodens punkt uppserteras.
     serie = [p.model_dump() for p in enhet.serie]
+    if serie and bevara_historik:
+        per_period = {p["period"]: p for p in befintlig_serie or []}
+        per_period.update({p["period"]: p for p in serie})
+        serie = [per_period[p] for p in sorted(per_period)]
     if not serie:
         serie = _serie_med_period(befintlig_serie or [], enhet, period)
 
@@ -344,7 +355,9 @@ def _measurement_fields(
     }
 
 
-async def import_ekonomi(session: AsyncSession, payload: EkonomiImport) -> dict:
+async def import_ekonomi(
+    session: AsyncSession, payload: EkonomiImport, *, bevara_historik: bool = False,
+) -> dict:
     """Upserta ekonomi per förvaltning (matchar Organisation på masterdata-kod)."""
     ekonomi_area = (
         await session.execute(select(KpiArea).filter_by(key="ekonomi"))
@@ -356,6 +369,7 @@ async def import_ekonomi(session: AsyncSession, payload: EkonomiImport) -> dict:
     rader: list[dict] = []
 
     for enhet in payload.enheter:
+        period = enhet.period or payload.period
         org = (
             await session.execute(select(Organisation).filter_by(kod=enhet.kod))
         ).scalar_one_or_none()
@@ -390,8 +404,10 @@ async def import_ekonomi(session: AsyncSession, payload: EkonomiImport) -> dict:
                 befintlig_serie.append(EkonomiSeriePunkt(period=aktuell_period, **netto).model_dump())
 
         try:
-            fields = _measurement_fields(enhet, payload.period, payload.kalla, befintlig_serie)
-            if m is not None and not enhet.serie and (m.details or {}).get("period", "") > payload.period:
+            fields = _measurement_fields(
+                enhet, period, payload.kalla, befintlig_serie, bevara_historik=bevara_historik,
+            )
+            if m is not None and (not enhet.serie or bevara_historik) and (m.details or {}).get("period", "") > period:
                 fields = {"details": {**m.details, "serie": fields["details"]["serie"]}}
         except ValueError as exc:
             rader.append({"namn": enhet.namn, "kod": enhet.kod, "atgard": f"Ofullständigt underlag: {exc}"})

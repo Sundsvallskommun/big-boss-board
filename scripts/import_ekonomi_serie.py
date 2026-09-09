@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Skicka en HEL månadsserie av ekonomidata till import-endpointen.
 
-Skickar Qlik-uttag (CSV/TXT) till backend från en mapp (t.ex. `ekonomi-indata/`), grupperar dem på
-rapportperiod (kolumnen `Period` i filen — inte filnamnets uttagsdatum), väljer det
-SENASTE (mest kompletta) dagsuttaget per period, och POSTar hela serien till
-`/api/import/ekonomi-filer`. Backend bygger en månadsserie per förvaltning; senaste
-perioden blir kortets huvudvärde och serien ritas i nettokostnadsdiagrammet.
+Skickar Qlik-uttag (CSV/TXT) från en mapp till `/api/import/ekonomi-filer`.
+Backend läser rapportperioden ur innehållet och prioriterar senaste ordinarie uttag
+dag 1–9 månaden efter perioden. Inlästa månader uppdateras, övrig historik bevaras.
+Senaste underlaget per förvaltning blir huvudvärde i prognosdialogen.
 
     IMPORT_TOKEN=... python3 scripts/import_ekonomi_serie.py --url http://localhost:3000
     IMPORT_TOKEN=... python3 scripts/import_ekonomi_serie.py --url https://bbb.sundsvall.dev
