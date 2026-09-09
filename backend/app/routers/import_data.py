@@ -12,6 +12,7 @@ from app.auth import require_import_token
 from app.db import get_session
 from app.schemas import (
     EkonomiCsvSerie,
+    ExportFiler,
     EkonomiImport,
     EkonomiRapport,
     EkonomiResultat,
@@ -22,6 +23,7 @@ from app.schemas import (
 )
 from app.services.ekonomi_import import (
     csv_to_payload,
+    valj_ekonomifiler,
     csvs_to_serie_payload,
     import_ekonomi,
     report_to_payload,
@@ -95,3 +97,16 @@ async def import_sjukfranvaro_csv_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return await import_sjukfranvaro(session, payload)
+
+
+@router.post("/ekonomi-filer", response_model=EkonomiResultat, dependencies=[Depends(require_import_token)])
+async def import_ekonomi_filer_endpoint(
+    body: ExportFiler,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Välj ordinarie dagsuttag och importera månadsserien; gemensam väg för webb och CLI."""
+    try:
+        payload = EkonomiImport(**csvs_to_serie_payload(valj_ekonomifiler(body.filer)))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return await import_ekonomi(session, payload)

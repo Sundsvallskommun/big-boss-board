@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 """Skicka en HEL månadsserie av ekonomidata till import-endpointen.
 
-Läser alla Qlik-CSV-uttag i en mapp (t.ex. `ekonomi-indata/`), grupperar dem på
+Skickar Qlik-uttag (CSV/TXT) till backend från en mapp (t.ex. `ekonomi-indata/`), grupperar dem på
 rapportperiod (kolumnen `Period` i filen — inte filnamnets uttagsdatum), väljer det
 SENASTE (mest kompletta) dagsuttaget per period, och POSTar hela serien till
-`/api/import/ekonomi-serie`. Backend bygger en månadsserie per förvaltning; senaste
+`/api/import/ekonomi-filer`. Backend bygger en månadsserie per förvaltning; senaste
 perioden blir kortets huvudvärde och serien ritas i nettokostnadsdiagrammet.
 
     IMPORT_TOKEN=... python3 scripts/import_ekonomi_serie.py --url http://localhost:3000
     IMPORT_TOKEN=... python3 scripts/import_ekonomi_serie.py --url https://bbb.sundsvall.dev
 
-Endast Python-stdlib (urllib/csv). Endpointen upsertar, så skriptet är säkert att köra om.
+Filurval och normalisering ägs av backend. Endast Python-stdlib (urllib). Endpointen upsertar, så skriptet är säkert att köra om.
 Ekonomidatan versionshanteras aldrig (mappen är gitignorerad) — den matas in så här.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
-import io
 import json
 import os
 import sys
@@ -28,33 +26,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DIR = ROOT / "ekonomi-indata"
-
-
-def _period_of(text: str) -> str:
-    """Läs rapportperioden (första dataradens Period) ur en CSV-text."""
-    reader = csv.DictReader(io.StringIO(text))
-    for row in reader:
-        period = (row.get("Period") or "").strip()
-        if period:
-            return period
-    return ""
-
-
-def _latest_per_period(files: list[Path]) -> list[tuple[str, str]]:
-    """Gruppera på rapportperiod, behåll det senaste uttaget (max filnamn) per period.
-
-    Returnerar (period, csv_text) sorterat kronologiskt (äldst först).
-    """
-    best: dict[str, tuple[str, str]] = {}  # period -> (filnamn, text)
-    for f in sorted(files):
-        text = f.read_text(encoding="utf-8-sig")
-        period = _period_of(text)
-        if not period:
-            print(f"  hoppar över {f.name} — hittar ingen Period.", file=sys.stderr)
-            continue
-        # sorted() ger stigande filnamn → sista vinner = senaste uttaget för perioden.
-        best[period] = (f.name, text)
-    return [(period, text) for period, (_, text) in sorted(best.items())]
 
 
 def main() -> None:
@@ -69,20 +40,15 @@ def main() -> None:
     if not args.dir.is_dir():
         raise SystemExit(f"Hittar inte mappen: {args.dir}")
 
-    files = list(args.dir.glob("*.csv"))
+    files = sorted([*args.dir.glob("*.csv"), *args.dir.glob("*.txt")])
     if not files:
         raise SystemExit(f"Inga CSV-filer i {args.dir}.")
 
-    valda = _latest_per_period(files)
-    if not valda:
-        raise SystemExit("Kunde inte läsa någon rapportperiod ur filerna.")
-
-    print(f"Hittade {len(files)} filer → {len(valda)} rapportperioder:")
-    for period, _ in valda:
-        print(f"  {period}")
-
-    body = json.dumps({"perioder": [text for _, text in valda]}).encode("utf-8")
-    endpoint = args.url.rstrip("/") + "/api/import/ekonomi-serie"
+    print(f"Skickar {len(files)} filer. Backend väljer senaste ordinarie uttag per period.")
+    body = json.dumps({"filer": [
+        {"namn": f.name, "text": f.read_text(encoding="utf-8-sig")} for f in files
+    ]}).encode("utf-8")
+    endpoint = args.url.rstrip("/") + "/api/import/ekonomi-filer"
     print(f"POST {endpoint}")
 
     req = urllib.request.Request(
@@ -92,7 +58,7 @@ def main() -> None:
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {args.token}"},
     )
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         for r in data.get("enheter", []):
             print(f"  {r['namn']:42} {str(r.get('value') or '–'):>14}  [{r['atgard']}]")

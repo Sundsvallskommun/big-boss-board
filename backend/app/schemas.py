@@ -339,6 +339,17 @@ class EkonomiImport(BaseModel):
     enheter: list[EkonomiEnhet]
 
 
+class ExportFil(BaseModel):
+    """Namngivet Qlik-uttag. Backend äger periodtolkning och val av dagsuttag."""
+
+    namn: str = Field(min_length=1, max_length=255)
+    text: str = Field(min_length=1, max_length=20_000_000)
+
+
+class ExportFiler(BaseModel):
+    filer: list[ExportFil] = Field(min_length=1, max_length=100)
+
+
 class EkonomiCsvSerie(BaseModel):
     """Flera CSV-perioder i ett anrop → månadsserie. En rå CSV-text per rapportperiod."""
 
