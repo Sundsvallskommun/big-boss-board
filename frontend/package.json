@@ -3,28 +3,28 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
-    "lint": "next lint"
+    "typecheck": "tsc --noEmit",
+    "test:product": "node --experimental-transform-types --test --test-concurrency=1 tests/product.test.mjs",
+    "test:theme": "node --test --test-concurrency=1 tests/theme.test.mjs",
+    "test:middleware": "node --test --test-concurrency=1 tests/middleware.test.cjs"
   },
   "dependencies": {
-    "lucide-react": "^1.20.0",
-    "next": "^15.5.19",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "recharts": "^2.15.4"
+    "lucide-react": "^1.43.0",
+    "next": "^16.3.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
-    "@types/node": "22.10.2",
-    "@types/react": "19.0.2",
-    "@types/react-dom": "19.0.2",
-    "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.15",
-    "tailwindcss": "^3.4.19",
-    "typescript": "5.7.2"
-  },
-  "overrides": {
-    "postcss": "^8.5.15"
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3"
   }
 }

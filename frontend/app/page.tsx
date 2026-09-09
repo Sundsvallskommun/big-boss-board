@@ -31,7 +31,7 @@ function Dialoglista({ dialoger }: { dialoger: DialogueSummary[] }) {
         <li key={d.id}>
           <Link
             href={`/dialog/${d.id}`}
-            className="flex h-full flex-col justify-between gap-16 rounded-12 border border-hairline bg-background-content p-20 transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="flex h-full flex-col justify-between gap-16 rounded-12 border border-hairline bg-background-content p-20 transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <div>
               <div className="font-header text-base font-bold leading-tight tracking-tight">
@@ -71,7 +71,7 @@ export default async function Home() {
       <main
         id="huvudinnehall"
         tabIndex={-1}
-        className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-32 outline-none md:px-32 md:pt-40"
+        className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-32 outline-hidden md:px-32 md:pt-40"
       >
         <div className="mb-32 flex flex-wrap items-start justify-between gap-x-32 gap-y-16">
           <div>
@@ -84,7 +84,7 @@ export default async function Home() {
           {admin && (
             <Link
               href="/admin/import"
-              className="inline-flex items-center gap-8 rounded-full border border-hairline bg-background-content px-16 py-8 text-small font-semibold transition hover:border-vattjom-surface-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="inline-flex items-center gap-8 rounded-full border border-hairline bg-background-content px-16 py-8 text-small font-semibold transition hover:border-vattjom-surface-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <Upload size={16} className="text-vattjom-text-primary" aria-hidden="true" />
               Importera data

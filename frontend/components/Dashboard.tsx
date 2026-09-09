@@ -88,7 +88,7 @@ export function Dashboard({
           <span className="flex items-center gap-16">
             <Link
               href="/"
-              className="inline-flex items-center gap-4 truncate rounded-md text-base font-semibold tracking-tight text-dark-secondary transition hover:text-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="inline-flex items-center gap-4 truncate rounded-md text-base font-semibold tracking-tight text-dark-secondary transition hover:text-dark-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <ChevronLeft size={16} aria-hidden="true" />
               Alla förvaltningar
@@ -101,7 +101,7 @@ export function Dashboard({
       <main
         id="huvudinnehall"
         tabIndex={-1}
-        className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-32 outline-none md:px-32 md:pt-40 xl:max-w-[1440px]"
+        className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-32 outline-hidden md:px-32 md:pt-40 xl:max-w-[1440px]"
       >
         {/* ===== Rubrik + kontext ===== */}
         <div className="mb-32 flex flex-wrap items-end justify-between gap-x-32 gap-y-16">
@@ -167,7 +167,7 @@ export function Dashboard({
                     setSelected(area.key);
                     scrollToDetail();
                   }}
-                  className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                  className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
                     st ? st.soft : "bg-background-content"
                   } ${isSel ? "border-vattjom-surface-primary card-selected" : "border-hairline"}`}
                 >
@@ -242,7 +242,7 @@ export function Dashboard({
                   setSelected(area.key);
                   scrollToDetail();
                 }}
-                className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${s.soft} ${
+                className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${s.soft} ${
                   isSel ? "border-vattjom-surface-primary card-selected" : "border-hairline"
                 }`}
               >
@@ -260,7 +260,7 @@ export function Dashboard({
 
                   {/* Värdet på egen rad (får hela bredden → radbryts inte), förändringen under. */}
                   <span className="block">
-                    <span className="block font-header text-h1 font-bold leading-none tracking-tight xl:text-h3">
+                    <span className="block font-header text-h1 font-bold leading-none tracking-tight xl:text-h3 xl:leading-tight">
                       {ekonomi ? diffText(ekDiff) : m.value_text}
                     </span>
                     {ekonomi && (

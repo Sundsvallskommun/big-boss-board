@@ -91,3 +91,42 @@ huvudvärde utan någon sparad serie. Vid historisk påfyllning måste även des
 föras in i serien. Importresultatet projiceras också genom samma MeasurementOut-kontrakt,
 så gammal lagrad ackumulerad status inte läcker ut i importsvaret. 26 produkt-/importtester
 passerar efter tillägget. Detta ligger i en separat korrigeringscommit före biblioteksetappen.
+
+## Etapp 3 — frontendbibliotek, avskilt från produktlogik
+
+Next 16.3.4, React 19.2.8, Recharts 3.10.1 och Tailwind 4.3.3 är införda med npm-låsfil.
+Node 22, Python, Dockerfiler, SAML/Redis, middleware, behörighetskod, användarmeny,
+OpenShift-prober och runtime-ersättning är oförändrade jämfört med kommunens a3515f0.
+Jaris backenduppgraderingar och Dokploy-härdning är inte överförda: de tillhör driftvarianten.
+
+- `globals.css` äger hela tokenlagret med `@theme`. Den gamla Tailwind-konfigurationen
+  och autoprefixer är borttagna. Kommunens extra hover-token är bevarad. CSS-sökningen
+  är uttryckligen avgränsad till app och components. Ändringar i markup avser v4:s
+  motsvarande utilities för fokus, skugga och gradient.
+- Sjukfrånvarografen använder Recharts publika skal-/ritområdeshooks i stället för
+  privata `Customized`-fält. Tooltip-typerna är anpassade utan `any`.
+- Webpack anges uttryckligen i dev/build så att ramverksuppgraderingen inte samtidigt
+  byter kommunens byggverktyg. Next 16:s befintliga middlewarestöd används; filen byts
+  inte till Jaris `proxy.ts`. `typecheck` ersätter det borttagna `next lint`-kommandot.
+
+Verifierat med global supervisor: npm-installation, TypeScript, CSS-genereringsprov,
+tre produktprov och ett prov av kommunens oförändrade middleware med det installerade
+Next 16. Middlewareprovet kontrollerar sessionscookie till /api/me, nekad utgången session,
+SAML-/import-/probe-undantag samt nekad felkonfiguration. Ingen appserver eller komplett
+produktionbyggnad har startats. Största uppmätta processminnet för biblioteksinstallationen
+var cirka 444 MiB; detta avser endast den övervakade processen.
+
+Källor för anpassningarna:
+
+- [Next 16: Node-krav, Webpack och fortsatt middlewarestöd](https://nextjs.org/docs/app/guides/upgrading/version-16)
+- [Tailwind 4: CSS-konfiguration, utilitynamn och webbläsarkrav](https://tailwindcss.com/docs/upgrade-guide)
+- [Recharts 3: egna lager och tooltip-typer](https://github.com/recharts/recharts/wiki/3.0-migration-guide)
+
+Tailwind 4 kräver moderna webbläsare (Safari 16.4+, Chrome 111+, Firefox 128+).
+Kontrollera användarnas klienter vid införande. Faktisk SAML-inloggning mot kommunens IdP,
+OpenShift-bygge/rollout, PostgreSQL-migration och visuell/tangentbordsgranskning i webbläsare
+återstår för driftmiljön. De är inte ersatta av en lokal typkontroll.
+
+Återtagning: biblioteksetappen kan återtas som egen commit utan databasändring. Produkt-
+etappernas datakontrakt och migreringskrav är separata. Arbetsgrenens ändringar är inte
+pushade eller driftsatta. Den befintliga oincheckade `backend/uv.lock` har lämnats orörd.

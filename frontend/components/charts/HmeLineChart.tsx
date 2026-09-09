@@ -11,7 +11,7 @@ import {
   ReferenceLine,
 } from "recharts";
 
-/** Färger i kommunens palett (samma tokens som tailwind.config).
+/** Färger i kommunens palett (samma tokens som globals.css).
  *
  *  Mållinjen är neutralt grå, inte gul. Punkterna färgas redan grönt över och rött under
  *  målet, och ett statusgult vid själva brytpunkten hade antytt en gul mellanzon som inte
@@ -79,7 +79,7 @@ export function HmeLineChart({ data, target }: { data: HmePoint[]; target: numbe
             width={36}
           />
           <Tooltip
-            formatter={(v: number) => [`${v}`, "HME-index"]}
+            formatter={(v) => [typeof v === "number" ? String(v).replace(".", ",") : "–", "HME-index"]}
             labelFormatter={(l) => `År ${l}`}
             contentStyle={{ borderRadius: 12, border: `1px solid ${C.grid}`, fontSize: 13 }}
           />

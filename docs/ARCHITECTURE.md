@@ -164,14 +164,13 @@ redan i DB:n — referera den med `create_type=False` i nya tabeller (se `8b3c4d
 ## Visuellt token-lager
 
 Frontend hämtar Sundsvalls **visuella grundintryck** men implementerar det i ett **eget,
-litet token-lager** — `@sk-web-gui` används inte. Tokens bor i två filer:
+litet token-lager** — `@sk-web-gui` används inte. Tailwind 4-tokens och CSS-bas bor i en fil:
 
-- `frontend/tailwind.config.js` — färger, spacing (`token-N` = N px), radie, typografi.
-- `frontend/app/globals.css` — CSS-bas + komponentklasser (`.eyebrow`, `.meter`, …).
+- `frontend/app/globals.css` — `@theme` för färger, spacing (`--spacing: 1px`), radie och typografi, samt CSS-bas och komponentklasser.
 
 Markupen använder token-utilities (`bg-background-content`, `text-dark-secondary`,
 `vattjom-surface-primary`, status-tokens via `components/status.ts`). **Skriv aldrig ny hex
-i sid-markup** — använd en token-utility, lägg värdet i config om det saknas. Lokala
+i sid-markup** — använd en token-utility, lägg värdet i globals.css om det saknas. Lokala
 UI-primitiver finns i `frontend/components/ui/`. Fullständiga regler i [`../CLAUDE.md`](../CLAUDE.md).
 
 ## Viktiga designbeslut & fallgropar
@@ -221,4 +220,4 @@ påbörjad**.
 Dev-verktygen (ruff, pytest) ligger **inte** i runtime-imagerna — kör dem lokalt med
 dev-beroendena installerade (`cd backend && pip install -e ".[dev]"`, sedan `ruff check app`
 / `pytest`). Frontendens lint + typecheck körs automatiskt av `next build` (dvs
-`docker compose build frontend` failar på fel); manuellt via `npm run lint` lokalt.
+`docker compose build frontend` failar på fel); manuellt via `npm run typecheck` lokalt.

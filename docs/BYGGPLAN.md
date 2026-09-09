@@ -1,5 +1,11 @@
 # Byggplan — Dialogstöd för chefsuppföljning
 
+> Genomfört september 2026: produktfunktioner från Jari och frontenduppgraderingar finns i
+> [JARI_INFORANDE.md](JARI_INFORANDE.md). Den beskrivningen och AGENTS.md gäller framför
+> äldre planavsnitt nedan om ekonomimått, sjukfrånvaro, bibliotek och tokenlager.
+> Kommunens SAML/ADFS och OpenShift-bas är bevarad.
+
+
 Arbetsnamn (internt, ej i UI): **Big Boss Board (bbb)**. Publik domän: `bbb.sundsvall.dev`.
 Den här planen beskriver hur prototypen (`uppfoljningsdialog.html`) byggdes om till en skalbar
 fullstack-app med Python-backend, PostgreSQL och en frontend i Sundsvalls visuella språk (eget

@@ -10,7 +10,7 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
           "block w-full rounded-12 border border-hairline bg-background-content px-12 py-10",
           "text-base text-dark-primary placeholder:text-dark-secondary",
           "transition focus:border-vattjom-surface-primary",
-          "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+          "focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
           "aria-[invalid=true]:border-error",
           className,
         ].join(" ")}

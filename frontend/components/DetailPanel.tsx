@@ -218,7 +218,7 @@ function ActivityRow({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="inline-flex shrink-0 items-center gap-4 rounded-full border border-vattjom-surface-primary px-10 py-3 text-[12px] font-semibold text-vattjom-text-primary transition hover:bg-vattjom-background-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="inline-flex shrink-0 items-center gap-4 rounded-full border border-vattjom-surface-primary px-10 py-3 text-[12px] font-semibold text-vattjom-text-primary transition hover:bg-vattjom-background-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <CheckCircle2 size={13} aria-hidden="true" />
             Klarmarkera
@@ -252,9 +252,7 @@ export function DetailPanel({
   // för dem utan) — assertion är därför säker och håller typerna nöjda.
   const m = item.measurement!;
   const AreaIcon = areaIcon(area.ikon);
-  // Ekonomi visar ingen trend: jämförelsen mot föregående år finns redan i
-  // nettokostnadsdiagrammet (serien "Ack utfall fg år"), och en trendruta ovanpå det
-  // sa samma sak en gång till — fast utan periodens sammanhang.
+  // Ekonomins förändring visas i prognosdiagrammet, utan separat trendruta.
   const visaTrend = area.key !== "ekonomi";
   // Trend kan saknas (ingen jämförelseperiod) → neutral platshållare utan riktningspil.
   const hasTrend = m.trend_dir !== null;
@@ -347,7 +345,7 @@ export function DetailPanel({
           blocken utan hängande kant i botten. */}
       <section className="reveal divide-y divide-hairline overflow-hidden rounded-12 border border-hairline bg-background-content">
       {/* Panelhuvud — mjuk statston som tonar ut mot vitt (som prototypen) */}
-      <div className={`bg-gradient-to-b to-background-content p-24 md:p-28 ${s.gradient}`}>
+      <div className={`bg-linear-to-b to-background-content p-24 md:p-28 ${s.gradient}`}>
         <div className="flex flex-wrap items-start justify-between gap-16">
           <div className="flex items-start gap-14">
             <span className="grid h-48 w-48 shrink-0 place-items-center rounded-12 border border-hairline bg-background-content text-vattjom-text-primary">
@@ -425,7 +423,7 @@ export function DetailPanel({
                 scrollToAktiviteter();
               }
             }}
-            className="cursor-pointer rounded-12 border border-hairline bg-background-content p-16 text-left transition hover:border-vattjom-surface-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="cursor-pointer rounded-12 border border-hairline bg-background-content p-16 text-left transition hover:border-vattjom-surface-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <dt className="flex items-center gap-6 font-mono text-[12px] font-semibold uppercase tracking-[0.05em] text-dark-secondary">
               <ListChecks size={14} strokeWidth={2.2} aria-hidden="true" />
@@ -475,7 +473,7 @@ export function DetailPanel({
             aria-expanded={infoOpen}
             aria-controls={`kpi-info-${area.key}`}
             onClick={() => setInfoOpen((o) => !o)}
-            className="flex w-full items-center gap-12 p-24 text-left focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:p-28"
+            className="flex w-full items-center gap-12 p-24 text-left focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:p-28"
           >
             <span className="shrink-0 text-vattjom-text-primary">
               <Info size={18} strokeWidth={2.2} aria-hidden="true" />

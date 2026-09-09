@@ -1,6 +1,6 @@
 "use client";
 
-import type { TooltipProps } from "recharts";
+import type { TooltipContentProps } from "recharts";
 
 import {
   Bar,
@@ -95,13 +95,13 @@ function Etikett(props: StapelProps = {}) {
   );
 }
 
-function Tips({ active, payload, label }: TooltipProps<number, string>) {
+function Tips({ active, payload, label }: Pick<TooltipContentProps, "active" | "payload" | "label">) {
   const v = payload?.[0]?.value;
   if (!active || typeof v !== "number") return null;
   const ord = v < 0 ? "Mot underskott" : v > 0 ? "Mot överskott" : "I balans";
   const korrigerad = payload?.[0]?.payload?.korrigerad;
   return (
-    <div className="rounded-8 border border-hairline bg-background-content px-12 py-8 text-small shadow-sm">
+    <div className="rounded-8 border border-hairline bg-background-content px-12 py-8 text-small shadow-xs">
       <p className="font-semibold">{label}</p>
       <p className="tabular-nums">
         {signerad(v)} mnkr · {ord}
@@ -139,7 +139,7 @@ export function EkonomiDiffChart({ data }: { data: EkonomiDiffManad[] }) {
             tickLine={false}
             width={56}
           />
-          <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} content={<Tips />} />
+          <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} content={(props) => <Tips {...props} />} />
 
           {/* Budget = noll. Stapeln byggs upp från den här linjen. */}
           <ReferenceLine

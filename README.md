@@ -23,7 +23,7 @@ Prototyp/designreferens: [`docs/uppfoljningsdialog.html`](docs/uppfoljningsdialo
 
 | Lager | Teknik |
 | --- | --- |
-| **Frontend** | Next.js 15 (App Router) · React 19 · TypeScript · Tailwind + ett eget litet token-lager (Sundsvalls visuella språk). Standalone-output. |
+| **Frontend** | Next.js 16 (App Router) · React 19 · TypeScript · Tailwind 4 + ett eget litet token-lager (Sundsvalls visuella språk). Standalone-output. |
 | **Backend** | FastAPI · SQLAlchemy 2.0 (async) · Pydantic v2 · Alembic. Uvicorn-workers via Gunicorn. Alla endpoints under `/api`, OpenAPI på `/api/docs`. |
 | **Databas** | PostgreSQL 16 (namngiven volym, ej publik). |
 | **Infra** | Docker Compose via Dokploy + Traefik (TLS). Endast `frontend` exponeras publikt; den proxar `/api/*` → backend (en domän, inga CORS-bekymmer). |
@@ -86,7 +86,7 @@ docker compose logs -f backend                                    # följ loggar
 | **Ny migration** | Skapa filen i `backend/alembic/versions/` (kopiera formatet från en befintlig, kedja `down_revision` till nuvarande head). Källkod är **inte** bind-mountad — den byggs in vid `docker compose build backend` och körs vid nästa start. |
 | **Kör migrationer manuellt** | `docker compose exec backend alembic upgrade head` (alembic finns i imagen). |
 | **Lint (backend)** | Dev-verktygen ligger **inte** i runtime-imagen. Lokalt i `backend/` (venv): `pip install -e ".[dev]" && ruff check app`. |
-| **Lint/typecheck (frontend)** | Körs automatiskt av `next build` — `docker compose build frontend` failar på lint-/typfel. Manuellt: lokalt i `frontend/` med `npm install && npm run lint`. |
+| **Typkontroll (frontend)** | Körs automatiskt av `next build` — `docker compose build frontend` failar på typfel. Manuellt: lokalt i `frontend/` med `npm install && npm run typecheck`. |
 | **Tester** | pytest är konfigurerat (`backend/pyproject.toml`, dev-deps) men ingen svit än; körs lokalt med `.[dev]` i en venv. |
 | **Importera riktig data** | token-skyddade endpoints via skripten i [`scripts/`](scripts/) — se [Datainläsning](#datainläsning) nedan. |
 
@@ -166,7 +166,7 @@ bbb/
 │  ├─ app/                   # sidor (/, /dialog/[id], /status, /login, /admin/import)
 │  ├─ components/            # Dashboard, DetailPanel, QuestionPanel, charts/, ui/, …
 │  ├─ lib/                   # api-klient, auth, admin-api
-│  ├─ tailwind.config.js + app/globals.css   # token-lagret (färger, spacing, klasser)
+│  ├─ app/globals.css (@theme)   # token-lagret (färger, spacing, klasser)
 │  └─ public/brand/          # kommunens officiella logotyp
 └─ scripts/                  # fristående importskript (Python-stdlib)
 ```
@@ -183,3 +183,8 @@ bbb/
   Postgres i prod.
 - [`CLAUDE.md`](CLAUDE.md) — konventioner (svenskt UI, imperativ knapptext, token-regler, dataregel).
 - [`docs/BYGGPLAN.md`](docs/BYGGPLAN.md) — ursprunglig byggplan och roadmap.
+
+## Senaste produktinförande
+
+Jaris produktfunktioner är införda ovanpå kommunens SAML/OpenShift-bas. Etapper, verifiering,
+dataimporter och återtagning beskrivs i [docs/JARI_INFORANDE.md](docs/JARI_INFORANDE.md).

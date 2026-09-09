@@ -20,7 +20,7 @@ export function ImportForm() {
         </p>
         <input id="file" name="file" type="file" multiple required
           accept=".json,.csv,.txt" aria-describedby="import-help import-selection"
-          className="mt-16 block w-full rounded-4 text-small focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+          className="mt-16 block w-full rounded-4 text-small focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring"
           onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
         <p id="import-selection" aria-live="polite" className="mt-12 text-small text-dark-secondary">
           {tooLarge ? "Urvalet överstiger 100 filer eller 15 MB." : `${files.length} filer valda.`}

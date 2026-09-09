@@ -121,7 +121,7 @@ export function HmeNivaer({
               // Samma anatomi som KPI-korten högst upp på sidan — statusremsa, mjuk
               // statusyta, rubrik, tal — men i mindre skala och utan ikonbricka, så att de
               // läses som en nivå under och inte som ännu en rad huvudkort.
-              className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${st.soft} ${
+              className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${st.soft} ${
                 isSel ? "border-vattjom-surface-primary card-selected" : "border-hairline"
               }`}
             >

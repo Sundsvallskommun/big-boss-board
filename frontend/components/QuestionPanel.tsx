@@ -83,7 +83,7 @@ function StatusSektion({
                 onClick={() => setVal(v)}
                 /* Vald status fylls med sin egen färg — det är hela poängen: man ser
                    vilken färg kortet kommer att få innan man sparar. */
-                className={`inline-flex items-center justify-center gap-10 rounded-12 border-2 px-16 py-16 text-large font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                className={`inline-flex items-center justify-center gap-10 rounded-12 border-2 px-16 py-16 text-large font-semibold transition focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
                   active
                     ? `${os.solidAA} ${os.onSolid} border-transparent shadow-md`
                     : `${os.soft} ${os.text} border-transparent hover:border-current`
@@ -252,7 +252,7 @@ export function QuestionPanel({
   return (
     <section className="reveal divide-y divide-hairline overflow-hidden rounded-12 border border-hairline bg-background-content">
       {/* Panelhuvud — tonas av effektiv (värsta) status om satt, annars neutral vattjom-ton. */}
-      <div className={st ? `bg-gradient-to-b to-background-content ${st.gradient}` : "bg-vattjom-background-100"}>
+      <div className={st ? `bg-linear-to-b to-background-content ${st.gradient}` : "bg-vattjom-background-100"}>
         <div className="flex flex-wrap items-start justify-between gap-16 p-24 md:p-28">
           <div className="flex items-start gap-14">
             <span className="grid h-48 w-48 shrink-0 place-items-center rounded-12 border border-hairline bg-background-content text-vattjom-text-primary">
@@ -361,7 +361,7 @@ export function QuestionPanel({
                     role="tab"
                     aria-selected={active}
                     onClick={() => setAktivFlik(d.key)}
-                    className={`-mb-px inline-flex items-center gap-8 border-b-2 px-12 py-10 text-base font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${
+                    className={`-mb-px inline-flex items-center gap-8 border-b-2 px-12 py-10 text-base font-semibold transition focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${
                       active
                         ? "border-vattjom-surface-primary text-dark-primary"
                         : "border-transparent text-dark-secondary hover:text-dark-primary"

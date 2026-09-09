@@ -14,13 +14,12 @@ Frontend hämtar sitt **visuella grundintryck** från Sundsvalls kommuns profil 
 implementerar det i ett **eget, litet token-lager** — **inte** hela designsystemet.
 `@sk-web-gui` används **inte längre** (beslut: avkoppla beroendet, behåll utseendet).
 
-- **Tokens bor i två filer:** `frontend/tailwind.config.js` (färger, spacing, radie, typografi)
-  och `frontend/app/globals.css` (CSS-bas + komponentklasser `.eyebrow`, `.meter`, `.card-selected`).
-  Markupen använger token-utilities (`bg-background-content`, `text-dark-secondary`,
-  `vattjom-surface-primary` …) precis som förr — bara underlaget bytt.
-- **Hex hör hemma i token-filerna**, inte spridda i markup. Centralt: config + globals + de tre
+- **Tokens bor i `frontend/app/globals.css`:** Tailwind 4 `@theme` äger färger, spacing,
+  radie och typografi tillsammans med CSS-bas och komponentklasser. `tailwind.config.js`
+  är borttagen. Använd token-utilities i markup; `--spacing: 1px` behåller px-skalan.
+- **Hex hör hemma i token-filerna**, inte spridda i markup. Centralt: globals + de tre
   graf-filerna (`components/charts/*` har seriefärger som hex). Skriv aldrig nya hex i sid-markup —
-  använd en token-utility, lägg värdet i config om det saknas.
+  använd en token-utility, lägg värdet i globals.css om det saknas.
 - **Palett (ur kommunens profil):** vattjom-blå `#0055B8` (`vattjom-surface-primary`), blå text/ikon
   `#00427D` (`vattjom-text-primary`), ljus blå ton `#E6EEF7` (`vattjom-background-100`), ink `#1F1F25`
   (`dark-primary`), dämpad `#51515C` (`dark-secondary`), sidyta `#F0F0F0` (`background-200`), kort
@@ -30,9 +29,9 @@ implementerar det i ett **eget, litet token-lager** — **inte** hela designsyst
   gult — skilj "Bevaka" från rött), `status-alert #D32F2F`. Semantiska ytor: `success/warning/error`
   med `-text` och `-background-*`. Mappning i `components/status.ts`.
 - **Spacing/radie = px-lik skala (`token-N` = N px):** `p-16`=16px, `gap-12`=12px, `rounded-12`=12px,
-  `h-48`=48px. Genereras i config (`pxScale`), så vilken px-nivå som helst funkar. Roten är vanlig
+  `h-48`=48px. Spacing beräknas med `--spacing: 1px`; radier definieras uttryckligen i `@theme`. Roten är vanlig
   **16px** (inte SK:s 62.5%), så **typografi anges i absoluta px** — text-tokens (`text-small`,
-  `text-base`, `text-h1` …) definieras i `tailwind.config.js`, egna storlekar (t.ex. `.eyebrow`)
+  `text-base`, `text-h1` …) definieras i `globals.css`, egna storlekar (t.ex. `.eyebrow`)
   i `px` i `globals.css`.
 - **UI-primitiver:** lokala i `frontend/components/ui/` (`Button`, `Input`, `Textarea`,
   `FormControl`, `FormLabel`, `Logo`) via barrel `@/components/ui`. Stödjer de props appen använder
@@ -53,7 +52,7 @@ implementerar det i ett **eget, litet token-lager** — **inte** hela designsyst
 
 ## Stack
 
-- **Frontend:** Next.js 15 (App Router) + React 19 + TypeScript, Tailwind + eget token-lager
+- **Frontend:** Next.js 16 (App Router) + React 19 + TypeScript, Tailwind 4 + eget token-lager
   (se "Visuellt språk"). Standalone-output.
   Proxar `/api/*` → backend via `next.config` rewrites (en domän, inga CORS-bekymmer).
 - **Backend:** FastAPI + SQLAlchemy 2.0 + Pydantic v2 + Alembic. Uvicorn (Gunicorn i prod).
@@ -118,20 +117,28 @@ Modeller i `models.py`, migration `7a2b3c4d5e06_status_content.py`, logik i
 - **Ännu ej byggt:** inget webb-GUI för triage (sker via API/Codex); statuskort
   saknar ändringshistorik (`uppdaterad_at` räcker).
 
-## Ekonomi: månadsserie (hela året)
+## Produktfunktioner och importer (september 2026)
 
-Nettokostnadsdiagrammet (`components/charts/EkonomiNettokostnadChart`) ritar en **månadsserie**.
-Serien ligger i mätvärdets `details.serie` (per förvaltning) och byggs ur flera Qlik-CSV-uttag:
+Kommunens SAML/ADFS, sessioner, behörigheter och OpenShift-anpassningar är bevarade.
+Införande, källcommits, verifiering och återtagning: [`docs/JARI_INFORANDE.md`](docs/JARI_INFORANDE.md).
 
-- **Rapportperiod ≠ uttagsdatum.** CSV:ns `Period`-kolumn är månadsstängningen (t.ex. `2026-05-31`);
-  filnamnets datum (`kpidata_RR_2026-06-26`) är dagsuttaget. Flera dagsuttag per period — det
-  **sista** är mest komplett.
-- **Import:** `scripts/import_ekonomi_serie.py --dir ekonomi-indata --url <bas-url>` grupperar på
-  period, väljer senaste uttag per period och POSTar hela serien till `POST /api/import/ekonomi-serie`
-  (token-skyddad). Backend (`services/ekonomi_import.csvs_to_serie_payload`) sätter senaste perioden
-  som kortets huvudvärde och fyller `details.serie`. Enkelperiod-vägarna (`/ekonomi`, `/ekonomi-csv`,
-  seed) finns kvar; utan serie faller grafen tillbaka på senaste perioden.
-- **`ekonomi-indata/` versionshanteras aldrig** (gitignorerad, som HME/ekonomi-rådata).
+- Ekonomi visar **prognos minus helårsbudget**, beräknat av `services/ekonomi.py` vid
+  import och läsning (`MeasurementOut`). Saknad budget/prognos ger null i status/värde.
+  Månadsdiagrammet är `EkonomiDiffChart`; det gamla nettokostnadsdiagrammet är borttaget.
+- `POST /api/import/ekonomi-filer` tar namngivna CSV/TXT-uttag och väljer senaste ordinarie
+  uttag dag 1–9 månaden efter rapportperioden. Webb och CLI använder samma backendregel.
+  Enkelperiodimport bevarar historik och huvudvärdet vid äldre uttag. Explicit serieimport
+  ersätter serien. Dokumenterad aprilrättning ägs av `services/ekonomi.py`.
+- Sjukfrånvaro använder **R12**, kvartalstrend och uppskattad årskostnad. Backend avvisar
+  gammal/okänd personalexport. Äldre lagrade aggregat visas som "Inväntar R12".
+  `/api/import/sjukfranvaro-filer` normaliserar flera filer och bevarar historik.
+- HME har totalindex + motivation, ledarskap och styrning. `/api/import/hme-rapport` tar
+  totalindex och valfri separat delindexrapport; webb, CLI och seed delar normalisering.
+- Organisationsmastern skiljer förvaltningar från Stadsbacken/MRF. `dialogbaserad` är en
+  lista med KPI-nycklar som ska följas upp med organisationsspecifika frågor utan mätdata.
+- Frågor har valfri `rubrik` och `bygger_pa`; statusrapporter har valfri `aterstaende`.
+- Rådata versionshanteras fortfarande aldrig. Historiska rapporter i `docs/rapporter`
+  är märkta ögonblicksbilder och är inte aktuella produktvyer.
 
 ## Faser (bygg en i taget, commit + verifiering per fas)
 

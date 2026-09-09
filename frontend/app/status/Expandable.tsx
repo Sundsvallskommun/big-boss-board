@@ -31,7 +31,7 @@ export function Expandable({ paragraphs }: { paragraphs: string[] }) {
         aria-expanded={open}
         aria-controls={regionId}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-6 rounded-md text-small font-semibold text-vattjom-text-primary transition hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="inline-flex items-center gap-6 rounded-md text-small font-semibold text-vattjom-text-primary transition hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         <ChevronDown
           size={14}

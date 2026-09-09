@@ -116,7 +116,7 @@ export function InfoPopover({
           type="button"
           aria-label="Stäng"
           onClick={() => { setOpen(false); btnRef.current?.focus(); }}
-          className="-mr-1 -mt-1 ml-auto grid h-24 w-24 shrink-0 place-items-center rounded-md text-dark-secondary transition hover:text-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="-mr-1 -mt-1 ml-auto grid h-24 w-24 shrink-0 place-items-center rounded-md text-dark-secondary transition hover:text-dark-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <X size={16} aria-hidden="true" />
         </button>
@@ -135,7 +135,7 @@ export function InfoPopover({
         aria-haspopup="dialog"
         aria-controls={id}
         onClick={() => setOpen((o) => !o)}
-        className={`grid h-32 w-32 place-items-center rounded-full border transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+        className={`grid h-32 w-32 place-items-center rounded-full border transition focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
           open
             ? "border-vattjom-surface-primary bg-vattjom-background-100 text-vattjom-text-primary"
             : "border-hairline text-dark-secondary hover:border-vattjom-surface-primary hover:text-vattjom-text-primary"

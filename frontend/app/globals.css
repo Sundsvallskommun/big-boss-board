@@ -1,11 +1,117 @@
 /* Lättviktig CSS-bas i Sundsvalls visuella språk.
-   Tokens (färger/spacing/typografi) kommer från tailwind.config.js — ett eget,
-   litet lager i stället för @sk-web-gui-preseten. Inga designsystem-beroenden. */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+   Tokens (färger/spacing/typografi) bor här i @theme — Tailwind 4 konfigureras i CSS,
+   tailwind.config.js finns inte längre. Ett eget, litet lager i stället för
+   @sk-web-gui-preseten. Inga designsystem-beroenden. */
+@import "tailwindcss" source(none);
+@source ".";
+@source "../components";
+
+@theme {
+  /* --- Spacing: px-lik skala (token-N = N px) ---
+     Tailwind 4 räknar alla spacing-utilities som N × --spacing, så en enda rad ger hela
+     skalan: p-16 = 16px, gap-12 = 12px, h-48 = 48px, pb-96 = 96px, w-0.5 = 0.5px.
+     (I v3 genererades 400 explicita värden; det behövs inte längre.) Roten är vanlig
+     16px, så typografi anges i absoluta px nedan. */
+  --spacing: 1px;
+
+  /* --- Radie --- Tailwind 4 har ingen bar `rounded`; skalan är förskjuten ett steg
+     som i v4:s egen (v3 `rounded` = v4 `rounded-sm`): xs 4, sm 6, md 8, lg 12, xl 16.
+     Px-steg för de som används i markup — nya nivåer: lägg till en rad, eller rounded-[Npx]. */
+  --radius-*: initial;
+  --radius-none: 0px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+  --radius-4: 4px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-10: 10px;
+  --radius-12: 12px;
+  --radius-16: 16px;
+  --radius-20: 20px;
+  --radius-24: 24px;
+
+  /* --- Typsnitt --- Brödtext/fält/knappar = Arial (kommunens sans). Rubriker = Raleway.
+     Etiketter/mono = Geist Mono. (Raleway + Geist Mono laddas i layout.tsx.) */
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-header: Raleway, Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  /* --- Typografi: absoluta px, kalibrerade mot designsystemets typskala --- */
+  --text-small: 14px;
+  --text-small--line-height: 1.5;
+  --text-base: 16px;
+  --text-base--line-height: 1.55;
+  --text-large: 19px;
+  --text-large--line-height: 1.5;
+  --text-h4: 22px;
+  --text-h4--line-height: 1.3;
+  --text-h3: 28px;
+  --text-h3--line-height: 1.25;
+  --text-h2: 34px;
+  --text-h2--line-height: 1.2;
+  --text-h1: 42px;
+  --text-h1--line-height: 1.12;
+
+  /* --- Ytor --- */
+  --color-background-200: #f0f0f0; /* grå sidyta (gray.100) */
+  --color-background-content: #ffffff; /* vita kort */
+
+  /* --- Text-ink (gråskala ur kommunens palett) --- */
+  --color-dark-primary: #1f1f25; /* gray.900 */
+  --color-dark-secondary: #51515c; /* gray.600 — dämpad sekundärtext, AA mot vitt */
+
+  /* --- Linjer --- */
+  --color-hairline: #e5e5e5; /* gray.200, tunn kortram */
+  --color-divider: #b7b7ba; /* gray.300, tydligare avdelare */
+
+  /* --- Fokusring --- */
+  --color-ring: #0c8ced;
+
+  /* --- Vattjom (kommunens primära blå) --- */
+  --color-vattjom-surface-primary: #0055b8; /* ytor/ramar/fyllnad */
+  --color-vattjom-surface-primary-hover: #004a99; /* kommunens befintliga hover-token */
+  --color-vattjom-text-primary: #00427d; /* text/ikoner (mörkare → AA) */
+  --color-vattjom-background-100: #e6eef7; /* ljus blå ton */
+  --color-vattjom-background-50: #eaf3fd; /* ljusare OCH blåare — botten för bedömningsytan */
+
+  /* --- Funktionella status (semantiska ytor + text) --- */
+  --color-error: #971a1a;
+  --color-error-text: #971a1a;
+  --color-error-background-200: #f7e4e4;
+
+  --color-success: #1e8a4e;
+  --color-success-text: #1e6e40; /* mörkare grön text för AA */
+  --color-success-background-200: #e3f1e8;
+  --color-success-background-300: #cde6d6;
+
+  --color-warning: #8c3b12;
+  --color-warning-text: #8c3b12;
+  --color-warning-background-100: #fbede4;
+
+  /* --- Trafikljus (ljusa funktionella signaler) --- */
+  --color-status-good: #1e8a4e;
+  /* Djupare grön för fyllda ytor med vit text. #1E8A4E ger bara 4,37:1 mot vitt,
+     vilket klarar AA enbart som stor text; den här ger 5,16:1 vid alla storlekar. */
+  --color-status-good-deep: #1b7d46;
+  --color-status-warn: #eab308; /* medvetet rent gult (skilj "Bevaka" från rött) */
+  --color-status-alert: #d32f2f;
+}
 
 @layer base {
+  /* Tailwind 4 sätter ingen standardfärg på `border` (currentColor). v3 gav gray-200,
+     och markupen förlitar sig på det på några ställen — hårlinjen är samma nyans. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-hairline, currentcolor);
+  }
+
   html,
   body {
     /* Grå sidyta så vita kort (background-content) får djup. */
@@ -17,54 +123,60 @@
   }
 }
 
-@layer components {
-  /* Vit ikon-bricka på tonad yta: subtil inre ring i stället för tjock ram. */
-  .icon-chip {
-    box-shadow: 0 0 0 1px rgb(31 31 37 / 0.05);
-  }
+/* Komponentklasser. Tailwind 4:s @utility gör dem variant-bara (hover:eyebrow osv.)
+   och lägger dem i utilities-lagret, så de vinner över bas men förlorar mot en
+   explicit utility i samma element — samma ordning som förr. */
 
-  /* Valt KPI-kort: 1px blå kant + mjuk blå glow nedåt. */
-  .card-selected {
-    box-shadow:
-      0 0 0 1px #0055b8,
-      0 10px 28px -14px rgb(0 85 184 / 0.45);
-  }
+/* Vit ikon-bricka på tonad yta: subtil inre ring i stället för tjock ram. */
+@utility icon-chip {
+  box-shadow: 0 0 0 1px rgb(31 31 37 / 0.05);
+}
 
-  /* Etikett-stil: versal mono, dämpad textton. Absoluta px. */
-  .eyebrow {
-    font-family: "Geist Mono", ui-monospace, monospace;
-    @apply uppercase text-dark-secondary;
-    font-size: 10px;
-    letter-spacing: 0.18em;
-    line-height: 1.2;
-  }
-  .eyebrow-sm {
-    font-family: "Geist Mono", ui-monospace, monospace;
-    @apply uppercase text-dark-secondary;
-    font-size: 9px;
-    letter-spacing: 0.16em;
-    line-height: 1.2;
-  }
-  /* Beslutsinstans på status-sidan — medvetet större och tydligare. */
-  .beslutsinstans {
-    font-family: "Geist Mono", ui-monospace, monospace;
-    @apply uppercase font-semibold text-dark-primary;
-    font-size: 13px;
-    letter-spacing: 0.1em;
-    line-height: 1.35;
-  }
+/* Valt KPI-kort: 1px blå kant + mjuk blå glow nedåt. */
+@utility card-selected {
+  box-shadow:
+    0 0 0 1px #0055b8,
+    0 10px 28px -14px rgb(0 85 184 / 0.45);
+}
 
-  /* Mätarbar (bespoke) — värdebredd sätts inline. */
-  .meter {
-    @apply relative h-[7px] w-full overflow-visible rounded-full;
-    background-color: rgb(255 255 255 / 0.8);
-    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06);
-  }
-  .meter > .meter-fill {
+/* Etikett-stil: versal mono, dämpad textton. Absoluta px. */
+@utility eyebrow {
+  font-family: "Geist Mono", ui-monospace, monospace;
+  @apply uppercase text-dark-secondary;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  line-height: 1.2;
+}
+@utility eyebrow-sm {
+  font-family: "Geist Mono", ui-monospace, monospace;
+  @apply uppercase text-dark-secondary;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+}
+/* Beslutsinstans på status-sidan — medvetet större och tydligare. */
+@utility beslutsinstans {
+  font-family: "Geist Mono", ui-monospace, monospace;
+  @apply uppercase font-semibold text-dark-primary;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  line-height: 1.35;
+}
+
+/* Mätarbar (bespoke) — värdebredd sätts inline. */
+@utility meter {
+  @apply relative h-[7px] w-full overflow-visible rounded-full;
+  background-color: rgb(255 255 255 / 0.8);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06);
+}
+@utility meter-fill {
+  .meter > & {
     @apply h-full rounded-full;
   }
-  .meter > .meter-target {
-    @apply absolute rounded-sm bg-dark-primary;
+}
+@utility meter-target {
+  .meter > & {
+    @apply absolute rounded-xs bg-dark-primary;
     top: -3px;
     width: 2px;
     height: 13px;

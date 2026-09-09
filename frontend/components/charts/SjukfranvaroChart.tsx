@@ -4,7 +4,6 @@ import { useId } from "react";
 
 import {
   CartesianGrid,
-  Customized,
   Legend,
   Line,
   LineChart,
@@ -13,6 +12,10 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  useOffset,
+  usePlotArea,
+  useXAxisScale,
+  useYAxisScale,
 } from "recharts";
 
 /** En månadsstängning i sjukfrånvarodiagrammet (etiketten är redan formaterad, t.ex. "jul 26").
@@ -24,7 +27,7 @@ export interface SjukChartPunkt {
   man: number | null;
 }
 
-/** Färger i kommunens palett (samma tokens som tailwind.config).
+/** Färger i kommunens palett (samma tokens som globals.css).
  *
  *  **Färg betyder måluppfyllelse, inget annat.** Totalen ritas grön under målet och röd
  *  över det, och byter exakt vid mållinjen. Därför får könslinjerna inte bära kulör: det
@@ -57,17 +60,33 @@ const fmt = (v: number) => v.toFixed(1).replace(".", ",");
 
 type PrickProps = { cx?: number; cy?: number; index?: number };
 
-/** Recharts färdigräknade ritläge, som det skickas till <Customized>. Vi rör bara de
- *  redan uträknade punktpositionerna — då slipper vi räkna om skalorna på egen hand. */
-type RitlageProps = {
-  formattedGraphicalItems?: {
-    /** Line.getComposedData() returnerar bara {points, layout, offset} — dataKey finns
-     *  INTE här, utan på det ursprungliga <Line>-elementet i `item`. */
-    props?: { points?: { x?: number; y?: number; value?: number | null }[] };
-    item?: { props?: { dataKey?: string } };
-  }[];
-  offset?: { top?: number; left?: number; width?: number; height?: number };
-};
+type Punkt = { x: number; y: number; value: number };
+
+/** Punkternas pixellägen för en serie, räknade med diagrammets egna skalor.
+ *
+ *  Recharts 3 lämnar inte längre ut sina färdigräknade linjepunkter till egna lager
+ *  (2.x:s `formattedGraphicalItems` är borta). I stället exponeras skalorna som hooks,
+ *  och att köra samma skalor på samma data ger exakt de koordinater linjen ritas med.
+ *  Hål i serien (null) blir hål även här. */
+function seriePunkter(
+  data: SjukChartPunkt[],
+  key: keyof SjukChartPunkt,
+  xScale: ((v: string) => number | undefined) | undefined,
+  yScale: ((v: number) => number | undefined) | undefined,
+): (Punkt | null)[] {
+  if (!xScale || !yScale) return [];
+  // Kategoriaxeln i ett linjediagram är en punktskala; en bandskala (staplar) hade behövt
+  // halva bandbredden som förskjutning. Hanteras för säkerhets skull.
+  const band = (xScale as { bandwidth?: () => number }).bandwidth?.() ?? 0;
+  return data.map((d) => {
+    const v = d[key];
+    if (typeof v !== "number") return null;
+    const x = xScale(d.period);
+    const y = yScale(v);
+    if (x == null || y == null) return null;
+    return { x: x + band / 2, y, value: v };
+  });
+}
 
 const ETIKETT_AVSTAND = 13; // minsta lodräta luft mellan två etiketter, px
 const ETIKETT_LYFT = 10; // etikettens normalläge ovanför sin punkt, px
@@ -95,17 +114,20 @@ const ETIKETTSERIER = [
  *  Etiketterna bär textfärg, aldrig seriefärgen — identiteten kommer från den färgade
  *  punkten bredvid talet. Konturen i sidans ytfärg håller talet läsbart där det hamnar
  *  ovanpå en linje eller en hjälplinje. */
-function Direktetiketter({ formattedGraphicalItems, offset }: RitlageProps) {
+function Direktetiketter({ data }: { data: SjukChartPunkt[] }) {
+  const xScale = useXAxisScale();
+  const yScale = useYAxisScale();
+  const offset = useOffset();
+  const rityta = usePlotArea();
   const serier = ETIKETTSERIER.map((s) => ({
     ...s,
-    punkter:
-      formattedGraphicalItems?.find((i) => i.item?.props?.dataKey === s.key)?.props?.points ?? [],
+    punkter: seriePunkter(data, s.key, xScale, yScale),
   }));
   const antal = Math.max(...serier.map((s) => s.punkter.length), 0);
   if (antal === 0) return <g />;
 
   // Glesa ut hellre än att låta talen gå in i varandra på en smal panel.
-  const bredd = offset?.width ?? 0;
+  const bredd = rityta?.width ?? 0;
   const steg = bredd / Math.max(1, antal - 1) >= ETIKETT_BREDD ? 1 : 2;
   const topp = offset?.top ?? 0;
 
@@ -117,13 +139,11 @@ function Direktetiketter({ formattedGraphicalItems, offset }: RitlageProps) {
     // etikett hamnar närmare någon annans linje än sin egen.
     const punkterHar = serier
       .map((serie) => serie.punkter[i])
-      .filter((p): p is { x: number; y: number; value: number } =>
-        p != null && p.x != null && p.y != null && typeof p.value === "number",
-      );
+      .filter((p): p is Punkt => p != null);
 
     for (const serie of serier) {
       const punkt = serie.punkter[i];
-      if (!punkt || punkt.x == null || punkt.y == null || typeof punkt.value !== "number") continue;
+      if (!punkt) continue;
       const egenY = punkt.y;
       // Ovanför punkten är normalläget; under är reserven när det är trångt. Klamras mot
       // plottens överkant så att ett högt värde inte skjuter talet ur rutan.
@@ -178,22 +198,22 @@ function totalPunkt(data: SjukChartPunkt[], mal: number) {
  *  skiftet exakt på mållinjen — även mitt i ett segment där kurvan korsar den. Ett
  *  alternativ hade varit att dela serien i två, men då måste korsningspunkterna räknas
  *  fram för hand och varje hål i serien hanteras två gånger. */
-function malGradient(id: string, mal: number, ymax: number) {
-  return function Gradient({ offset }: RitlageProps) {
-    const topp = offset?.top ?? 0;
-    const hojd = offset?.height ?? 0;
-    if (!hojd) return <g />;
-    // Andel av ritytans höjd, uppifrån räknat, där målet ligger.
-    const brytning = Math.min(Math.max(1 - mal / ymax, 0), 1);
-    return (
-      <defs>
-        <linearGradient id={id} gradientUnits="userSpaceOnUse" x1={0} y1={topp} x2={0} y2={topp + hojd}>
-          <stop offset={brytning} stopColor={C.larm} />
-          <stop offset={brytning} stopColor={C.god} />
-        </linearGradient>
-      </defs>
-    );
-  };
+function MalGradient({ id, mal, ymax }: { id: string; mal: number; ymax: number }) {
+  const offset = useOffset();
+  const rityta = usePlotArea();
+  const topp = offset?.top ?? 0;
+  const hojd = rityta?.height ?? 0;
+  if (!hojd) return <g />;
+  // Andel av ritytans höjd, uppifrån räknat, där målet ligger.
+  const brytning = Math.min(Math.max(1 - mal / ymax, 0), 1);
+  return (
+    <defs>
+      <linearGradient id={id} gradientUnits="userSpaceOnUse" x1={0} y1={topp} x2={0} y2={topp + hojd}>
+        <stop offset={brytning} stopColor={C.larm} />
+        <stop offset={brytning} stopColor={C.god} />
+      </linearGradient>
+    </defs>
+  );
 }
 
 /** Egen legend. Totalens linje byter färg vid målet, så ett enda färgprov kan inte
@@ -270,10 +290,11 @@ export function SjukfranvaroChart({ data, mal }: { data: SjukChartPunkt[]; mal: 
       : "");
 
   return (
-    <div className="h-[360px] w-full" role="img" aria-label={sammanfattning}>
+    <div className="h-360 w-full" role="img" aria-label={sammanfattning}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 24, right: 40, bottom: 4, left: 0 }}>
-          <Customized component={malGradient(gradientId, mal, ymax)} />
+          {/* Recharts 3 ritar godtyckliga element direkt i diagrammet; 2.x krävde <Customized>. */}
+          <MalGradient id={gradientId} mal={mal} ymax={ymax} />
           <CartesianGrid vertical={false} stroke={C.grid} strokeDasharray="3 3" />
           <XAxis
             dataKey="period"
@@ -295,7 +316,7 @@ export function SjukfranvaroChart({ data, mal }: { data: SjukChartPunkt[]; mal: 
             width={40}
           />
           <Tooltip
-            formatter={(v: number, name) => [`${fmt(v)} %`, name]}
+            formatter={(v, name) => [typeof v === "number" ? `${fmt(v)} %` : "–", name]}
             labelFormatter={(l) => `${l} · rullande 12 månader`}
             contentStyle={{ borderRadius: 12, border: `1px solid ${C.grid}`, fontSize: 13 }}
           />
@@ -346,7 +367,7 @@ export function SjukfranvaroChart({ data, mal }: { data: SjukChartPunkt[]; mal: 
             connectNulls={false}
             isAnimationActive={false}
           />
-          <Customized component={Direktetiketter} />
+          <Direktetiketter data={data} />
         </LineChart>
       </ResponsiveContainer>
     </div>
