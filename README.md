@@ -26,7 +26,7 @@ Prototyp/designreferens: [`docs/uppfoljningsdialog.html`](docs/uppfoljningsdialo
 | **Frontend** | Next.js 16 (App Router) · React 19 · TypeScript · Tailwind 4 + ett eget litet token-lager (Sundsvalls visuella språk). Standalone-output. |
 | **Backend** | FastAPI · SQLAlchemy 2.0 (async) · Pydantic v2 · Alembic. Uvicorn-workers via Gunicorn. Alla endpoints under `/api`, OpenAPI på `/api/docs`. |
 | **Databas** | PostgreSQL 16 (namngiven volym, ej publik). |
-| **Infra** | Docker Compose via Dokploy + Traefik (TLS). Endast `frontend` exponeras publikt; den proxar `/api/*` → backend (en domän, inga CORS-bekymmer). |
+| **Infra** | OpenShift-anpassade containrar med kommunens SAML/Redis. Compose/Dokploy finns som separat körväg. Frontend proxar `/api/*` → backend. |
 
 > Obs: `@sk-web-gui` (Sundsvalls designsystem-paket) används **inte** — utseendet är
 > återskapat i ett eget token-lager. Se [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#visuellt-token-lager).
@@ -37,8 +37,8 @@ Prototyp/designreferens: [`docs/uppfoljningsdialog.html`](docs/uppfoljningsdialo
 vill köra en tjänst utanför Docker eller köra importskripten.)
 
 ```bash
-git clone git@github.com:jarikoponen/bbb.git
-cd bbb
+git clone https://github.com/Sundsvallskommun/big-boss-board.git
+cd big-boss-board
 cp .env.example .env          # sätt POSTGRES_PASSWORD (och matcha den i DATABASE_URL)
 # sätt även ACCESS_CODE, eller ALLOW_OPEN_ACCESS=true för en öppen lokal/demo-körning
 docker compose up --build
@@ -64,6 +64,12 @@ Dokploy kör) utan override-filen:
 docker compose -f docker-compose.yml up --build
 ```
 
+### Inloggning
+
+Kommunens SAML-läge styrs av `AUTH_MODE=saml`; sessioner och behörigheter ägs av
+backend. Se [SAML-kontraktet](docs/SAML_SSO_PLAN.md). Följande åtkomstkodsläge gäller
+lokal/demo-körning.
+
 ### Åtkomstkod
 
 Sätt `ACCESS_CODE` i `.env` för vanlig inloggning. `ADMIN_ACCESSCODE` ger dessutom
@@ -87,7 +93,7 @@ docker compose logs -f backend                                    # följ loggar
 | **Kör migrationer manuellt** | `docker compose exec backend alembic upgrade head` (alembic finns i imagen). |
 | **Lint (backend)** | Dev-verktygen ligger **inte** i runtime-imagen. Lokalt i `backend/` (venv): `pip install -e ".[dev]" && ruff check app`. |
 | **Typkontroll (frontend)** | Körs automatiskt av `next build` — `docker compose build frontend` failar på typfel. Manuellt: lokalt i `frontend/` med `npm install && npm run typecheck`. |
-| **Tester** | pytest är konfigurerat (`backend/pyproject.toml`, dev-deps) men ingen svit än; körs lokalt med `.[dev]` i en venv. |
+| **Tester** | Riktade pytest-prov i `backend/tests/` och Node-prov i `frontend/tests/`. Se arkitekturdokumentets testavsnitt. |
 | **Importera riktig data** | token-skyddade endpoints via skripten i [`scripts/`](scripts/) — se [Datainläsning](#datainläsning) nedan. |
 
 ## Datainläsning
@@ -142,7 +148,8 @@ kör appen vidare med fiktiva platshållar-mätvärden tills riktig data lästs 
 ```
 bbb/
 ├─ README.md                 # den här filen
-├─ CLAUDE.md                 # projektregler/konventioner (visuellt språk, dataregel, faser)
+├─ AGENTS.md                 # gemensamma projektregler/konventioner
+├─ CLAUDE.md                 # hänvisning till AGENTS.md
 ├─ docker-compose.yml        # produktionsstack (Dokploy) — inga publicerade portar
 ├─ docker-compose.override.yml  # endast lokalt: publicerar frontend-porten
 ├─ .env.example              # alla miljövariabler (kopiera till .env)
@@ -181,10 +188,12 @@ bbb/
 - [`docs/SAML_SSO_PLAN.md`](docs/SAML_SSO_PLAN.md) — plan för SAML/SSO, sessioner och gruppstyrning.
 - [`docs/EXTERNAL_DATABASE_PLAN.md`](docs/EXTERNAL_DATABASE_PLAN.md) — plan för extern intern
   Postgres i prod.
-- [`CLAUDE.md`](CLAUDE.md) — konventioner (svenskt UI, imperativ knapptext, token-regler, dataregel).
+- [`AGENTS.md`](AGENTS.md) — konventioner (svenskt UI, imperativ knapptext, token-regler, dataregel).
 - [`docs/BYGGPLAN.md`](docs/BYGGPLAN.md) — ursprunglig byggplan och roadmap.
 
-## Senaste produktinförande
+## Införande av uppdaterade nyckeltal
 
-Jaris produktfunktioner är införda ovanpå kommunens SAML/OpenShift-bas. Etapper, verifiering,
-dataimporter och återtagning beskrivs i [docs/JARI_INFORANDE.md](docs/JARI_INFORANDE.md).
+Budget–prognos, sjukfrånvaro R12, HME-delindex och organisationsspecifika frågor beskrivs
+med sina importkontrakt i [arkitekturen](docs/ARCHITECTURE.md#datainflöden).
+Migrationer, underlag och återställning beskrivs i
+[driftdokumentationen](docs/DEPLOY.md#införa-nyckeltalsuppdateringen).

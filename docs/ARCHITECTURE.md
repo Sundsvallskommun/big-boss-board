@@ -1,7 +1,7 @@
 # Arkitektur — Big Boss Board (bbb)
 
 Teknisk översikt för utvecklare. För att komma igång, se [`../README.md`](../README.md).
-För konventioner (visuellt språk, svenskt UI, dataregel), se [`../CLAUDE.md`](../CLAUDE.md).
+För konventioner (visuellt språk, svenskt UI, dataregel), se [`../AGENTS.md`](../AGENTS.md).
 
 ## Innehåll
 
@@ -19,7 +19,9 @@ För konventioner (visuellt språk, svenskt UI, dataregel), se [`../CLAUDE.md`](
 
 ## Systemöversikt
 
-Tre tjänster i en Docker Compose-stack. Endast **frontend** är publik; den proxar
+Kommunens drift använder OpenShift-anpassade containrar, SAML och Redis. Se
+[OpenShift-planen](OPENSHIFT_PROD_PLAN.md) och [SAML-kontraktet](SAML_SSO_PLAN.md).
+Nedanstående nätverksbild visar den separata Compose/Dokploy-körvägen med tre tjänster. Endast **frontend** är publik; den proxar
 `/api/*` vidare till backend, så allt ligger på en domän (inga CORS-bekymmer).
 
 ```
@@ -67,8 +69,8 @@ host-port för `frontend` (`FRONTEND_PORT`). Dokploy använder **enbart** `docke
   backend på det interna nätet (`BACKEND_INTERNAL_URL`, default `http://backend:8000`).
 - **Klient-anrop:** webbläsarens `fetch("/api/…")` går till frontend, som via
   `next.config` **rewrites** proxar `/api/*` → backend. Samma domän → inga CORS.
-- **Access-gate:** `frontend/middleware.ts` gatar sidor bakom en access-kaka
-  (`ACCESS_CODE`/`ADMIN_ACCESSCODE`). `/api/import/*` och `/api/admin/*` **undantas** —
+- **Access-gate:** `frontend/middleware.ts` kontrollerar SAML-sessionen via `/api/me`
+  i kommunens `AUTH_MODE=saml`. Åtkomstkakor används endast i `access_code`-läget. `/api/import/*` och `/api/admin/*` **undantas** —
   de är maskin-till-maskin och har egen token-auth (`IMPORT_TOKEN`). `/brand` (loggan)
   är också undantagen (publik).
 - **Robusthet:** `frontend/lib/api.ts` (`fetchJson`) har timeout + retry på server-fetchar;
@@ -94,7 +96,7 @@ Fristående:
 - **`dialogue`** = en uppföljning för en **förvaltning** (`organisation`) med en
   `ansvarig_chef` (`person`) och en `period`.
 - **`measurement`** = utfall för ett nyckeltal i en dialog (unik per `dialogue`+`kpi_area`).
-  Har `status` (good/warn/alert), värde/mål, trend och en fri `details`-JSON (t.ex. HME-serie,
+  Har `status` (good/warn/alert eller null när underlag saknas), värde/mål, trend och en fri `details`-JSON (t.ex. HME-serie,
   ekonomins månadsserie/resultaträkning, sjukfrånvarons köns-/ålders-nedbrytning).
 - **`area_status`** = manuellt satt status + kommentar för nyckeltal **utan** mätdata.
   **Append-only historik** — varje sparning är en ny rad; senaste raden gäller.
@@ -128,9 +130,9 @@ köra om. Skripten i [`../scripts/`](../scripts/) använder enbart Python-stdlib
 
 | Nyckeltal | Endpoint(s) | Skript | Källformat |
 | --- | --- | --- | --- |
-| HME | `POST /api/import/hme` | `import_hme.py` | JSON (officiell rapport); alt. fil-bootstrap via `HME_DATA_DIR` |
-| Ekonomi | `POST /api/import/ekonomi` · `/ekonomi-csv` · `/ekonomi-serie` | `import_ekonomi.py`, `import_ekonomi_serie.py` | Qlik-CSV (månadsserie ur flera dagsuttag) |
-| Sjukfrånvaro | `POST /api/import/sjukfranvaro-csv` | `import_sjukfranvaro.py` | Qlik personal-CSV (senaste uttag per period) |
+| HME | `POST /api/import/hme-rapport` (rapport + valfria delindex), `/hme` (normaliserat) | `import_hme.py` | JSON (officiell rapport); alt. fil-bootstrap via `HME_DATA_DIR` |
+| Ekonomi | `POST /api/import/ekonomi-filer` (webb/CLI), `/ekonomi`, `/ekonomi-csv`, `/ekonomi-serie` | `import_ekonomi.py`, `import_ekonomi_serie.py` | Qlik-CSV (månadsserie ur flera dagsuttag) |
+| Sjukfrånvaro | `POST /api/import/sjukfranvaro-filer` (webb/CLI), `/sjukfranvaro-csv` | `import_sjukfranvaro.py` | Qlik personal-CSV (senaste uttag per period) |
 
 ```bash
 # Exempel (kör mot lokal instans eller prod):
@@ -139,8 +141,37 @@ IMPORT_TOKEN=… python3 scripts/import_sjukfranvaro.py --dir sjukfranvaro-indat
 ```
 
 Nyckeln kopplas till rätt förvaltning via masterdata-koden (`organisation.kod` ↔ CSV:ns
-`Enhet`). Rapportperiod ≠ uttagsdatum: skripten väljer det **senaste/mest kompletta**
-dagsuttaget per period.
+`Enhet`). Backend äger normalisering och urval; skripten transporterar underlaget.
+
+- **Ekonomi:** prognos minus helårsbudget för nettokostnad `SK.EK.RR.005`, i mnkr.
+  `services/ekonomi.py` äger bedömningen vid både import och läsning. Negativ diff är
+  underskott. Noll eller saknad budget/prognos ger ingen bedömning. Filurvalet prioriterar
+  senaste uttag dag 1–9 månaden efter rapportperioden, annars senaste tillgängliga uttag.
+  Fil- och enkelperiodimport uppdaterar angivna månader och bevarar övrig historik samt
+  senaste huvudvärde. `/ekonomi-serie` är en uttrycklig ersättning av serien.
+  Varje förvaltnings senaste tillgängliga period används, även om den saknas i sista filen.
+  En tidsbegränsad aprilrättning för kod 24 fyller endast saknad prognos vid den dokumenterade
+  budgeten; ett faktiskt källvärde har företräde. Regeln och beslutskällan finns i `ekonomi.py`.
+- **Sjukfrånvaro:** R12, grön ≤6 %, gul >6–7,5 %, röd >7,5 % eller ökning >1,5
+  procentenheter på exakt tre månader. Gammalt aggregat blandas inte med R12 och visas
+  neutralt tills nytt underlag importerats. CSV-formatets personalmått `SK.P.AM.` används
+  som formatmarkör; kontrollera mot dataägaren att produktionsuttaget faktiskt avser R12.
+  Importerat personalantal används i kostnadsschablonen; saknat antal använder en daterad
+  reservtabell. Noll anställda ersätts aldrig med reservantal. Uppskattningen är
+  antal × R12-procent × 3 000 kr per år, inte bokförd kostnad eller säker besparing.
+- **HME:** total och delperspektiv har egna årsserier. Import av enbart totalen bevarar
+  befintliga perspektiv; en explicit tom perspektivkarta i `/hme` rensar dem. Årsangivelsen
+  på varje perspektivkort visar om underlaget är äldre än totalens. Helt undertryckta
+  enheter hoppas över och räknas i importresultatet.
+- **Importvalidering:** felaktiga datum, ogiltiga/icke-ändliga tal och andelar utanför
+  0–100 avvisas före skrivning. Filer kan skickas som CSV/TXT med BOM. Webbens och
+  flerfils-API:ts gräns är 100 filer och 15 MB totalt.
+- **Organisationer och frågor:** mastern skiljer förvaltning från bolag/förbund.
+  `dialogbaserad` anger vilka nyckeltal som följs upp med egna frågor; dessa ersätter
+  områdets allmänna frågor för just organisationen. Övriga frågor påverkas inte.
+  `rubrik` etiketterar frågan, `bygger_pa` anger enkätursprung.
+- **Statusrapporter:** `aterstaende` lagrar återstående aktiviteter, separat från `punkter`.
+  Befintligt publicerings-API äger både fälten.
 
 **Status-sidan** (`/status`) har egna vägar: en publik inkorg (`POST /api/submissions`,
 gatas av access-koden) och token-skyddad triage/publicering (`/api/admin/...`).
@@ -171,7 +202,7 @@ litet token-lager** — `@sk-web-gui` används inte. Tailwind 4-tokens och CSS-b
 Markupen använder token-utilities (`bg-background-content`, `text-dark-secondary`,
 `vattjom-surface-primary`, status-tokens via `components/status.ts`). **Skriv aldrig ny hex
 i sid-markup** — använd en token-utility, lägg värdet i globals.css om det saknas. Lokala
-UI-primitiver finns i `frontend/components/ui/`. Fullständiga regler i [`../CLAUDE.md`](../CLAUDE.md).
+UI-primitiver finns i `frontend/components/ui/`. Fullständiga regler i [`../AGENTS.md`](../AGENTS.md).
 
 ## Viktiga designbeslut & fallgropar
 
@@ -213,11 +244,21 @@ aldrig i repo.
 
 ## Tester
 
-pytest + pytest-asyncio + httpx är konfigurerade som dev-beroenden
-(`backend/pyproject.toml`, `asyncio_mode = "auto"`), men någon testsvit är **ännu inte
-påbörjad**.
+Riktade backendtester finns i `backend/tests/` (pytest, pytest-asyncio, httpx och
+SQLite i minnet för produktkontrakt). Frontendens `tests/` innehåller Node-prov av
+API-transport, import, komponentmarkup, tema och middleware. SQLite-proven ersätter
+inte migrationsprov med PostgreSQL; markupprov ersätter inte webbläsargranskning.
 
-Dev-verktygen (ruff, pytest) ligger **inte** i runtime-imagerna — kör dem lokalt med
-dev-beroendena installerade (`cd backend && pip install -e ".[dev]"`, sedan `ruff check app`
-/ `pytest`). Frontendens lint + typecheck körs automatiskt av `next build` (dvs
-`docker compose build frontend` failar på fel); manuellt via `npm run typecheck` lokalt.
+Dev-verktyg installeras lokalt via backendens `.[dev]` och frontendens `npm ci`.
+Typkontroll: `frontend/node_modules/.bin/tsc --noEmit --incremental false -p frontend/tsconfig.json`.
+Riktade prov från reporoten:
+
+```sh
+backend/.venv/bin/python -m pytest backend/tests/test_ekonomi_import.py backend/tests/test_product_imports.py -q
+node --experimental-transform-types --test --test-concurrency=1 frontend/tests/product.test.mjs
+node --test --test-concurrency=1 frontend/tests/review.test.cjs frontend/tests/middleware.test.cjs frontend/tests/theme.test.mjs
+```
+
+På utvecklings-Macen körs varje test, typkontroll, installation och bygge genom den
+globala resurssupervisorn enligt arbetsmiljöns instruktioner. Fullständiga byggen,
+serverstarter och webbläsartester körs endast efter uttrycklig begäran.

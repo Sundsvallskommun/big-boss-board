@@ -5,7 +5,8 @@ Publik domän: `bbb.sundsvall.dev`. Produkten är ett **dialogstöd för chefsup
 en chef går igenom nyckeltal område för område med en underställd chef och fångar
 överenskommelser direkt i samtalet.
 
-Den fullständiga byggplanen finns i [`docs/BYGGPLAN.md`](docs/BYGGPLAN.md).
+Aktuell arkitektur finns i [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Den ursprungliga byggplanen finns i [`docs/BYGGPLAN.md`](docs/BYGGPLAN.md).
 Designreferens/prototyp: [`docs/uppfoljningsdialog.html`](docs/uppfoljningsdialog.html).
 
 ## Visuellt språk (eget lättviktslager)
@@ -58,7 +59,8 @@ implementerar det i ett **eget, litet token-lager** — **inte** hela designsyst
 - **Backend:** FastAPI + SQLAlchemy 2.0 + Pydantic v2 + Alembic. Uvicorn (Gunicorn i prod).
   Alla endpoints under prefix `/api`. OpenAPI på `/api/docs`.
 - **Databas:** PostgreSQL 16. Namngiven volym, ej publik. Migrationer + idempotent seed vid deploy.
-- **Infra:** Docker Compose via Dokploy + Traefik (TLS). Endast `frontend` exponeras publikt.
+- **Infra:** kommunen använder OpenShift-anpassade containrar och SAML/Redis.
+  Compose/Dokploy finns kvar som separat körväg. Endast `frontend` exponeras publikt.
 
 ## Dataregel (viktig)
 
@@ -120,14 +122,15 @@ Modeller i `models.py`, migration `7a2b3c4d5e06_status_content.py`, logik i
 ## Produktfunktioner och importer (september 2026)
 
 Kommunens SAML/ADFS, sessioner, behörigheter och OpenShift-anpassningar är bevarade.
-Införande, källcommits, verifiering och återtagning: [`docs/JARI_INFORANDE.md`](docs/JARI_INFORANDE.md).
+Importkontrakt: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#datainflöden).
+Införande och återställning: [`docs/DEPLOY.md`](docs/DEPLOY.md#införa-nyckeltalsuppdateringen).
 
 - Ekonomi visar **prognos minus helårsbudget**, beräknat av `services/ekonomi.py` vid
   import och läsning (`MeasurementOut`). Saknad budget/prognos ger null i status/värde.
   Månadsdiagrammet är `EkonomiDiffChart`; det gamla nettokostnadsdiagrammet är borttaget.
 - `POST /api/import/ekonomi-filer` tar namngivna CSV/TXT-uttag och väljer senaste ordinarie
   uttag dag 1–9 månaden efter rapportperioden. Webb och CLI använder samma backendregel.
-  Enkelperiodimport bevarar historik och huvudvärdet vid äldre uttag. Explicit serieimport
+  Fil- och enkelperiodimport bevarar historik och huvudvärdet vid äldre uttag. Explicit serieimport
   ersätter serien. Dokumenterad aprilrättning ägs av `services/ekonomi.py`.
 - Sjukfrånvaro använder **R12**, kvartalstrend och uppskattad årskostnad. Backend avvisar
   gammal/okänd personalexport. Äldre lagrade aggregat visas som "Inväntar R12".
@@ -137,8 +140,36 @@ Införande, källcommits, verifiering och återtagning: [`docs/JARI_INFORANDE.md
 - Organisationsmastern skiljer förvaltningar från Stadsbacken/MRF. `dialogbaserad` är en
   lista med KPI-nycklar som ska följas upp med organisationsspecifika frågor utan mätdata.
 - Frågor har valfri `rubrik` och `bygger_pa`; statusrapporter har valfri `aterstaende`.
-- Rådata versionshanteras fortfarande aldrig. Historiska rapporter i `docs/rapporter`
-  är märkta ögonblicksbilder och är inte aktuella produktvyer.
+- Rådata versionshanteras aldrig. Undvik statiska rapportkopior och separata metadatafiler
+  som dubblerar appens datakontrakt.
+
+## Inloggning (AUTH_MODE: access_code | saml)
+
+Två lägen, valt med `AUTH_MODE` (frontend-middleware och backend läser samma variabel):
+
+- **access_code** (default): stubben — `ACCESS_CODE`/`ADMIN_ACCESSCODE`, cookie `bbb_access`,
+  gating i `frontend/middleware.ts`.
+- **saml**: backend äger SAML mot kommunens IdP (draken-mönstret, portat till FastAPI +
+  **python3-saml** — inte pysaml2, som saknar knappar för test-IdP:ns kvirkar; se
+  `docs/SAML_SSO_PLAN.md`). Kod i `backend/app/auth/`: `router.py` (`/api/auth/saml/
+  {login,callback,metadata,logout,logout/callback}` + `/api/me`), `sessions.py`
+  (session-id i HMAC-signerad cookie `bbb_session`; data i Redis — utan `REDIS_HOST`
+  minnesstore, endast lokalt med `WEB_CONCURRENCY=1`; satt-men-onåbar Redis = vägrad
+  start), `claims.py` (ADFS/Onegate-dubbelmappning, grupper → roll `admin`/`user`),
+	  `redirects.py` (RelayState/origin-validering), `saml.py` (`SAML_STRICT=true` i drift,
+	  signerad assertion krävs som standard; toleransläge används endast mot test-IdP; IdP beskrivs av
+  `SAML_ENTRY_SSO`/`SAML_IDP_ENTITY_ID`/`SAML_IDP_PUBLIC_CERT`). Utloggning: avatar-menyn
+  i headern (`components/UserMenu` + server-wrapper `UserBadge`, initial-avatar i
+  `ui/Avatar` — shadcn-mönstret i eget token-lager, INTE shadcn/Radix som beroende)
+  → `/api/auth/saml/logout` som rensar sessionen lokalt och, om `SAML_IDP_LOGOUT_URL`
+  är satt, även IdP-sessionen (test-IdP:ns `/logout?RelayState=` — den kan inte parsa
+  riktiga SLO-requests). Frontend-middleware validerar
+  sessionen mot `/api/me`; `isAdmin()` läser rollen därifrån; login-sidan visar
+  SAML-knapp och `?failMessage=<KOD>`-fel. Env-namnen följer draken (se `.env.example`)
+  så OpenShift-secrets kan återanvändas. `IMPORT_TOKEN`-spåret är oförändrat och skilt
+  från användarauth i båda lägena. Tester i `backend/tests/`. Plan: `docs/SAML_SSO_PLAN.md`.
+  WSO2-tokentjänsten (OAuth2 client credentials, Redis-cachad) ligger vilande i
+  `app/services/gateway_token.py`.
 
 ## Faser (bygg en i taget, commit + verifiering per fas)
 
@@ -156,5 +187,5 @@ ikon-knappar, `prefers-reduced-motion`, kontrast ≥4.5:1. Verifiera med axe/Lig
 
 ## Konventioner
 
-- Hemligheter aldrig i repo — bara i Dokploy. Se `.env.example` för nycklar.
+- Hemligheter aldrig i repo — de ägs av driftmiljön. Se `.env.example` för nycklar.
 - Interna tjänster (backend, db) får inga publika portar.
