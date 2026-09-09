@@ -18,6 +18,12 @@ export interface StatusTokens {
   stroke: string;
   /** Färgvärde för <Icon color>. */
   iconColor: "success" | "warning" | "error";
+  /** Fylld yta när text ska ligga ovanpå och klara AA i alla textstorlekar. Skiljer sig
+   *  från `solid` bara för grönt, som annars är för ljust mot vit text. */
+  solidAA: string;
+  /** Textfärg att använda OVANPÅ `solid`. Gult är för ljust för vit text — det behöver
+   *  mörk ink för att klara kontrastkravet, medan grönt och rött klarar vitt. */
+  onSolid: string;
   /** Legendtext i interface-rösten. */
   legend: string;
 }
@@ -32,6 +38,8 @@ export const STATUS: Record<Status, StatusTokens> = {
     border: "border-success",
     stroke: "stroke-status-good",
     iconColor: "success",
+    solidAA: "bg-status-good-deep",
+    onSolid: "text-white",
     legend: "Över mål",
   },
   warn: {
@@ -43,6 +51,8 @@ export const STATUS: Record<Status, StatusTokens> = {
     border: "border-warning",
     stroke: "stroke-status-warn",
     iconColor: "warning",
+    solidAA: "bg-status-warn",
+    onSolid: "text-dark-primary",
     legend: "Bevaka",
   },
   alert: {
@@ -54,9 +64,34 @@ export const STATUS: Record<Status, StatusTokens> = {
     border: "border-error",
     stroke: "stroke-status-alert",
     iconColor: "error",
+    solidAA: "bg-status-alert",
+    onSolid: "text-white",
     legend: "Åtgärd krävs",
   },
 };
+
+/** Neutral tokenuppsättning — inget besked, varken bra eller dåligt.
+ *  Ligger avsiktligt UTANFÖR `STATUS` (som är uttömmande över `Status`), så övriga
+ *  nyckeltal fortsätter ha exakt tre nivåer. Används bara av ekonomikortet när ingen
+ *  helårsprognos finns att jämföra med. */
+export const NEUTRAL: StatusTokens = {
+  solid: "bg-divider",
+  solidText: "text-dark-secondary",
+  soft: "bg-background-200",
+  text: "text-dark-secondary",
+  gradient: "from-background-200",
+  border: "border-hairline",
+  stroke: "stroke-divider",
+  iconColor: "warning", // används inte i ekonomivägen; fältet är typat som semantiskt
+  solidAA: "bg-divider",
+  onSolid: "text-dark-primary", // grå yta → mörk ink
+  legend: "Ingen bedömning",
+};
+
+/** Mätvärdets bedömning ägs av API:t. null betyder att underlag saknas. */
+export function measurementTokens(status: Status | null): StatusTokens {
+  return status ? STATUS[status] : NEUTRAL;
+}
 
 /** En underdimension för ett nyckeltal vars manuella status delas i flikar (BYGGPLAN §16). */
 export interface StatusDimension {

@@ -3,7 +3,12 @@ import { STATUS } from "./status";
 
 /** Färgnivåerna för sjukfrånvaro (tröskelvärden). Visas i en popover bakom i-ikonen
  *  i dialogpanelen. Måste hållas i synk med backends sjukfranvaro_status()
- *  (SJUK_MAL = 6,0 · gul-tak = 7,5 · kvartalslarm = 1,5). */
+ *  (SJUK_MAL = 6,0 · gul-tak = 7,5 · kvartalslarm = 1,5).
+ *
+ *  Kvartalsregeln blev mätbar först med den rullande 12-månadersserien: den jämför
+ *  nuvarande R12-värde med värdet tre månadsstängningar bakåt. Eftersom ett R12-värde
+ *  bara rör sig en tolftedel per månad är 1,5 procentenheter på ett kvartal ett stort
+ *  skifte, inte brus. Saknas en punkt exakt tre månader bakåt larmar regeln inte alls. */
 const NIVAER: { status: Status; namn: string; trosk: string; text: string }[] = [
   {
     status: "good",
@@ -28,7 +33,9 @@ const NIVAER: { status: Status; namn: string; trosk: string; text: string }[] = 
 export function SjukfranvaroNivaer() {
   return (
     <>
-      <p>Färgen sätts av sjukfrånvarons nivå (lägre är bättre):</p>
+      <p>
+        Färgen sätts av sjukfrånvarons nivå rullande 12 månader (lägre är bättre):
+      </p>
       <ul className="space-y-10">
         {NIVAER.map((n) => (
           <li key={n.status}>
@@ -44,6 +51,12 @@ export function SjukfranvaroNivaer() {
           </li>
         ))}
       </ul>
+      <p className="text-dark-secondary">
+        Kvartalsökningen mäts mellan två rullande 12-månadersvärden tre månader isär. Ett
+        sådant värde rör sig bara en tolftedel per månad, så 1,5 procentenheter på ett
+        kvartal är ett verkligt skifte — rött kan därför sättas av takten även när nivån i
+        sig ser godtagbar ut.
+      </p>
     </>
   );
 }

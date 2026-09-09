@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { History, MessagesSquare, SlidersHorizontal } from "lucide-react";
+import { Check, History, MessagesSquare, Quote, SlidersHorizontal } from "lucide-react";
 import type { AreaStatus, DialogueArea, Status } from "@/lib/api";
 import { areaIcon } from "./icons";
 import { STATUS, type StatusDimension, kortStatus, senastePerDimension } from "./status";
@@ -52,56 +52,123 @@ function StatusSektion({
     }
   }
 
+  const vald = val ? STATUS[val] : null;
+
   return (
     <div>
-      <div role="radiogroup" aria-label="Status" className="flex flex-wrap gap-8">
-        {STATUS_VAL.map((v) => {
-          const os = STATUS[v];
-          const active = val === v;
-          return (
-            <button
-              key={v}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => setVal(v)}
-              className={`inline-flex items-center gap-10 rounded-12 border px-20 py-14 text-large font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-                active
-                  ? `${os.soft} ${os.border} ${os.text} ring-1 ring-inset ring-current`
-                  : "border-hairline text-dark-secondary hover:border-dark-primary"
-              }`}
-            >
-              <span className={`inline-block h-14 w-14 rounded-full ${os.solid}`} aria-hidden="true" />
-              {os.legend}
-            </button>
-          );
-        })}
+      {/* Arbetsytan ligger vit mot sektionens ljusblå botten, så det syns var man gör
+          något. Stegnumren speglar frågelistan ovanför: välj, motivera, spara. */}
+      <div
+        className={`rounded-12 border bg-background-content p-20 transition md:p-24 ${
+          vald ? vald.border : "border-hairline"
+        }`}
+      >
+        <div className="flex items-center gap-10">
+          <span className="grid h-24 w-24 shrink-0 place-items-center rounded-full bg-vattjom-background-100 font-header text-[12px] font-bold text-vattjom-text-primary">
+            1
+          </span>
+          <span className="eyebrow">Välj status</span>
+        </div>
+
+        <div role="radiogroup" aria-label="Status" className="mt-12 grid gap-10 sm:grid-cols-3">
+          {STATUS_VAL.map((v) => {
+            const os = STATUS[v];
+            const active = val === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => setVal(v)}
+                /* Vald status fylls med sin egen färg — det är hela poängen: man ser
+                   vilken färg kortet kommer att få innan man sparar. */
+                className={`inline-flex items-center justify-center gap-10 rounded-12 border-2 px-16 py-16 text-large font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                  active
+                    ? `${os.solidAA} ${os.onSolid} border-transparent shadow-md`
+                    : `${os.soft} ${os.text} border-transparent hover:border-current`
+                }`}
+              >
+                {/* Vald status fylls helt; ovald bär samma färg i mjuk ton. Bocken gör
+                    valet läsbart utan att förlita sig på färgen ensam. */}
+                {active ? (
+                  <Check size={18} strokeWidth={3} className="shrink-0" aria-hidden="true" />
+                ) : (
+                  <span
+                    className="inline-block h-14 w-14 shrink-0 rounded-full bg-current"
+                    aria-hidden="true"
+                  />
+                )}
+                {os.legend}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-20 flex items-center gap-10">
+          <span className="grid h-24 w-24 shrink-0 place-items-center rounded-full bg-vattjom-background-100 font-header text-[12px] font-bold text-vattjom-text-primary">
+            2
+          </span>
+          <span className="eyebrow">Motivera kort</span>
+        </div>
+
+        <FormControl className="mt-12 w-full">
+          <FormLabel htmlFor={`kommentar-${uid}`}>
+            {vald ? (
+              <span className="inline-flex items-center gap-8">
+                Varför
+                <span
+                  className={`inline-flex items-center gap-6 rounded-full px-10 py-2 text-small font-semibold ${vald.soft} ${vald.text}`}
+                >
+                  <span className={`inline-block h-8 w-8 rounded-full ${vald.solid}`} aria-hidden="true" />
+                  {vald.legend}
+                </span>
+                ?
+              </span>
+            ) : (
+              "Vad i dialogen ligger bakom bedömningen?"
+            )}
+          </FormLabel>
+          <Textarea
+            id={`kommentar-${uid}`}
+            value={kommentar}
+            onChange={(e) => setKommentar(e.target.value)}
+            maxLength={2000}
+            rows={3}
+            placeholder="Kort motivering till statusen…"
+          />
+        </FormControl>
+
+        {feedback && (
+          <p
+            role={feedback.kind === "err" ? "alert" : "status"}
+            className={`mt-12 rounded-8 px-12 py-8 text-small ${
+              feedback.kind === "err"
+                ? "bg-error-background-200 text-error-text"
+                : "bg-success-background-200 text-success-text"
+            }`}
+          >
+            {feedback.msg}
+          </p>
+        )}
+
+        <div className="mt-20 flex flex-wrap items-center gap-x-16 gap-y-10 border-t border-hairline pt-16">
+          <Button variant="primary" loading={busy} onClick={spara}>
+            Spara status
+          </Button>
+          <p className="text-small text-dark-secondary">
+            {vald ? (
+              <>
+                Kortet får färgen{" "}
+                <b className={vald.text}>{vald.legend.toLowerCase()}</b> och sparningen läggs
+                till i historiken.
+              </>
+            ) : (
+              "Sparningen läggs till i historiken — inget skrivs över."
+            )}
+          </p>
+        </div>
       </div>
-
-      <FormControl className="mt-16 w-full">
-        <FormLabel htmlFor={`kommentar-${uid}`}>Kommentar — varför denna status?</FormLabel>
-        <Textarea
-          id={`kommentar-${uid}`}
-          value={kommentar}
-          onChange={(e) => setKommentar(e.target.value)}
-          maxLength={2000}
-          rows={3}
-          placeholder="Kort motivering till statusen…"
-        />
-      </FormControl>
-
-      {feedback && (
-        <p
-          role={feedback.kind === "err" ? "alert" : "status"}
-          className={`mt-12 text-small ${feedback.kind === "err" ? "text-error" : "text-success-text"}`}
-        >
-          {feedback.msg}
-        </p>
-      )}
-
-      <Button className="mt-16" variant="primary" loading={busy} onClick={spara}>
-        Spara status
-      </Button>
 
       {historik.length > 0 && (
         <div className="mt-24">
@@ -117,7 +184,9 @@ function StatusSektion({
                 <li
                   key={h.id}
                   className={`rounded-12 border p-16 ${
-                    isSenaste ? `${hs.soft} ${hs.border}` : "border-hairline bg-background-content"
+                    isSenaste
+                      ? `${hs.soft} ${hs.border}`
+                      : "border-hairline bg-background-content"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-8">
@@ -218,16 +287,43 @@ export function QuestionPanel({
           Frågor att ha dialog kring
         </h3>
         {fragor.length > 0 ? (
-          <ol className="flex flex-col gap-12">
+          /* Kortet är ett samtalsunderlag, inte en checklista. Frågorna hålls ihop av en
+             genomgående linje i stället för en ram per fråga: fyra accentkanter blev ett
+             mönster snarare än en accent. Linjen ligger i nummerkolumnen som ett
+             flex-syskon och sträcks av innehållet, så den träffar alltid nästa nummer.
+             Färgen finns kvar men bara i siffrorna. */
+          <ol className="flex flex-col">
             {fragor.map((q, i) => (
-              <li
-                key={q.id}
-                className="flex items-start gap-14 rounded-12 border border-hairline bg-background-content p-16"
-              >
-                <span className="grid h-28 w-28 shrink-0 place-items-center rounded-full bg-vattjom-background-100 text-small font-semibold text-vattjom-text-primary">
-                  {i + 1}
-                </span>
-                <p className="text-base leading-relaxed text-dark-primary">{q.text}</p>
+              <li key={q.id} className="flex gap-16">
+                <div className="flex shrink-0 flex-col items-center">
+                  <span className="grid h-32 w-32 place-items-center rounded-full bg-vattjom-surface-primary font-header text-small font-bold text-white">
+                    {i + 1}
+                  </span>
+                  {i < fragor.length - 1 && (
+                    <span className="my-8 w-2 flex-1 rounded-full bg-hairline" aria-hidden="true" />
+                  )}
+                </div>
+
+                <div className={`min-w-0 flex-1 pt-4 ${i < fragor.length - 1 ? "pb-24" : ""}`}>
+                  {/* Rubriken säger vad frågan handlar om och står över den, medan
+                      "Bygger på" står under — två olika sorters stöd, olika tyngd. */}
+                  {q.rubrik && (
+                    <p className="eyebrow-sm mb-4 text-vattjom-text-primary">{q.rubrik}</p>
+                  )}
+                  <p className="text-base font-semibold leading-relaxed text-dark-primary">
+                    {q.text}
+                  </p>
+
+                  {q.bygger_pa && (
+                    <p className="mt-10 flex gap-8 text-small leading-relaxed text-dark-secondary">
+                      <Quote size={13} className="mt-4 shrink-0 text-divider" aria-hidden="true" />
+                      <span>
+                        <span className="eyebrow-sm">Bygger på</span>{" "}
+                        <span className="italic">”{q.bygger_pa}”</span>
+                      </span>
+                    </p>
+                  )}
+                </div>
               </li>
             ))}
           </ol>
@@ -238,8 +334,10 @@ export function QuestionPanel({
         )}
       </div>
 
-      {/* Manuell status — en sektion, eller flikar per dimension (Verksamhet) */}
-      <div className="p-24 md:p-28">
+      {/* Manuell status — en sektion, eller flikar per dimension (Verksamhet).
+          Ljusblå botten skiljer bedömningen från frågorna ovanför: det är två olika
+          moment, att prata och att sätta betyg. */}
+      <div className="bg-vattjom-background-50 p-24 md:p-28">
         <h3 className="eyebrow mb-4 flex items-center gap-8">
           <SlidersHorizontal size={14} aria-hidden="true" />
           Sätt status för området
@@ -251,7 +349,7 @@ export function QuestionPanel({
 
         {dimensions ? (
           <>
-            <div role="tablist" aria-label="Statusdimensioner" className="mb-20 flex flex-wrap gap-4 border-b border-hairline">
+            <div role="tablist" aria-label="Statusdimensioner" className="mb-20 flex flex-wrap gap-4 border-b border-divider">
               {dimensions.map((d) => {
                 const ds = senastePerDimension(historik, d.key);
                 const dcol = ds ? STATUS[ds.status] : null;

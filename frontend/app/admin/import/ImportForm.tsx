@@ -6,126 +6,28 @@ import { UploadCloud, CheckCircle2, AlertTriangle } from "lucide-react";
 import { STATUS } from "@/components/status";
 import { importData, type ImportState } from "./actions";
 
-type Preview =
-  | { kind: "hme" | "ekonomi" | "sjukfranvaro"; count: number; info: string }
-  | { error: string }
-  | null;
-
-type JsonObject = Record<string, unknown>;
-
-function isObject(value: unknown): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-const KIND_ETIKETT: Record<"hme" | "ekonomi" | "sjukfranvaro", string> = {
-  hme: "HME",
-  ekonomi: "Ekonomi",
-  sjukfranvaro: "Sjukfrånvaro",
-};
-
-function previewOf(text: string): Preview {
-  // Ekonomi CSV (Qlik-export): Period,Enhet,Mått,Kolumn,Mätvärde (ev. BOM).
-  if (/^﻿?Period,Enhet,M/.test(text)) {
-    const lines = text.split(/\r?\n/).filter((l) => l.trim());
-    const enheter = new Set<string>();
-    let period = "";
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(",");
-      const kod = (cols[1] ?? "").trim();
-      if (kod && kod !== "13") enheter.add(kod);
-      if (!period) period = (cols[0] ?? "").trim();
-    }
-    if (enheter.size === 0) return { error: "Hittar inga enheter i CSV-filen." };
-    const kind = /SK\.P\./.test(text) ? "sjukfranvaro" : "ekonomi";
-    return { kind, count: enheter.size, info: period ? `period ${period} · CSV` : "CSV" };
-  }
-  try {
-    const d = JSON.parse(text) as unknown;
-    if (!isObject(d)) return { error: "JSON-filen måste innehålla ett objekt." };
-    // Ekonomi: rå rapport med poster/dataset.
-    if (Array.isArray(d.poster) || d.dataset) {
-      const metadata = isObject(d.metadata) ? d.metadata : {};
-      const dataset = isObject(d.dataset) ? d.dataset : {};
-      const enheter = asArray(metadata.enheter)
-        .filter(isObject)
-        .filter((e) => e.niva === "förvaltning");
-      const period = typeof dataset.period === "string" ? dataset.period : "";
-      return { kind: "ekonomi", count: enheter.length, info: period ? `period ${period}` : "ekonomi" };
-    }
-    // HME: dimensioner eller redan normaliserad forvaltningar.
-    const dimensioner = isObject(d.dimensioner) ? d.dimensioner : {};
-    const forv = Array.isArray(d.forvaltningar)
-      ? d.forvaltningar
-      : asArray(dimensioner["Enhet"] ?? dimensioner["Förvaltning"]);
-    if (!Array.isArray(forv) || forv.length === 0) return { error: "Hittar inga förvaltningar i filen." };
-    const ar = new Set<string>();
-    for (const f of forv) {
-      if (!isObject(f)) continue;
-      for (const y of Object.keys(isObject(f.matningar) ? f.matningar : {})) ar.add(y);
-    }
-    const sorted = [...ar].sort();
-    const span = sorted.length ? `${sorted[0]}–${sorted[sorted.length - 1]}` : "–";
-    return { kind: "hme", count: forv.length, info: `år ${span}` };
-  } catch {
-    return { error: "Filen är varken giltig JSON eller CSV." };
-  }
-}
-
 export function ImportForm() {
   const [state, formAction, pending] = useActionState(importData, {} as ImportState);
-  const [preview, setPreview] = useState<Preview>(null);
-
+  const [files, setFiles] = useState<File[]>([]);
+  const tooLarge = files.length > 100 || files.reduce((sum, f) => sum + f.size, 0) > 15_000_000;
   return (
     <form action={formAction} className="space-y-16">
-      <div>
-        <label
-          htmlFor="file"
-          className="flex cursor-pointer flex-col items-center gap-8 rounded-12 border border-dashed border-hairline bg-background-200 px-16 py-32 text-center transition hover:border-vattjom-surface-primary"
-        >
-          <UploadCloud size={28} className="text-vattjom-text-primary" aria-hidden="true" />
-          <span className="text-base font-semibold">Välj datafil (JSON eller CSV)</span>
-          <span className="text-small text-dark-secondary">
-            HME-totalindex (JSON) eller ekonomi (JSON/CSV) — typen känns igen automatiskt
-          </span>
-        </label>
-        <input
-          id="file"
-          name="file"
-          type="file"
-          accept="application/json,.json,text/csv,.csv"
-          required
-          className="sr-only"
-          onChange={async (e) => {
-            const f = e.target.files?.[0];
-            setPreview(f ? previewOf(await f.text()) : null);
-          }}
-        />
-      </div>
-
-      {preview && (
-        <p className="text-small" aria-live="polite">
-          {"error" in preview ? (
-            <span className="text-status-alert">{preview.error}</span>
-          ) : (
-            <span className="text-dark-secondary">
-              {KIND_ETIKETT[preview.kind]} · {preview.count} förvaltningar · {preview.info}
-            </span>
-          )}
+      <div className="rounded-12 border border-dashed border-hairline bg-background-200 p-24">
+        <label htmlFor="file" className="block text-base font-semibold">Välj datafiler</label>
+        <p id="import-help" className="mt-8 text-small text-dark-secondary">
+          Välj ekonomi- eller personaluttag (CSV/TXT), eller HME-totalindex med valfri
+          delindexrapport (JSON). Importera ett nyckeltal åt gången. Högst 100 filer och 15 MB.
         </p>
-      )}
-
-      <Button
-        type="submit"
-        color="vattjom"
-        variant="primary"
-        loading={pending}
-        disabled={pending || (preview != null && "error" in preview)}
-        leftIcon={<UploadCloud size={16} aria-hidden="true" />}
-      >
+        <input id="file" name="file" type="file" multiple required
+          accept=".json,.csv,.txt" aria-describedby="import-help import-selection"
+          className="mt-16 block w-full rounded-4 text-small focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
+        <p id="import-selection" aria-live="polite" className="mt-12 text-small text-dark-secondary">
+          {tooLarge ? "Urvalet överstiger 100 filer eller 15 MB." : `${files.length} filer valda.`}
+        </p>
+      </div>
+      <Button type="submit" color="vattjom" variant="primary" loading={pending}
+        disabled={pending || tooLarge || files.length === 0} leftIcon={<UploadCloud size={16} aria-hidden="true" />}>
         Importera
       </Button>
 
@@ -161,7 +63,7 @@ export function ImportForm() {
                               {s.legend}
                             </span>
                           ) : (
-                            <span className="text-dark-secondary">–</span>
+                            <span className="text-dark-secondary">Ingen bedömning</span>
                           )}
                         </td>
                         <td className="px-12 py-10 font-mono text-dark-secondary">{r.atgard}</td>

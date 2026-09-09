@@ -75,6 +75,7 @@ module.exports = {
           "surface-primary-hover": "#004A99", // hover på primära knappar/länkar
           "text-primary": "#00427D", // text/ikoner (mörkare → AA)
           "background-100": "#E6EEF7", // ljus blå ton
+          "background-50": "#EAF3FD", // ljusare OCH blåare — botten för bedömningsytan
         },
         // --- Funktionella status (semantiska ytor + text) ---
         error: {
@@ -95,6 +96,9 @@ module.exports = {
         },
         // --- Trafikljus (ljusa funktionella signaler) ---
         "status-good": "#1E8A4E",
+        // Djupare grön för fyllda ytor med vit text. #1E8A4E ger bara 4,37:1 mot vitt,
+        // vilket klarar AA enbart som stor text; den här ger 5,16:1 vid alla storlekar.
+        "status-good-deep": "#1B7D46",
         "status-warn": "#EAB308", // medvetet rent gult (skilj "Bevaka" från rött)
         "status-alert": "#D32F2F",
       },

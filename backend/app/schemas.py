@@ -7,10 +7,12 @@ prototypens AREAS-objekt (område + mätvärde + verktyg + frågor + ev. överen
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from app.models import Status, TrendDir
+from app.services.ekonomi import bedom_ekonomi
 
 
 class ORMModel(BaseModel):
@@ -36,7 +38,11 @@ class SupportFunctionOut(ORMModel):
 
 class QuestionOut(ORMModel):
     id: int
+    # Kort etikett över frågan; None för de flesta frågor.
+    rubrik: str | None = None
     text: str
+    # Påstående ur medarbetarenkäten som frågan bygger på (None för de flesta frågor).
+    bygger_pa: str | None = None
     ordning: int
 
 
@@ -58,17 +64,45 @@ class KpiAreaOut(ORMModel):
 
 class MeasurementOut(ORMModel):
     value_text: str
-    value_num: float
+    value_num: float | None
     unit: str
     target_text: str
     target_num: float
     bar_max: float
-    status: Status
+    status: Status | None
     trend_dir: TrendDir | None = None
     trend_good: bool | None = None
     trend_text: str
     interpretation: str
     details: dict | None = None
+
+
+    @model_validator(mode="after")
+    def ekonomins_bedomning(self):
+        # Äldre lagrade huvudfält använder ackumulerad budget. Läs alltid den aktuella
+        # definitionen ur underlaget, även innan nästa import har uppdaterat huvudfälten.
+        if self.details and self.details.get("typ") == "ekonomi":
+            details = dict(self.details)
+            netto = next((r for r in details.get("resultatrakning", [])
+                          if r.get("matt_kod") == "SK.EK.RR.005"), {})
+            b = bedom_ekonomi(netto.get("budget_helar"), netto.get("prognos"))
+            self.value_num, self.status, self.value_text = b.diff, b.status, b.text
+            self.interpretation = b.tolkning
+            self.target_text, self.target_num = "Budget i balans", 0
+            self.trend_dir = self.trend_good = None
+            self.trend_text = ""
+            details["serie"] = [
+                {**p, "diff": bedom_ekonomi(p.get("budget_helar"), p.get("prognos")).diff}
+                for p in details.get("serie", [])
+            ]
+            self.details = details
+        if self.details and self.details.get("typ") == "sjukfranvaro" and self.details.get("matmetod") != "rullande12":
+            self.value_num = self.status = None
+            self.value_text = "Inväntar R12"
+            self.trend_dir = self.trend_good = None
+            self.trend_text = ""
+            self.interpretation = "Importera ett aktuellt R12-uttag. Tidigare ackumulerade värden är inte jämförbara med rullande 12 månader."
+        return self
 
 
 class ActivityOut(ORMModel):
@@ -145,6 +179,7 @@ class StatusrapportOut(ORMModel):
     rubrik: str
     text: str
     punkter: list[str] | None = None
+    aterstaende: list[str] | None = None
     ordning: int
     publicerad: bool
     skapad_at: datetime
@@ -195,6 +230,7 @@ class StatusrapportCreate(BaseModel):
     rubrik: str
     text: str
     punkter: list[str] | None = None
+    aterstaende: list[str] | None = None
     ordning: int = 0
     publicerad: bool = True
 
@@ -204,11 +240,17 @@ class StatusrapportUpdate(BaseModel):
     rubrik: str | None = None
     text: str | None = None
     punkter: list[str] | None = None
+    aterstaende: list[str] | None = None
     ordning: int | None = None
     publicerad: bool | None = None
 
 
 # ---- Dataimport ----------------------------------------------------------
+
+
+class HmeRapportImport(BaseModel):
+    rapport: dict[str, JsonValue]
+    delindex: dict[str, JsonValue] | None = None
 
 
 class HmeForvaltning(BaseModel):
@@ -219,6 +261,10 @@ class HmeForvaltning(BaseModel):
     kod: str | None = None
     matningar: dict[str, float | None]
     antal_svar: int | None = None
+    # HME-talet byggs av tre delperspektiv (motivation, ledarskap, styrning). Var och ett
+    # har en egen årsserie med samma mätår som totalen: {"motivation": {"2025": 80.0, …}}.
+    # Saknas de visas bara totalen — nyckeln är valfri så äldre rapporter fungerar oförändrat.
+    perspektiv: dict[str, dict[str, float | None]] | None = None
 
 
 class HmeImport(BaseModel):
@@ -296,6 +342,8 @@ class EkonomiMatt(BaseModel):
     utfall: float | None = None
     utfall_fg: float | None = None
     prognos: float | None = None
+    korrigerad: bool = False
+    korrigering_orsak: str | None = None
 
 
 class EkonomiOmrade(BaseModel):
@@ -316,6 +364,10 @@ class EkonomiSeriePunkt(BaseModel):
     utfall: float | None = None
     utfall_fg: float | None = None
     prognos: float | None = None
+    # Sant när punkten är manuellt korrigerad (se KORRIGERINGAR i ekonomi_import).
+    # Följer med ut i API:t så gränssnittet kan märka ut månaden.
+    korrigerad: bool = False
+    korrigering_orsak: str | None = None
 
 
 class EkonomiEnhet(BaseModel):
@@ -411,7 +463,12 @@ class SjukAldersgrupp(BaseModel):
 
 
 class SjukPunkt(BaseModel):
-    """Sjukfrånvaro en period: total %, kvinnors andel %, mäns andel % (för tidsserien)."""
+    """Sjukfrånvaro en månadsstängning: total %, kvinnors %, mäns % — en punkt i R12-serien.
+
+    Varje punkt är ett **rullande 12-månadersvärde**: snittet för de tolv månader som
+    slutar med `period`. Punkterna rör sig därför långsamt — en ny månad byter ut en
+    tolftedel av underlaget.
+    """
 
     period: str
     total: float | None = None
@@ -420,7 +477,7 @@ class SjukPunkt(BaseModel):
 
 
 class SjukEnhet(BaseModel):
-    """En förvaltnings sjukfrånvaro: senaste periodens värden + tidsserie."""
+    """En förvaltnings sjukfrånvaro: senaste månadens R12-värden + månadsserie."""
 
     kod: str
     namn: str
@@ -429,16 +486,25 @@ class SjukEnhet(BaseModel):
     kvinnor: float | None = None
     man: float | None = None
     langtidsandel: float | None = None
+    # Antal tillsvidareanställda (SK.P.AM.001/K9) — underlag för kostnadsuppskattningen.
+    anstallda: int | None = None
     aldersgrupper: list[SjukAldersgrupp] = []
     serie: list[SjukPunkt] = []
 
 
 class SjukImport(BaseModel):
-    """Normaliserad importpayload för sjukfrånvaro (per förvaltning)."""
+    """Normaliserad importpayload för sjukfrånvaro (per förvaltning).
+
+    `matmetod` märker hur värdena är aggregerade. Personalexporten levererar sedan
+    2026-08 **rullande 12 månader**; tidigare uttag var tertialackumulerade och har
+    andra tal för samma period. Märkningen gör att en R12-import aldrig ärver punkter
+    ur en serie som byggts av det gamla aggregatet.
+    """
 
     kpi: str = "sjukfranvaro"
     period: str = ""
     kalla: str = ""
+    matmetod: Literal["rullande12"]
     enheter: list[SjukEnhet]
 
 
@@ -502,6 +568,11 @@ class OrganisationOut(ORMModel):
     id: int
     namn: str
     slug: str
+    # Masterdata-koden är den kanoniska nyckeln (BYGGPLAN §18) — frontend kopplar
+    # referensdata (t.ex. antal anställda) på den, aldrig på namn eller slug.
+    kod: str | None = None
+    # Förvaltning eller en av koncernens övriga verksamheter. Startsidan grupperar på detta.
+    ar_forvaltning: bool = True
 
 
 class DialogueDetail(BaseModel):

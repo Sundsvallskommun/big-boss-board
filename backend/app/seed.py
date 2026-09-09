@@ -34,6 +34,7 @@ from app.services.ekonomi_import import csv_to_payload as ekonomi_csv_to_payload
 from app.services.ekonomi_import import import_ekonomi
 from app.services.ekonomi_import import report_to_payload as ekonomi_report_to_payload
 from app.services.hme_import import FICTIV_MEASUREMENTS, import_hme, report_to_payload, slugify
+from app.services.sjukfranvaro_import import SjukExportMetodError
 from app.services.sjukfranvaro_import import csv_to_payload as sjuk_csv_to_payload
 from app.services.sjukfranvaro_import import import_sjukfranvaro
 
@@ -92,14 +93,17 @@ KPI_AREAS: list[dict] = [
         "key": "sjukfranvaro", "namn": "Sjukfrånvaro", "short": None, "ikon": "heart-pulse",
         "lower_better": True, "support": "HR",
         "info": (
-            "Lönekörning sker en gång per månad, runt den 20:e, och då genereras "
-            "sjukfrånvarostatistiken för den senaste perioden. Sjukfrånvaro som medarbetare "
-            "ännu inte registrerat, eller som chef inte hunnit godkänna/attestera före "
-            "lönekörningen, kommer inte med. Eftersom lönekörningen sker den 20:e missas "
-            "omkring 10 av månadens cirka 30 dagar — den senaste månaden visar därför "
-            "erfarenhetsmässigt bara runt 70–80 % av den slutliga bilden och ser nästan "
-            "alltid bättre ut än verkligheten. Tillförlitlig statistik finns först när ett "
-            "par månader gått och all registrering kommit med."
+            "Sjukfrånvaron visas som rullande 12 månader: varje månadsstängning är snittet "
+            "för de tolv månader som slutar där. Det tar bort säsongsvängningarna — vinterns "
+            "toppar och sommarens dalar — och gör i stället nivåskiften synliga. Priset är "
+            "tröghet: en enskild månad kan bara flytta värdet en tolftedel, så en förändring "
+            "syns senare men är desto mer verklig när den syns.\n\n"
+            "Lönekörning sker en gång per månad, runt den 20:e, och då genereras statistiken "
+            "för den senaste perioden. Frånvaro som medarbetare ännu inte registrerat, eller "
+            "som chef inte hunnit attestera före lönekörningen, kommer inte med — den senaste "
+            "månaden fångar erfarenhetsmässigt bara 70–80 % av den slutliga bilden. Med "
+            "rullande 12 slår det bara igenom på en tolftedel av värdet, men den nyaste "
+            "punkten i kurvan är ändå den minst färdiga."
         ),
         "questions": [
             "Är det kort- eller långtidsfrånvaro som ökar?",
@@ -110,10 +114,44 @@ KPI_AREAS: list[dict] = [
     {
         "key": "verksamhet", "namn": "Verksamhet", "short": None, "ikon": "target",
         "lower_better": False, "support": "Verksamhet",
+        # Frågorna kommer i par: en kort rubrik som säger vad frågan handlar om, och
+        # frågan under. Numreringen sätts av gränssnittet, inte av texten.
         "questions": [
-            "Hur ligger ni mot uppsatta verksamhetsmål?",
-            "Vad säger kundnöjdheten just nu?",
-            "Vilken utveckling prioriterar du framåt?",
+            {
+                "rubrik": "Uppdraget",
+                "text": (
+                    "Hur bedömer du att verksamheten klarar sitt uppdrag just nu, och vad "
+                    "grundar du den bedömningen på?"
+                ),
+            },
+            {
+                "rubrik": "Risker och avvikelser",
+                "text": (
+                    "Vilka problem, risker eller avvikelser behöver vi känna till? Hur "
+                    "planerar du att hantera dessa?"
+                ),
+            },
+            {
+                "rubrik": "Utveckling och förflyttning",
+                "text": (
+                    "Vad behöver verksamheten förändra eller utveckla för att bättre klara "
+                    "sitt uppdrag? Vad är viktigast för dig att åstadkomma den närmaste tiden?"
+                ),
+            },
+            {
+                "rubrik": "Omvärld och framtida förutsättningar",
+                "text": (
+                    "Vilka förändringar i omvärlden eller verksamhetens förutsättningar "
+                    "behöver ni förhålla er till framåt?"
+                ),
+            },
+            {
+                "rubrik": "Koncernperspektiv",
+                "text": (
+                    "Finns det något i din verksamhet som kräver ett kommunövergripande "
+                    "agerande eller påverkar andra verksamheter?"
+                ),
+            },
         ],
     },
     {
@@ -130,14 +168,51 @@ KPI_AREAS: list[dict] = [
         # Frågeställningarna är preliminära och tas fram tillsammans med Kommunikationsdirektör.
         "key": "kommunikativt", "namn": "Kommunikativt ledarskap", "short": None, "ikon": "megaphone",
         "lower_better": False, "support": "Kommunikation",
+        # Dialogfrågorna är omskrivna till chefens perspektiv; påståendet som varje fråga
+        # härleds ur kommer från medarbetarenkäten och visas som ursprung i kortet.
         "questions": [
-            "Min chef förklarar mål och förväntningar på ett tydligt sätt",
-            "Min chef ger medarbetare konstruktiv kritik på deras arbete",
-            "Min chef är lyhörd och lyssnar på medarbetarna",
-            "Min chef involverar medarbetarna i viktiga frågor som rör min organisation",
+            ("Hur arbetar du för att skapa tydlighet kring mål, prioriteringar och "
+             "förväntningar i din verksamhet?",
+             "Min chef förklarar mål och förväntningar på ett tydligt sätt."),
+            ("Hur arbetar du med återkoppling för att stärka prestation och lärande?",
+             "Min chef ger medarbetare konstruktiv kritik på deras arbete."),
+            ("Hur säkerställer du att du fångar upp medarbetarnas perspektiv och visar att "
+             "du lyssnar på dem?",
+             "Min chef är lyhörd och lyssnar på medarbetarna."),
+            ("Hur involverar du medarbetarna i frågor där deras delaktighet kan bidra till "
+             "bättre beslut och ökat engagemang?",
+             "Min chef involverar medarbetarna i viktiga frågor som rör min organisation."),
         ],
     },
 ]
+
+# Frågeställningar för de nyckeltal en verksamhet följer upp via dialog (`dialogbaserad` i
+# organisationsmastern).
+#
+# De allmänna frågorna är skrivna mot grafen bredvid — "Vad förklarar nuläget mot budget och
+# prognos?" förutsätter att en prognos syns på kortet. Här finns ingen graf, så frågan måste i
+# stället be chefen beskriva hur det ser ut och går för den egna verksamheten. Frågorna ersätter
+# nyckeltalets allmänna frågor för just dessa verksamheter; förvaltningarnas kort är orörda.
+#
+# Bara de tre datanyckeltalen behöver egna frågor. Verksamhet, Digital transformation och
+# Kommunikativt ledarskap saknar mätdata för alla och är redan formulerade för ett samtal.
+DIALOGBASERADE_QUESTIONS: dict[str, list[str]] = {
+    "ekonomi": [
+        "Hur ser er ekonomiska prognos ut för året?",
+        "Var ligger den största avvikelsen mot budget — och vad beror den på?",
+        "Vilka åtgärder är beslutade — och när får de effekt?",
+    ],
+    "hme": [
+        "Hur skulle du beskriva medarbetarengagemanget hos er just nu?",
+        "Vad gör ni för att stärka motivation, ledarskap och styrning?",
+        "Vilka signaler fångar ni upp mellan mätningarna?",
+    ],
+    "sjukfranvaro": [
+        "Hur ser sjukfrånvaron ut hos er — och åt vilket håll rör den sig?",
+        "Är det korttids- eller långtidsfrånvaro som dominerar?",
+        "Vilka rehab- och förebyggande insatser pågår?",
+    ],
+}
 
 # Nyckeltal som följs upp via dialogfrågor + manuellt satt status i stället för mätdata
 # (BYGGPLAN §16–17). Seeden rensar ev. gamla dummy-mätvärden så frontend visar dem som
@@ -318,6 +393,10 @@ STATUSRAPPORTER_SEED: list[dict] = [
 # Officiella HME-totalindexrapporten (flerårig, per enhet/förvaltning). Levereras utanför
 # git och monteras lokalt/vid deploy; i drift uppdateras HME istället via /api/import/hme.
 HME_REPORT_PATH = Path(__file__).resolve().parent / "data" / "hme_totalindex.json"
+# Delindex (motivation/ledarskap/styrning per verksamhet) levereras som en egen fil, samma
+# väg som totalindex. Finns den kopplas perspektivserierna på via enhetsnamnet; saknas den
+# visar HME-kortet bara totalen.
+HME_DELINDEX_PATH = Path(__file__).resolve().parent / "data" / "hme_delindex.json"
 
 # Ekonomirapporten (resultaträkning per förvaltning) levereras utanför git, samma väg som HME.
 # Qlik-exporten är CSV framåt; JSON stöds som tidigare format. CSV prioriteras om båda finns.
@@ -328,8 +407,9 @@ EKONOMI_REPORT_PATH = Path(__file__).resolve().parent / "data" / "ekonomi.json"
 SJUK_CSV_PATH = Path(__file__).resolve().parent / "data" / "sjukfranvaro.csv"
 
 # Masterdata-organisationsid → org-slug (de slugar HME redan skapat). Sätter Organisation.kod
-# så att ekonomi (och framtida dataset) kan kopplas på koden. Räddningstjänsten/Stadsbacken
-# saknas i masterdatan här och får därför ingen kod ännu.
+# så att ekonomi (och framtida dataset) kan kopplas på koden. Endast förvaltningarna behöver
+# stå här: Medelpads Räddningstjänstförbund (14) och Stadsbacken (4705) kom till senare och
+# får sin slug ur namnet, eftersom HME aldrig hunnit skapa någon åt dem.
 KOD_TILL_SLUG: dict[str, str] = {
     "24": "barn-och-utbildningsforvaltning",
     "23": "vard-och-omsorgsforvaltningen",
@@ -370,11 +450,61 @@ def _load_org_master() -> list[dict]:
     return data.get("organisationer", [])
 
 
+def _dialogomraden(o: dict) -> set[str]:
+    """Vilka nyckeltal följer verksamheten upp via dialog i stället för mätdata?
+
+    Mastern anger dem som en lista av nyckeltalsnycklar, så ett nyckeltal kan få data utan
+    att de övriga gör det — HME finns i HME-rapporten även för Räddningstjänsten och
+    Stadsbacken, medan deras ekonomi och sjukfrånvaro fortfarande saknar källa. Listan anger exakt vilka nyckeltal som saknar datakälla.
+    """
+    v = o.get("dialogbaserad")
+    if isinstance(v, list):
+        return {str(k) for k in v}
+    return set()
+
+
+async def _seed_org_questions(
+    session: AsyncSession, org: Organisation, area_by_key: dict[str, KpiArea], dialogomraden: set[str]
+) -> None:
+    """Verksamhetsspecifika dialogfrågor, avstämda mot DIALOGBASERADE_QUESTIONS.
+
+    Bara de nyckeltal som faktiskt följs upp via dialog får egna frågor. Får ett nyckeltal
+    data tas dess frågor bort och nyckeltalets allmänna gäller igen — mastern är sanningen,
+    inte det som råkar ligga i basen.
+    """
+    for key, area in area_by_key.items():
+        texter = DIALOGBASERADE_QUESTIONS.get(key, []) if key in dialogomraden else []
+        befintliga = (
+            await session.execute(
+                select(Question)
+                .filter_by(kpi_area_id=area.id, organisation_id=org.id)
+                .order_by(Question.ordning)
+            )
+        ).scalars().all()
+        for i, text in enumerate(texter):
+            if i < len(befintliga):
+                befintliga[i].text = text
+                befintliga[i].ordning = i
+            else:
+                session.add(
+                    Question(
+                        kpi_area_id=area.id, organisation_id=org.id, text=text, ordning=i
+                    )
+                )
+        for extra in befintliga[len(texter):]:
+            await session.delete(extra)
+
+
 async def _seed_organisationer(session: AsyncSession, area_by_key: dict[str, KpiArea]) -> None:
     """Organisationslistan är master (BYGGPLAN §18): skapas/uppdateras ur organisationer.json,
-    med en dialog per förvaltning och fiktiva bootstrap-mätvärden. Importerna (HME/ekonomi/
-    sjukfrånvaro) kopplar sedan bara mot dessa via masterdata-koden. Förvaltningar som inte
-    finns i mastern (t.ex. utan kod) tas bort med sina dialoger/mätvärden."""
+    med en dialog per verksamhet och fiktiva bootstrap-mätvärden. Importerna (HME/ekonomi/
+    sjukfrånvaro) kopplar sedan bara mot dessa via masterdata-koden. Verksamheter som inte
+    finns i mastern (t.ex. utan kod) tas bort med sina dialoger/mätvärden.
+
+    Nyckeltal listade i `dialogbaserad` får inga bootstrap- eller importerade mätvärden.
+    De följs upp med organisationsspecifika frågor och manuell status. Frontend behöver ingen kännedom om detta: den väljer
+    dialogkort så snart mätvärdet saknas. Rensningen körs vid varje start, så flaggan är
+    sanningen — får verksamheten data någon gång tas flaggan bort ur mastern i stället."""
     master = _load_org_master()
     if not master:
         return
@@ -394,6 +524,8 @@ async def _seed_organisationer(session: AsyncSession, area_by_key: dict[str, Kpi
             session, Organisation, {"namn": namn, "slug": slug, "kod": kod}, kod=kod,
         )
         org.namn, org.slug = namn, slug  # håll i synk mot mastern
+        # Saknas nyckeln är verksamheten en förvaltning — så såg mastern ut före 1.2.
+        org.ar_forvaltning = bool(o.get("forvaltning", True))
 
         dialogue = (
             await session.execute(select(Dialogue).filter_by(organisation_id=org.id))
@@ -406,9 +538,24 @@ async def _seed_organisationer(session: AsyncSession, area_by_key: dict[str, Kpi
             session.add(dialogue)
             await session.flush()
 
+        dialogomraden = _dialogomraden(o)
+        await _seed_org_questions(session, org, area_by_key, dialogomraden)
+
         for key, data in BOOTSTRAP_MEASUREMENTS.items():
             area = area_by_key.get(key)
             if area is None:
+                continue
+            if key in dialogomraden:
+                # Följs upp via dialog: inget mätvärde, så kortet renderas som dialogfråga
+                # med manuellt satt status. Rensa även ett ev. tidigare mätvärde, så att en
+                # ändrad master eller en gammal import inte lämnar kvar ett datakort som
+                # motsäger den. Rensningen är per nyckeltal — HME får finnas kvar.
+                await session.execute(
+                    delete(Measurement).where(
+                        Measurement.dialogue_id == dialogue.id,
+                        Measurement.kpi_area_id == area.id,
+                    )
+                )
                 continue
             finns = (
                 await session.execute(
@@ -438,11 +585,16 @@ async def _seed_organisationer(session: AsyncSession, area_by_key: dict[str, Kpi
             await session.execute(delete(AreaStatus).where(AreaStatus.dialogue_id.in_(dlg_ids)))
             await session.execute(delete(Activity).where(Activity.dialogue_id.in_(dlg_ids)))
             await session.execute(delete(Dialogue).where(Dialogue.id.in_(dlg_ids)))
+        await session.execute(delete(Question).where(Question.organisation_id == org.id))
         await session.delete(org)
-        print(f"[seed] tog bort förvaltning utanför mastern: {org.namn} (kod {org.kod}).")
+        print(f"[seed] tog bort verksamhet utanför mastern: {org.namn} (kod {org.kod}).")
 
     await session.commit()
-    print(f"[seed] organisationsmaster: {len(master)} förvaltningar säkerställda.")
+    dialog = sum(1 for o in master if _dialogomraden(o))
+    print(
+        f"[seed] organisationsmaster: {len(master)} verksamheter säkerställda "
+        f"({dialog} med ett eller flera dialogbaserade nyckeltal)."
+    )
 
 
 async def _get_or_create(session: AsyncSession, model, defaults: dict | None = None, **filters):
@@ -515,18 +667,40 @@ async def seed(session: AsyncSession) -> None:
         # Reconcilera frågeställningarna mot seed-listan (positionsvis): uppdatera text på
         # befintliga, lägg till nya, ta bort överflödiga. Utan detta blir gamla frågor kvar
         # i drift (_get_or_create tar aldrig bort) när en areas frågor ändras.
+        # Endast de allmänna frågorna (organisation_id = None). Verksamhetsspecifika frågor
+        # ägs av _seed_organisationer — utan filtret hade den här loopen skrivit över dem.
         befintliga = (
             await session.execute(
-                select(Question).filter_by(kpi_area_id=area.id).order_by(Question.ordning)
+                select(Question)
+                .filter_by(kpi_area_id=area.id, organisation_id=None)
+                .order_by(Question.ordning)
             )
         ).scalars().all()
-        onskade = a["questions"]
-        for i, text in enumerate(onskade):
+        # En fråga anges på tre former: ren text; (text, bygger_pa) när den är härledd ur
+        # ett påstående i medarbetarenkäten; eller en dict när den har en rubrik.
+        # Normaliseras till (text, bygger_pa, rubrik).
+        def _normalisera(q) -> tuple[str, str | None, str | None]:
+            if isinstance(q, str):
+                return q, None, None
+            if isinstance(q, dict):
+                return q["text"], q.get("bygger_pa"), q.get("rubrik")
+            text, bygger_pa = q
+            return text, bygger_pa, None
+
+        onskade = [_normalisera(q) for q in a["questions"]]
+        for i, (text, bygger_pa, rubrik) in enumerate(onskade):
             if i < len(befintliga):
                 befintliga[i].text = text
+                befintliga[i].bygger_pa = bygger_pa
+                befintliga[i].rubrik = rubrik
                 befintliga[i].ordning = i
             else:
-                session.add(Question(kpi_area_id=area.id, text=text, ordning=i))
+                session.add(
+                    Question(
+                        kpi_area_id=area.id, text=text, bygger_pa=bygger_pa,
+                        rubrik=rubrik, ordning=i,
+                    )
+                )
         for extra in befintliga[len(onskade):]:
             await session.delete(extra)
 
@@ -554,7 +728,12 @@ async def seed(session: AsyncSession) -> None:
     # den kör appen vidare med bootstrap-platshållaren tills HME importerats via endpointen.
     if HME_REPORT_PATH.exists():
         report = json.loads(HME_REPORT_PATH.read_text(encoding="utf-8"))
-        payload = HmeImport(**report_to_payload(report))
+        delindex = (
+            json.loads(HME_DELINDEX_PATH.read_text(encoding="utf-8"))
+            if HME_DELINDEX_PATH.exists()
+            else None
+        )
+        payload = HmeImport(**report_to_payload(report, delindex=delindex))
         resultat = await import_hme(session, payload)
         print(
             f"[seed] HME importerad ur {HME_REPORT_PATH.name}: "
@@ -590,13 +769,16 @@ async def seed(session: AsyncSession) -> None:
 
     # Sjukfrånvaro (personal-CSV). Finns den importeras den per förvaltning (matchar på kod).
     if SJUK_CSV_PATH.exists():
-        sj = await import_sjukfranvaro(
-            session, SjukImport(**sjuk_csv_to_payload(SJUK_CSV_PATH.read_text(encoding="utf-8-sig")))
-        )
-        print(
-            f"[seed] Sjukfrånvaro importerad ur {SJUK_CSV_PATH.name}: "
-            f"{sj['skapade']} skapade, {sj['uppdaterade']} uppdaterade, {sj['hoppade_over']} hoppade över."
-        )
+        try:
+            payload = SjukImport(**sjuk_csv_to_payload(SJUK_CSV_PATH.read_text(encoding="utf-8-sig")))
+        except SjukExportMetodError as exc:
+            print(f"[seed] {SJUK_CSV_PATH.name} används inte: {exc} Importera nytt R12-underlag.")
+        else:
+            sj = await import_sjukfranvaro(session, payload)
+            print(
+                f"[seed] Sjukfrånvaro importerad ur {SJUK_CSV_PATH.name}: "
+                f"{sj['skapade']} skapade, {sj['uppdaterade']} uppdaterade, {sj['hoppade_over']} hoppade över."
+            )
     else:
         print(f"[seed] {SJUK_CSV_PATH.name} saknas — hoppar över sjukfrånvarodata.")
 

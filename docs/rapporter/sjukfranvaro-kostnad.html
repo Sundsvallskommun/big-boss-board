@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Estimerad kostnad för sjukfrånvaro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:#1F1F25; --ink2:#51515C; --hair:#E5E5E5; --div:#B7B7BA;
+    --bg:#F0F0F0; --card:#FFFFFF; --vattjom:#0055B8; --vattjom-text:#00427D; --vattjom-100:#E6EEF7;
+    --good:#1E8A4E; --warn:#EAB308; --alert:#D32F2F;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 Arial, Helvetica, sans-serif; -webkit-font-smoothing:antialiased; }
+  h1,h2,h3 { font-family:Raleway, Arial, sans-serif; font-weight:700; letter-spacing:-.01em; margin:0; }
+  h1 { font-size:30px; line-height:1.2; }
+  h2 { font-size:22px; line-height:1.25; }
+  h3 { font-size:16px; line-height:1.3; }
+  p { margin:8px 0 0; }
+  .wrap { max-width:1000px; margin:0 auto; padding:0 20px 64px; }
+  .eyebrow { font-family:"Geist Mono", ui-monospace, Menlo, monospace; font-size:11px;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--ink2); }
+
+  header.top { background:var(--card); border-bottom:1px solid var(--hair); }
+  .lockup { max-width:1000px; margin:0 auto; padding:16px 20px; display:flex; align-items:center; gap:14px; }
+  .lockup img { height:34px; width:auto; }
+  .lockup .sep { width:1px; height:26px; background:var(--div); }
+  .lockup .prod { font-family:Raleway, Arial, sans-serif; font-weight:600; font-size:17px; }
+
+  .hero { background:var(--card); border-bottom:1px solid var(--hair); }
+  .hero .inner { max-width:1000px; margin:0 auto; padding:32px 20px 36px; }
+  .hero p.lead { font-size:17px; color:var(--ink2); max-width:70ch; }
+  .meta { margin-top:20px; display:flex; flex-wrap:wrap; gap:8px 28px; }
+  .meta div { font-size:13px; color:var(--ink2); }
+  .meta b { display:block; font-family:"Geist Mono", ui-monospace, monospace; font-size:11px;
+    letter-spacing:.08em; text-transform:uppercase; font-weight:500; }
+  .meta span { color:var(--ink); }
+
+  section { margin-top:28px; }
+  .card { background:var(--card); border:1px solid var(--hair); border-radius:12px; padding:24px 26px; }
+  .card + .card { margin-top:16px; }
+
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-top:24px; }
+  .kpi { background:var(--card); border:1px solid var(--hair); border-radius:12px; padding:18px 20px; }
+  .kpi .v { font-family:Raleway, Arial, sans-serif; font-weight:700; font-size:30px; line-height:1.1; margin-top:6px; }
+  .kpi .l { font-size:13px; color:var(--ink2); margin-top:6px; }
+  .kpi.ok .v { color:var(--good); } .kpi.bad .v { color:var(--alert); }
+
+  .steg { display:grid; gap:12px; margin-top:18px; }
+  .steg > div { display:flex; gap:14px; align-items:flex-start;
+    border:1px solid var(--hair); border-radius:12px; padding:16px 18px; }
+  .steg .num { flex:none; width:28px; height:28px; border-radius:999px; display:grid; place-items:center;
+    font-family:"Geist Mono", monospace; font-size:12px;
+    background:var(--vattjom-100); color:var(--vattjom-text); }
+  .formel { font-family:"Geist Mono", ui-monospace, monospace; font-size:14px;
+    background:var(--bg); border-radius:8px; padding:12px 14px; margin-top:10px;
+    overflow-x:auto; white-space:nowrap; }
+  .formel b { color:var(--vattjom-text); }
+
+  .chart { display:block; width:100%; height:auto; margin:18px 0 4px; }
+  .chart text { font-family:Arial, Helvetica, sans-serif; fill:var(--ink); }
+  .chart .tick { font-size:11px; fill:var(--ink2); font-variant-numeric:tabular-nums; }
+  .chart .rl { font-size:13px; }
+  .chart .dl { font-size:12px; font-variant-numeric:tabular-nums; }
+  .chart .lg, .chart .axl, .chart .band { font-size:12px; fill:var(--ink2); }
+  .chart .band { font-size:11px; }
+  .chart .pt { font-size:11px; fill:var(--ink2); }
+
+  table { border-collapse:collapse; width:100%; font-size:14px; margin-top:16px; }
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--hair); }
+  th { font-size:12px; color:var(--ink2); font-weight:normal; white-space:nowrap; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.neg { color:#A32020; font-weight:bold; }
+  td.pos { color:#136B3B; }
+  tfoot td { font-weight:bold; border-bottom:none; border-top:2px solid var(--hair); }
+  .scroll { overflow-x:auto; }
+
+  .ruta { max-width:520px; border:1px solid var(--hair); border-radius:12px;
+    background:var(--bg); padding:16px; margin-top:16px; }
+  .ruta .rub { font-family:"Geist Mono", monospace; font-size:11px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--ink2); }
+  .ruta .belopp { font-family:Raleway, Arial, sans-serif; font-weight:700; font-size:26px;
+    line-height:1.1; margin-top:8px; }
+  .ruta .belopp small { font-family:Arial, sans-serif; font-size:15px; color:var(--ink2); font-weight:normal; }
+  .ruta .txt { font-size:14px; color:var(--ink2); margin-top:8px; line-height:1.5; }
+  .ruta .txt b.mer { color:#A32020; }
+
+  .callout { border-left:4px solid var(--vattjom); background:var(--vattjom-100);
+    border-radius:0 8px 8px 0; padding:16px 18px; margin-top:18px; }
+  .callout.warn { border-left-color:var(--warn); background:#FDF3D4; }
+  .callout h3 { font-size:15px; }
+  ol.fragor { margin:14px 0 0; padding-left:22px; }
+  ol.fragor li { margin-top:10px; }
+  footer { margin-top:36px; font-size:12px; color:var(--ink2); }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+  @media (max-width:820px) { .kpis { grid-template-columns:repeat(2,1fr); } }
+  @media print { body { background:#fff; } .card, .kpi { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<p role="note">Historiskt analysunderlag från Jaris gren. Siffrorna är statiska och uppdateras inte från tjänstens databas.</p>
+
+<header class="top">
+  <div class="lockup">
+    <img src="/brand/sundsvalls-kommun-logotyp.svg" alt="Sundsvalls kommun">
+    <div class="sep" aria-hidden="true"></div>
+    <div class="prod">Dialogstöd</div>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="inner">
+    <p class="eyebrow">Dokumentation · Nyckeltal Sjukfrånvaro</p>
+    <h1 style="margin-top:8px">Estimerad kostnad<br>för sjukfrånvaro</h1>
+    <p class="lead">Sjukfrånvarokortet visar en procentsats. Procent säger sällan något i ett
+      chefssamtal — kronor gör det. Kortet räknar därför om förvaltningens sjukfrånvaro till
+      en uppskattad månadskostnad, och visar vad samma förvaltning hade kostat vid målnivån.
+      Här är hela uppbyggnaden: modellen, antagandena och vad den ger per förvaltning.</p>
+    <div class="meta">
+      <div><b>Modell</b><span>250 kr per anställd och procentenhet</span></div>
+      <div><b>Personalunderlag</b><span>Tillsvidareanställda per 2026-04-30</span></div>
+      <div><b>Mätperiod</b><span>2026-04-30</span></div>
+      <div><b>Datum</b><span>2026-08-13</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+<div class="kpis">
+  <div class="kpi"><p class="eyebrow">Styckkostnad</p><div class="v">250 kr</div>
+    <div class="l">per anställd och procentenhet sjukfrånvaro, per månad</div></div>
+  <div class="kpi"><p class="eyebrow">Alla förvaltningar</p><div class="v">11,9 mnkr</div>
+    <div class="l">uppskattad kostnad per månad med dagens nivåer (modellens ankare är
+      12 mnkr vid målnivå för 8 000 anställda)</div></div>
+  <div class="kpi bad"><p class="eyebrow">Över målnivån</p><div class="v">759 tkr</div>
+    <div class="l">merkostnad per månad jämfört med 6,0 % överallt</div></div>
+  <div class="kpi bad"><p class="eyebrow">Störst avvikelse</p><div class="v">1,2 mnkr</div>
+    <div class="l">Vård och omsorg, per månad över målnivån</div></div>
+</div>
+
+<section>
+  <div class="card">
+    <h2>Så är modellen uppbyggd</h2>
+    <p>Nyckeltalet är formulerat för kommunen som helhet. För att kunna visa en siffra per
+      förvaltning behöver det skrivas om till en styckkostnad — och då visar det sig att
+      modellen är rakt linjär.</p>
+
+    <div class="steg">
+      <div><div class="num">1</div><div>
+        <h3>Utgångspunkten</h3>
+        <p>Vid målnivån 6,0 % kostar sjukfrånvaron cirka <b>12 mnkr per månad</b> för
+          kommunens omkring <b>8 000 anställda</b>. Gul nivå lägger på ungefär 2 mnkr och röd
+          nivå ungefär 5 mnkr under en enskild månad.</p>
+      </div></div>
+      <div><div class="num">2</div><div>
+        <h3>Räkna om till styckkostnad</h3>
+        <p>Dela beloppet på antalet anställda och på antalet procentenheter:</p>
+        <div class="formel">12 000 000 kr ÷ 8 000 anställda ÷ 6,0 procentenheter = <b>250 kr</b></div>
+        <p>Alltså 250 kr per anställd och procentenhet och månad.</p>
+      </div></div>
+      <div><div class="num">3</div><div>
+        <h3>Kontrollera mot hållpunkterna</h3>
+        <p>Styckkostnaden ska återge de nivåer nyckeltalet anger — och den gör det:</p>
+        <div class="formel">8 000 × 7,0 % × 250 kr = 14 mnkr &nbsp;(+2)&nbsp;&nbsp;·&nbsp;&nbsp;8 000 × 8,5 % × 250 kr = 17 mnkr &nbsp;(+5)</div>
+      </div></div>
+      <div><div class="num">4</div><div>
+        <h3>Tillämpa per förvaltning</h3>
+        <p>Samma styckkostnad, men med förvaltningens faktiska antal anställda och faktiska
+          sjukfrånvaro:</p>
+        <div class="formel">antal anställda × sjukfrånvaro i % × 250 kr = <b>kostnad per månad</b></div>
+        <p>Vård och omsorg: 2 800 × 7,7 % × 250 kr = <b>5,4 mnkr</b> per månad.</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="card">
+    <h2>Kostnaden som kurva</h2>
+    <p>Eftersom modellen är linjär blir kostnaden en rät linje: varje procentenhet sjukfrånvaro
+      kostar 2 mnkr per månad räknat på <b>modellens 8 000 anställda</b>. Punkterna är
+      nyckeltalets tre hållpunkter, fälten i bakgrunden är tjänstens färgnivåer. Kurvan
+      beskriver alltså nyckeltalet som det är formulerat — de faktiska
+      7 437 anställda ger en något flackare lutning.</p>
+    <svg viewBox="0 0 760 340" class="chart" role="img" aria-labelledby="k-t k-d">
+<title id="k-t">Kostnad per månad för hela kommunen som funktion av sjukfrånvaron</title>
+<desc id="k-d">Rät linje från noll: varje procentenhet sjukfrånvaro kostar 2 miljoner kronor per månad för 8 000 anställda. Färgade fält visar tjänstens grön-, gul- och rödnivåer.</desc>
+<rect x="70.0" y="24" width="399.6" height="268" fill="#EFF7F2"/>
+<rect x="469.6" y="24" width="99.9" height="268" fill="#FDF9EC"/>
+<rect x="569.5" y="24" width="166.5" height="268" fill="#FBEFEF"/>
+<text x="269.8" y="38" class="band" text-anchor="middle">Grön nivå</text>
+<text x="519.5" y="38" class="band" text-anchor="middle">Gul</text>
+<text x="652.8" y="38" class="band" text-anchor="middle">Röd</text>
+<line x1="70" y1="292.0" x2="736" y2="292.0" stroke="#E5E5E5" stroke-width="1"/>
+<text x="58" y="296.0" class="tick" text-anchor="end">0</text>
+<line x1="70" y1="225.0" x2="736" y2="225.0" stroke="#E5E5E5" stroke-width="1"/>
+<text x="58" y="229.0" class="tick" text-anchor="end">5</text>
+<line x1="70" y1="158.0" x2="736" y2="158.0" stroke="#E5E5E5" stroke-width="1"/>
+<text x="58" y="162.0" class="tick" text-anchor="end">10</text>
+<line x1="70" y1="91.0" x2="736" y2="91.0" stroke="#E5E5E5" stroke-width="1"/>
+<text x="58" y="95.0" class="tick" text-anchor="end">15</text>
+<line x1="70" y1="24.0" x2="736" y2="24.0" stroke="#E5E5E5" stroke-width="1"/>
+<text x="58" y="28.0" class="tick" text-anchor="end">20</text>
+<text x="70.0" y="314" class="tick" text-anchor="middle">0 %</text>
+<text x="203.2" y="314" class="tick" text-anchor="middle">2 %</text>
+<text x="336.4" y="314" class="tick" text-anchor="middle">4 %</text>
+<text x="469.6" y="314" class="tick" text-anchor="middle">6 %</text>
+<text x="602.8" y="314" class="tick" text-anchor="middle">8 %</text>
+<text x="736.0" y="314" class="tick" text-anchor="middle">10 %</text>
+<text x="403" y="334" class="axl" text-anchor="middle">Sjukfrånvaro, % av ordinarie arbetstid</text>
+<text x="16" y="158" class="axl" text-anchor="middle" transform="rotate(-90 16 158)">Kostnad, mnkr per månad</text>
+<path d="M70.0,292.0 L736.0,24.0" fill="none" stroke="#0055B8" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="469.6" y1="131.2" x2="469.6" y2="292" stroke="#1E8A4E" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+<circle cx="469.6" cy="131.2" r="6" fill="#1E8A4E" stroke="#fff" stroke-width="2"><title>6,0 % → 12 mnkr per månad</title></circle>
+<text x="459.6" y="119.2" class="pt" text-anchor="end">Målnivå · 12 mnkr</text>
+<line x1="536.2" y1="104.4" x2="536.2" y2="292" stroke="#EAB308" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+<circle cx="536.2" cy="104.4" r="6" fill="#EAB308" stroke="#fff" stroke-width="2"><title>7,0 % → 14 mnkr per månad</title></circle>
+<text x="526.2" y="92.4" class="pt" text-anchor="end">+2 mnkr</text>
+<line x1="636.1" y1="64.2" x2="636.1" y2="292" stroke="#D32F2F" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+<circle cx="636.1" cy="64.2" r="6" fill="#D32F2F" stroke="#fff" stroke-width="2"><title>8,5 % → 17 mnkr per månad</title></circle>
+<text x="626.1" y="52.2" class="pt" text-anchor="end">+5 mnkr</text>
+</svg>
+    <div class="callout warn">
+      <h3>Observera: nivåerna och hållpunkterna är inte samma tal</h3>
+      <p>Tjänsten färgsätter kortet efter <b>grön ≤ 6,0 %</b>, <b>gul 6,1–7,5 %</b> och
+        <b>röd &gt; 7,5 %</b>. Nyckeltalets hållpunkter ligger på 7,0 % (+2 mnkr) och 8,5 %
+        (+5 mnkr) — den första inne i det gula spannet, den andra en bit ovanför den röda
+        gränsen. Modellen räknar på den faktiska procenten och påverkas inte av färgen, men
+        det är värt att veta att "gul nivå kostar +2 mnkr" gäller vid 7,0 %, inte i hela
+        det gula spannet.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="card">
+    <h2>Vad det ger per förvaltning</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Förvaltning</th><th class="n">Tillsvidare&shy;anställda</th>
+        <th class="n">Sjukfrånvaro</th><th class="n">Kostnad/mån</th>
+        <th class="n">Vid målnivå</th><th class="n">Skillnad</th></tr></thead>
+      <tbody><tr><td>Vård och omsorg</td><td class="n">2 800</td><td class="n">7,7 %</td><td class="n">5,4 mnkr</td><td class="n">4,2 mnkr</td><td class="n neg">+1,2 mnkr</td></tr>
+<tr><td>Barn och utbildning</td><td class="n">2 560</td><td class="n">6,1 %</td><td class="n">3,9 mnkr</td><td class="n">3,8 mnkr</td><td class="n neg">+64 tkr</td></tr>
+<tr><td>Miljökontoret</td><td class="n">42</td><td class="n">2,6 %</td><td class="n">27 tkr</td><td class="n">63 tkr</td><td class="n pos">−36 tkr</td></tr>
+<tr><td>Stadsbyggnadskontoret</td><td class="n">125</td><td class="n">3,0 %</td><td class="n">94 tkr</td><td class="n">188 tkr</td><td class="n pos">−94 tkr</td></tr>
+<tr><td>Lantmäterikontoret</td><td class="n">23</td><td class="n">2,8 %</td><td class="n">16 tkr</td><td class="n">34 tkr</td><td class="n pos">−18 tkr</td></tr>
+<tr><td>Kommunstyrelsekontoret</td><td class="n">917</td><td class="n">5,5 %</td><td class="n">1,3 mnkr</td><td class="n">1,4 mnkr</td><td class="n pos">−115 tkr</td></tr>
+<tr><td>Överförmyndarkontoret</td><td class="n">16</td><td class="n">0,1 %</td><td class="n">400 kr</td><td class="n">24 tkr</td><td class="n pos">−24 tkr</td></tr>
+<tr><td>Kultur och fritid</td><td class="n">266</td><td class="n">3,9 %</td><td class="n">259 tkr</td><td class="n">399 tkr</td><td class="n pos">−140 tkr</td></tr>
+<tr><td>Individ och arbetsmarknad</td><td class="n">688</td><td class="n">5,6 %</td><td class="n">963 tkr</td><td class="n">1,0 mnkr</td><td class="n pos">−69 tkr</td></tr></tbody>
+      <tfoot><tr><td>Summa</td><td class="n">7 437</td><td class="n"></td>
+        <td class="n">11,9 mnkr</td><td class="n">11,2 mnkr</td>
+        <td class="n neg">+759 tkr</td></tr></tfoot>
+    </table></div>
+    <svg viewBox="0 0 760 366" class="chart" role="img" aria-labelledby="m-t m-d">
+<title id="m-t">Skillnad mot målnivån per förvaltning, kronor per månad</title>
+<desc id="m-d">Stapel åt höger = kostar mer än vid målnivån 6,0 procent. Stapel åt vänster = kostar mindre.</desc>
+<text x="287" y="20" class="lg">Dyrare än målnivån →</text>
+<text x="271" y="20" class="lg" text-anchor="end">← Billigare</text>
+<line x1="210.0" y1="28" x2="210.0" y2="322" stroke="#E5E5E5" stroke-width="1"/>
+<text x="210.0" y="342" class="tick" text-anchor="middle">−0,25</text>
+<line x1="279.4" y1="28" x2="279.4" y2="322" stroke="#1F1F25" stroke-width="2"/>
+<text x="279.4" y="342" class="tick" text-anchor="middle">0</text>
+<line x1="348.7" y1="28" x2="348.7" y2="322" stroke="#E5E5E5" stroke-width="1"/>
+<text x="348.7" y="342" class="tick" text-anchor="middle">0,25</text>
+<line x1="418.1" y1="28" x2="418.1" y2="322" stroke="#E5E5E5" stroke-width="1"/>
+<text x="418.1" y="342" class="tick" text-anchor="middle">0,50</text>
+<line x1="487.4" y1="28" x2="487.4" y2="322" stroke="#E5E5E5" stroke-width="1"/>
+<text x="487.4" y="342" class="tick" text-anchor="middle">0,75</text>
+<line x1="556.8" y1="28" x2="556.8" y2="322" stroke="#E5E5E5" stroke-width="1"/>
+<text x="556.8" y="342" class="tick" text-anchor="middle">1,00</text>
+<line x1="626.1" y1="28" x2="626.1" y2="322" stroke="#E5E5E5" stroke-width="1"/>
+<text x="626.1" y="342" class="tick" text-anchor="middle">1,25</text>
+<text x="425" y="362" class="axl" text-anchor="middle">Skillnad mot målnivån, mnkr per månad</text>
+<text x="196" y="54" class="rl" text-anchor="end">Vård och omsorg</text>
+<rect x="279.4" y="41" width="330.1" height="18" fill="#D32F2F" rx="3"><title>Vård och omsorg: +1,2 mnkr per månad mot målnivån</title></rect>
+<text x="654" y="54" class="dl">+1,2 mnkr</text>
+<text x="196" y="86" class="rl" text-anchor="end">Barn och utbildning</text>
+<rect x="279.4" y="73" width="17.8" height="18" fill="#D32F2F" rx="3"><title>Barn och utbildning: +64 tkr per månad mot målnivån</title></rect>
+<text x="654" y="86" class="dl">+64 tkr</text>
+<text x="196" y="118" class="rl" text-anchor="end">Lantmäterikontoret</text>
+<rect x="274.3" y="105" width="5.1" height="18" fill="#1E8A4E" rx="3"><title>Lantmäterikontoret: −18 tkr per månad mot målnivån</title></rect>
+<text x="654" y="118" class="dl">−18 tkr</text>
+<text x="196" y="150" class="rl" text-anchor="end">Överförmyndarkontoret</text>
+<rect x="272.8" y="137" width="6.5" height="18" fill="#1E8A4E" rx="3"><title>Överförmyndarkontoret: −24 tkr per månad mot målnivån</title></rect>
+<text x="654" y="150" class="dl">−24 tkr</text>
+<text x="196" y="182" class="rl" text-anchor="end">Miljökontoret</text>
+<rect x="269.5" y="169" width="9.9" height="18" fill="#1E8A4E" rx="3"><title>Miljökontoret: −36 tkr per månad mot målnivån</title></rect>
+<text x="654" y="182" class="dl">−36 tkr</text>
+<text x="196" y="214" class="rl" text-anchor="end">Individ och arbetsmarknad</text>
+<rect x="260.3" y="201" width="19.1" height="18" fill="#1E8A4E" rx="3"><title>Individ och arbetsmarknad: −69 tkr per månad mot målnivån</title></rect>
+<text x="654" y="214" class="dl">−69 tkr</text>
+<text x="196" y="246" class="rl" text-anchor="end">Stadsbyggnadskontoret</text>
+<rect x="253.3" y="233" width="26.0" height="18" fill="#1E8A4E" rx="3"><title>Stadsbyggnadskontoret: −94 tkr per månad mot målnivån</title></rect>
+<text x="654" y="246" class="dl">−94 tkr</text>
+<text x="196" y="278" class="rl" text-anchor="end">Kommunstyrelsekontoret</text>
+<rect x="247.6" y="265" width="31.8" height="18" fill="#1E8A4E" rx="3"><title>Kommunstyrelsekontoret: −115 tkr per månad mot målnivån</title></rect>
+<text x="654" y="278" class="dl">−115 tkr</text>
+<text x="196" y="310" class="rl" text-anchor="end">Kultur och fritid</text>
+<rect x="240.6" y="297" width="38.7" height="18" fill="#1E8A4E" rx="3"><title>Kultur och fritid: −140 tkr per månad mot målnivån</title></rect>
+<text x="654" y="310" class="dl">−140 tkr</text>
+</svg>
+    <p style="font-size:13px;color:var(--ink2)">Nästan hela merkostnaden ligger hos Vård och
+      omsorg. Sju av nio förvaltningar ligger under målnivån och bidrar med en beräknad
+      besparing.</p>
+  </div>
+</section>
+
+<section>
+  <div class="card">
+    <h2>Så visas det i kortet</h2>
+    <p>Rutan ligger inne i sjukfrånvarokortet, under diagrammet. Den finns alltid där — saknas
+      underlag står det varför i stället för att rutan tyst uteblir.</p>
+    <div class="ruta">
+      <div class="rub">◎ Estimerad kostnad för sjukfrånvaro</div>
+      <div class="belopp">5,4 mnkr <small>per månad</small></div>
+      <div class="txt">7,7 % sjukfrånvaro bland 2 800 tillsvidareanställda. Vid målnivån
+        6,0 % hade kostnaden varit 4,2 mnkr —
+        <b class="mer">en merkostnad på 1,2 mnkr per månad</b>.</div>
+    </div>
+    <p style="font-size:13px;color:var(--ink2);margin-top:12px">Jämförelsen mot målnivån
+      vänds efter var förvaltningen ligger. Exemplet ovan är en förvaltning <b>över</b> målet,
+      där målnivån är något att sikta mot. Ligger förvaltningen <b>under</b> målet vore
+      målnivån en försämring, och då står det i stället: <i>"Det är under målnivån 6,0 %,
+      vilket motsvarar 115 tkr lägre kostnad per månad än om frånvaron låg på målet"</i> —
+      med beloppet i grönt. En i-ikon i rutan visar hela härledningen och påminner om att
+      det är en uppskattning.</p>
+  </div>
+</section>
+
+<section>
+  <div class="card">
+    <h2>Antaganden och avgränsningar</h2>
+    <ol class="fragor">
+      <li><b>Bara tillsvidareanställda räknas.</b> Underlaget är 7 437
+        tillsvidareanställda per 2026-04-30. Visstids- och timanställda ingår inte, vilket
+        sannolikt gör uppskattningen försiktig.</li>
+      <li><b>Styckkostnaden behåller modellens egen bas.</b> Nyckeltalet räknar på 8 000
+        anställda, men den faktiska summan är 7 437. Vi behåller
+        250 kr i stället för att skala om, vilket gör att summan vid målnivå landar på
+        11,2 mnkr i stället för exakt 12 mnkr — en skillnad på
+        844 tkr som helt beror på att förvaltningarna tillsammans
+        är 563 färre än modellens bas.</li>
+      <li><b>Kostnaden är linjär.</b> Modellen skiljer inte på korttids- och långtidsfrånvaro,
+        trots att de kostar olika — vikarier, produktionsbortfall och rehabilitering ser inte
+        likadana ut.</li>
+      <li><b>Personalunderlaget är en fast tabell.</b> Antalet anställda uppdateras inte
+        automatiskt utan ändras i koden när nytt underlag kommer.</li>
+      <li><b>Det är en uppskattning för dialogen</b>, inte en bokförd kostnad, och ska inte
+        användas som ekonomiskt beslutsunderlag i sig.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Frågor till HR</h2>
+    <ol class="fragor">
+      <li>Är <b>250 kr per anställd och procentenhet</b> rätt styckkostnad, och vad ingår i
+        den — vikariekostnad, sjuklön, produktionsbortfall, rehabilitering?</li>
+      <li>Ska <b>visstids- och timanställda</b> räknas in i underlaget? I så fall behöver vi
+        motsvarande siffror.</li>
+      <li>Bör modellen skilja på <b>korttids- och långtidsfrånvaro</b>? Kortet har redan
+        andelen långtidsfrånvaro, så en uppdelning vore möjlig.</li>
+      <li>Hur ofta ska <b>personalunderlaget</b> uppdateras, och vem äger den siffran?</li>
+      <li>Ska kostnaden visas även för <b>hela kommunen</b> någonstans, eller bara per
+        förvaltning i dialogen?</li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <p>Aggregerad statistik per förvaltning. Inga personuppgifter förekommer. Framtagen
+    2026-08-13 som dokumentation av kostnadsberäkningen i sjukfrånvarokortet.</p>
+</footer>
+
+</div>
+</body>
+</html>

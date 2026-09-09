@@ -1,0 +1,177 @@
+{
+  "meta": {
+    "beskrivning": "Dataordbok för nyckeltalen i appen — populärnamn, enheter, koder och statusnivåer så att en användare i gränssnittet förstår vad varje datapunkt betyder. Beskriver de tre importerade (datadrivna) nyckeltalen HME, Ekonomi och Sjukfrånvaro.",
+    "version": "1.0",
+    "senastUppdaterad": "2026-07-03",
+    "statusskala": {
+      "beskrivning": "Gemensam trafikljusskala. Färgen sätts av tröskelvärden per nyckeltal och visas med legendtexten i GUI.",
+      "good": { "farg": "grön", "legend": "Över mål" },
+      "warn": { "farg": "gul", "legend": "Bevaka" },
+      "alert": { "farg": "röd", "legend": "Åtgärd krävs" }
+    },
+    "koppling": "Varje rad i källfilerna knyts till rätt förvaltning via masterdata-koden (orgId / CSV-kolumnen 'Enhet')."
+  },
+
+  "nyckeltal": {
+    "hme": {
+      "namn": "Hållbart medarbetarengagemang",
+      "kortnamn": "HME",
+      "beskrivning": "Totalindex ur medarbetarundersökningen som mäter engagemang, styrning och ledarskap.",
+      "enhet": "index (0–100)",
+      "kalla": "Medarbetarundersökning (HME-mätning)",
+      "uppdateringsrytm": "Vartannat år (mätår 2017, 2019, 2021, 2023, 2025 …).",
+      "huvudvarde": {
+        "popularnamn": "HME-totalindex",
+        "beskrivning": "Senaste mätårets totalindex för förvaltningen.",
+        "enhet": "index (0–100)"
+      },
+      "mal": { "varde": 75, "text": "≥ 75" },
+      "statusniva": {
+        "good": "≥ 75 (på eller över mål)",
+        "warn": "70–74 (nära mål, inom 5 enheter under)",
+        "alert": "< 70 (under mål)"
+      },
+      "trend": {
+        "popularnamn": "Förändring sedan förra mätningen",
+        "beskrivning": "Senaste mätårets index minus föregående mätårs (t.ex. 2025 minus 2023).",
+        "enhet": "procentenheter (p.e.)"
+      },
+      "datapunkter": {
+        "matningar": {
+          "popularnamn": "Årsserie",
+          "beskrivning": "Index per mätår (år → värde; null = ingen mätning det året). Ritas som linje över tid.",
+          "enhet": "index (0–100)"
+        },
+        "antal_svar": {
+          "popularnamn": "Antal svarande",
+          "beskrivning": "Antal medarbetare som besvarat undersökningen (senaste mätåret). Litet antal = osäkrare värde.",
+          "enhet": "antal"
+        },
+        "diff": {
+          "popularnamn": "Differens mellan mätår",
+          "beskrivning": "Skillnad i totalindex mellan de två senaste mätåren.",
+          "enhet": "procentenheter (p.e.)"
+        }
+      },
+      "dimensioner": {
+        "Enhet": "Per förvaltning (bär orgId = masterdata-kod). Det är dessa rader som kopplas till förvaltningarna i appen.",
+        "Ålder": "Koncernnivå, uppdelat på åldersgrupp (ej per förvaltning).",
+        "Kön": "Koncernnivå, uppdelat på kön (ej per förvaltning)."
+      }
+    },
+
+    "ekonomi": {
+      "namn": "Ekonomi",
+      "kortnamn": null,
+      "beskrivning": "Förvaltningens resultaträkning; nettokostnaden mot budget är det som följs upp.",
+      "enhet": "mnkr (miljoner kronor)",
+      "kalla": "Ekonomisystem via Qlik-export (CSV, koder översätts till klartext i appen).",
+      "uppdateringsrytm": "Månadsvis. Uppdateras runt den 7:e; en månad är komplett först en bit in i nästa (runt den 8–10:e). Tidigt i månaden är bilden ofullständig.",
+      "huvudvarde": {
+        "popularnamn": "Avvikelse mot budget",
+        "beskrivning": "Skillnaden mellan ackumulerad budget och utfall för Verksamhetens nettokostnad (SK.EK.RR.005), t.o.m. senaste rapportperioden.",
+        "enhet": "mnkr",
+        "teckenkonvention": "Kommunal konvention: MINUS = över budget (spenderat mer än budget), PLUS = under budget. På budget = ±0."
+      },
+      "mal": { "text": "Hålla budget (±0 mnkr avvikelse)" },
+      "statusniva": {
+        "good": "Utfall ≤ 100 % av ackumulerad budget (inom budget)",
+        "warn": "Utfall ≤ 102 % av budget (svagt över)",
+        "alert": "Utfall > 102 % av budget (överskrider)"
+      },
+      "matt": {
+        "popularnamn_kolumn": "Måttkod (SK.EK.RR.xxx) → populärnamn",
+        "SK.EK.RR.001": "Verksamhetens intäkter",
+        "SK.EK.RR.002": "Personalkostnader",
+        "SK.EK.RR.003": "Verksamhetens övriga kostnader",
+        "SK.EK.RR.004": "Avskrivningar",
+        "SK.EK.RR.005": "Verksamhetens nettokostnad (huvudmått — kortets värde beräknas härifrån)",
+        "SK.EK.RR.006": "Skattemedel",
+        "SK.EK.RR.007": "Finansiella intäkter",
+        "SK.EK.RR.008": "Finansiella kostnader",
+        "SK.EK.RR.009": "Resultat"
+      },
+      "kolumner": {
+        "beskrivning": "CSV-kolumnkoder per mått (alla i mnkr).",
+        "K14": { "popularnamn": "Budget helår", "beskrivning": "Årsbudget för hela året." },
+        "K15": { "popularnamn": "Budget ackumulerad", "beskrivning": "Budget hittills i år (t.o.m. rapportperioden)." },
+        "K16": { "popularnamn": "Utfall", "beskrivning": "Faktiskt utfall hittills i år." },
+        "K17": { "popularnamn": "Utfall föregående år", "beskrivning": "Utfall samma period föregående år (jämförelse)." },
+        "K18": { "popularnamn": "Prognos", "beskrivning": "Helårsprognos." }
+      },
+      "datapunkter": {
+        "resultatrakning": {
+          "popularnamn": "Resultaträkning",
+          "beskrivning": "Alla mått ovan med budget/utfall/prognos — full nedbrytning under kortet."
+        },
+        "nettokostnad_per_omrade": {
+          "popularnamn": "Nettokostnad per verksamhetsområde",
+          "beskrivning": "Nettokostnaden (SK.EK.RR.005) nedbruten per verksamhetsområde (måttkod SK.EK.RR.005.XX).",
+          "enhet": "mnkr"
+        },
+        "serie": {
+          "popularnamn": "Månadsserie (nettokostnad)",
+          "beskrivning": "Nettokostnaden per rapportperiod över året — ritas i nettokostnadsdiagrammet (budget helår/ackumulerad, utfall, föregående år, prognos).",
+          "enhet": "mnkr"
+        }
+      }
+    },
+
+    "sjukfranvaro": {
+      "namn": "Sjukfrånvaro",
+      "kortnamn": null,
+      "beskrivning": "Sjukfrånvaro i procent av ordinarie arbetstid, med köns- och åldersfördelning samt långtidsandel.",
+      "enhet": "% av ordinarie arbetstid",
+      "kalla": "Personalsystem via lönekörning (Qlik-export CSV).",
+      "uppdateringsrytm": "Månadsvis. Lönekörning sker runt den 20:e; den senaste månaden fångar bara ~70–80 % av den slutliga bilden (registrering/attest hinner inte ikapp) och ser nästan alltid bättre ut än verkligheten. Tillförlitlig statistik finns först efter ett par månader.",
+      "huvudvarde": {
+        "popularnamn": "Total sjukfrånvaro",
+        "beskrivning": "Total sjukfrånvaro i % av ordinarie arbetstid (måttkod SK.P.SJ.001, kolumn K20).",
+        "enhet": "%",
+        "riktning": "Lägre är bättre."
+      },
+      "mal": { "varde": 6.0, "text": "≤ 6,0 %" },
+      "statusniva": {
+        "good": "≤ 6,0 % (på eller under mål)",
+        "warn": "6,1–7,5 % (strax över mål eller stigande)",
+        "alert": "> 7,5 %, eller en ökning > 1,5 procentenheter på ett kvartal"
+      },
+      "matt": {
+        "popularnamn_kolumn": "Måttkod (SK.P.SJ.xxx) → populärnamn",
+        "SK.P.SJ.001": { "popularnamn": "Total sjukfrånvaro", "beskrivning": "% av ordinarie arbetstid (huvudmått).", "enhet": "%" },
+        "SK.P.SJ.002": { "popularnamn": "Långtidsandel", "beskrivning": "Andel av sjukfrånvaron i sammanhängande tid ≥ 60 dagar.", "enhet": "%" },
+        "SK.P.SJ.003": { "popularnamn": "Sjukfrånvaro 29 år eller yngre", "beskrivning": "Sjukfrånvaro för åldersgruppen ≤ 29 år.", "enhet": "%" },
+        "SK.P.SJ.004": { "popularnamn": "Sjukfrånvaro 30–49 år", "beskrivning": "Sjukfrånvaro för åldersgruppen 30–49 år.", "enhet": "%" },
+        "SK.P.SJ.005": { "popularnamn": "Sjukfrånvaro 50 år eller äldre", "beskrivning": "Sjukfrånvaro för åldersgruppen ≥ 50 år.", "enhet": "%" }
+      },
+      "kolumner": {
+        "beskrivning": "CSV-kolumnkoder (andelar i %).",
+        "K20": { "popularnamn": "Totalt", "beskrivning": "Värde för hela gruppen." },
+        "K12": { "popularnamn": "Kvinnor", "beskrivning": "Kvinnors andel/värde i %." },
+        "K13": { "popularnamn": "Män", "beskrivning": "Mäns andel/värde i %." }
+      },
+      "datapunkter": {
+        "konsfordelning": {
+          "popularnamn": "Könsfördelning",
+          "beskrivning": "Total sjukfrånvaro uppdelat på kvinnor (K12) och män (K13).",
+          "enhet": "%"
+        },
+        "langtidsandel": {
+          "popularnamn": "Långtidsandel",
+          "beskrivning": "Andel av sjukfrånvaron som är sammanhängande ≥ 60 dagar (SK.P.SJ.002).",
+          "enhet": "%"
+        },
+        "aldersgrupper": {
+          "popularnamn": "Åldersgrupper",
+          "beskrivning": "Sjukfrånvaro per åldersgrupp (SK.P.SJ.003/004/005).",
+          "enhet": "%"
+        },
+        "serie": {
+          "popularnamn": "Tidsserie",
+          "beskrivning": "Total sjukfrånvaro per period, med kvinnors och mäns andel — ritas i sjukfrånvarodiagrammet.",
+          "enhet": "%"
+        }
+      }
+    }
+  }
+}

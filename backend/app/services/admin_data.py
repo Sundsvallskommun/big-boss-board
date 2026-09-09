@@ -24,7 +24,7 @@ from app.models import (
     Organisation,
     Question,
 )
-from app.schemas import AdminMeasurementIn
+from app.schemas import MeasurementOut, AdminMeasurementIn
 
 # Fält som måste finnas när ett mätvärde skapas från grunden (övriga har defaultvärden).
 PAKRAVDA_VID_NYSKAPANDE = {"value_text", "value_num", "target_text", "target_num", "status"}
@@ -87,12 +87,7 @@ async def read_state(session: AsyncSession) -> dict:
                     (
                         {
                             "kpi_key": m.kpi_area.key,
-                            "value_text": m.value_text,
-                            "value_num": m.value_num,
-                            "unit": m.unit,
-                            "target_text": m.target_text,
-                            "status": m.status.value,
-                            "trend_text": m.trend_text,
+                            **MeasurementOut.model_validate(m).model_dump(mode="json"),
                         }
                         for m in d.measurements
                     ),

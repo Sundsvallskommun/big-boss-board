@@ -17,6 +17,7 @@ from app.schemas import (
     EkonomiRapport,
     EkonomiResultat,
     HmeImport,
+    HmeRapportImport,
     ImportResultat,
     SjukImport,
     SjukResultat,
@@ -28,9 +29,9 @@ from app.services.ekonomi_import import (
     import_ekonomi,
     report_to_payload,
 )
-from app.services.hme_import import import_hme
+from app.services.hme_import import import_hme, report_to_payload as hme_report_to_payload
 from app.services.sjukfranvaro_import import csv_to_payload as sjuk_csv_to_payload
-from app.services.sjukfranvaro_import import import_sjukfranvaro
+from app.services.sjukfranvaro_import import import_sjukfranvaro, filer_to_payload as sjuk_filer_to_payload
 
 router = APIRouter(prefix="/api/import", tags=["import"])
 
@@ -110,3 +111,24 @@ async def import_ekonomi_filer_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return await import_ekonomi(session, payload)
+
+
+@router.post("/hme-rapport", response_model=ImportResultat, dependencies=[Depends(require_import_token)])
+async def import_hme_rapport_endpoint(body: HmeRapportImport, session: AsyncSession = Depends(get_session)) -> dict:
+    """Totalindex och valfri separat delindexrapport normaliseras av HME-importens ägare."""
+    try:
+        payload = HmeImport(**hme_report_to_payload(body.rapport, delindex=body.delindex))
+        if not payload.forvaltningar:
+            raise ValueError("Hittar inga verksamheter i totalindexrapporten.")
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail="Ogiltig HME-rapport: " + str(exc)) from exc
+    return await import_hme(session, payload)
+
+
+@router.post("/sjukfranvaro-filer", response_model=SjukResultat, dependencies=[Depends(require_import_token)])
+async def import_sjukfranvaro_filer_endpoint(body: ExportFiler, session: AsyncSession = Depends(get_session)) -> dict:
+    try:
+        payload = SjukImport(**sjuk_filer_to_payload(body.filer))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return await import_sjukfranvaro(session, payload)

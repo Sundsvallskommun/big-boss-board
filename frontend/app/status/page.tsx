@@ -233,7 +233,24 @@ function OvergripandeKort({ q }: { q: StatusFraga }) {
   );
 }
 
-/** Statusrapport: daterat kort med rubrik, text och valfria punkter. Blå accent. */
+/** Punktlista i ett rapportkort — blå prick per rad. */
+function Punktlista({ punkter }: { punkter: string[] }) {
+  return (
+    <ul className="mt-12 flex flex-col gap-6">
+      {punkter.map((p, i) => (
+        <li key={i} className="flex gap-8 text-small leading-relaxed text-dark-secondary">
+          <span
+            className="mt-[7px] h-[5px] w-[5px] shrink-0 rounded-full bg-vattjom-surface-primary"
+            aria-hidden="true"
+          />
+          {p}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Statusrapport: daterat kort med rubrik, text, punkter och återstående aktiviteter. */
 function StatusrapportKort({ r, senaste }: { r: Statusrapport; senaste: boolean }) {
   return (
     <li className="overflow-hidden rounded-12 border border-hairline border-l-[6px] border-l-vattjom-surface-primary bg-background-content">
@@ -253,21 +270,12 @@ function StatusrapportKort({ r, senaste }: { r: Statusrapport; senaste: boolean 
           {r.rubrik}
         </h3>
         <p className="mt-8 text-small leading-relaxed text-dark-secondary">{r.text}</p>
-        {r.punkter && r.punkter.length > 0 && (
-          <ul className="mt-12 flex flex-col gap-6">
-            {r.punkter.map((p, i) => (
-              <li
-                key={i}
-                className="flex gap-8 text-small leading-relaxed text-dark-secondary"
-              >
-                <span
-                  className="mt-[7px] h-[5px] w-[5px] shrink-0 rounded-full bg-vattjom-surface-primary"
-                  aria-hidden="true"
-                />
-                {p}
-              </li>
-            ))}
-          </ul>
+        {r.punkter && r.punkter.length > 0 && <Punktlista punkter={r.punkter} />}
+        {r.aterstaende && r.aterstaende.length > 0 && (
+          <div className="mt-20 border-t border-hairline pt-16">
+            <h4 className="eyebrow text-vattjom-text-primary">Återstående aktiviteter</h4>
+            <Punktlista punkter={r.aterstaende} />
+          </div>
         )}
       </div>
     </li>

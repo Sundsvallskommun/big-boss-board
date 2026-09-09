@@ -24,3 +24,62 @@ Inga serverstarter, fulla byggen eller databasmigrationer har körts.
 
 Återtagning: denna etapp kan återtas med sin commit. Inga schemaändringar i databasen.
 Äldre /ekonomi-serie finns kvar för befintliga klienter som redan skickar valda perioder.
+
+## Etapp 2 — produktfunktioner och gemensamma datakontrakt
+
+Infört från Jaris produktarbete fram till dc54342:
+
+- Budget–prognos i ekonomins kort och månadsdiagram. Det oanvända nettokostnadsdiagrammet
+  är borttaget. Underliggande resultaträkning sparas fortfarande.
+- R12-sjukfrånvaro, kvartalstrend, larm på snabb ökning, historikbevarande och uppskattad
+  årskostnad. Kostnadstexten förklarar att personalantalet är en ögonblicksbild, schablonen
+  ger inte ett exakt historiskt kostnadsutfall. Reservantalet är uttryckligen daterat.
+- HME-total och tre delperspektiv, organisationsspecifika frågor, Stadsbacken och MRF,
+  rubriksatta verksamhetsfrågor och enkätursprung för kommunikativt ledarskap.
+- Återstående aktiviteter på statusrapporter, uppdaterad statusväljare och informationsrutor
+  i portal med fokus vid öppning och återgång vid stängning/Escape.
+- Webbimport av flera CSV/TXT-filer och HME-totalindex + delindex. CLI och webb använder
+  samma backendnormalisering. Inget byte av inloggning eller API-proxy.
+
+Ägarskap och rättningar:
+
+- `services/ekonomi.py` äger tecken, saknat underlag, status och tolkning. Import och
+  `MeasurementOut` använder samma bedömning. Läsprojektionen gör också redan lagrade
+  ackumulerade huvudfält konsekventa med den nya definitionen före nästa import.
+- Saknad prognos ger null i värde/status, aldrig ett påhittat noll/grönt besked. En extra
+  migration gör dessa två measurement-kolumner nullable; manuella statusar ändras inte.
+- Aprilrättningen för Barn och utbildning är avgränsad till kod 24, april 2026 och budget
+  -2972,31 mnkr. Skälet och källcommit följer med i underlaget. Ändrad budget kräver
+  omprövning i stället för en tyst överskrivning. Ta bort rättningen när källexporten rättats.
+- R12 kontrolleras i backend även för direkt-API. Export utan personalmått kan inte
+  verifieras som R12 och avvisas. Normaliserad payload kräver uttrycklig mätmetod.
+  Gammal monterad personalfil stoppas från import vid seed utan att blockera appstart;
+  befintliga äldre värden visas som "Inväntar R12" tills nytt underlag importerats.
+- HME-perspektiv bevaras vid efterföljande totalindeximport. Explicit tom perspektivkarta
+  kan rensa dem. Ingen separat HME-omvandling finns längre i webb/CLI.
+- Gemensam API-transport ger omförsök bara för läsningar. Skrivning görs en gång med
+  timeout och tydligt besked om okänt utfall; kommunens rewrite/sessionstransport behålls.
+- Historiska statiska rapporter finns i `docs/rapporter/`, märkta som ögonblicksbilder.
+  De publiceras inte som om de vore aktuella vyer. Jaris prototyp är inte en produktfunktion.
+
+Verifierat: 24 produkt-/importtester (varav databasprov i SQLite-minne och HTTP-kontrakt),
+16 befintliga auth/redirect-tester, senare ytterligare ett seedprov (upprepad start med gammal
+personalfil), tre små frontendtester och TypeScript. Ruff godkänd på ändrade backendägare.
+Alla sex migrationer genererar PostgreSQL-SQL utan databasanslutning. Detta ersätter inte
+ett faktiskt migrationsprov i PostgreSQL eller visuell granskning i webbläsare.
+
+Kommandon (alltid under global supervisor):
+
+- `backend/.venv/bin/python -m pytest backend/tests/test_ekonomi_import.py backend/tests/test_product_imports.py backend/tests/test_auth_api.py backend/tests/test_redirects.py -q`
+- `node --experimental-transform-types --test --test-concurrency=1 frontend/tests/product.test.mjs`
+- `frontend/node_modules/.bin/tsc --noEmit --incremental false -p frontend/tsconfig.json`
+- I backend: `DATABASE_URL=postgresql+asyncpg://test:test@localhost:65500/test .venv/bin/python -m alembic upgrade a0d5e6f7b109:head --sql`
+
+Inför drift: ta databassnapshot, kör sex migrationer och seed enligt befintlig deployväg,
+importera aktuellt R12-underlag och HME-delindex. Detta arbete har inte hämtat eller ändrat
+driftens data. Seed uppdaterar allmänna frågor och skapar koncernverksamheterna; statusrapporters
+befintliga innehåll skrivs inte över. Fältet återstående aktiviteter fylls via befintligt admin-API.
+
+Återtagning: återställ kodversion och databassnapshot tillsammans om importer hunnit köras.
+Nullable-migrationens downgrade vägrar om nullvärden finns; den fabricerar inte en gammal
+status. Senare importer har också ändrat mätmetoden, vilket enbart schema-downgrade inte återställer.

@@ -17,7 +17,8 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Dialogue, KpiArea, Measurement, Organisation, Status, TrendDir
+from app.models import Dialogue, KpiArea, Measurement, Organisation
+from app.services.ekonomi import bedom_ekonomi, korrigering_for
 from app.schemas import EkonomiEnhet, EkonomiImport, ExportFil
 
 # Resultaträkningens mått (RR.005 = Verksamhetens nettokostnad är kortets huvudvärde).
@@ -61,25 +62,6 @@ ENHET_NAMN = {
 # ingår därför inte. Exporten innehåller även sektion och enhet; de filtreras bort vid
 # parsningen (se csv_to_payload).
 FORVALTNING_KODER = frozenset(ENHET_NAMN) - {"13"}
-
-# Tröskelvärden för färg (nettokostnad mot ackumulerad budget, lägre är bättre).
-EK_BUDGET = 100.0   # på/under budget
-EK_GUL_TAK = 102.0  # svagt över
-
-
-def ekonomi_status(pct_av_budget: float) -> Status:
-    """Färgnivå för nettokostnad mot budget: ≤100 % grön, ≤102 % gul, annars röd."""
-    if pct_av_budget <= EK_BUDGET:
-        return Status.good
-    if pct_av_budget <= EK_GUL_TAK:
-        return Status.warn
-    return Status.alert
-
-
-def _num(value: float) -> str:
-    """mnkr med svensk decimal (en decimal), heltal utan decimal."""
-    return str(int(value)) if float(value).is_integer() else f"{value:.1f}".replace(".", ",")
-
 
 def report_to_payload(report: dict) -> dict:
     """Rå ekonomirapport (`poster` i long-format) → normaliserad EkonomiImport-payload.
@@ -276,8 +258,27 @@ def _serie_med_period(befintlig: list[dict], enhet: EkonomiEnhet, period: str) -
         "utfall": netto.utfall,
         "utfall_fg": netto.utfall_fg,
         "prognos": netto.prognos,
+        "korrigerad": netto.korrigerad,
+        "korrigering_orsak": netto.korrigering_orsak,
     }
     return [per_period[p] for p in sorted(per_period)]
+
+
+def korrigerat_underlag(enhet: EkonomiEnhet, period: str) -> EkonomiEnhet:
+    """En dokumenterad rättning följer både huvudvärdet och månadsserien, i alla importvägar."""
+    enhet = enhet.model_copy(deep=True)
+    netto = enhet.matt.get(NETTOKOSTNAD)
+    if netto is not None:
+        korr = korrigering_for(enhet.kod, period, netto.budget_helar)
+        if korr:
+            netto.prognos = korr.prognos
+            netto.korrigerad, netto.korrigering_orsak = True, korr.orsak
+    for punkt in enhet.serie:
+        korr = korrigering_for(enhet.kod, punkt.period, punkt.budget_helar)
+        if korr:
+            punkt.prognos = korr.prognos
+            punkt.korrigerad, punkt.korrigering_orsak = True, korr.orsak
+    return enhet
 
 
 def _measurement_fields(
@@ -287,46 +288,11 @@ def _measurement_fields(
     befintlig_serie: list[dict] | None = None,
 ) -> dict:
     """Bygg mätvärdesfält: nettokostnad mot budget + resultaträkning/områden i details."""
+    enhet = korrigerat_underlag(enhet, period)
     netto = enhet.matt.get(NETTOKOSTNAD)
-    if netto is None or not netto.budget_ack:
-        raise ValueError(f"{enhet.namn!r} saknar nettokostnad/budget — kan inte beräkna utfall mot budget.")
-
-    utfall = netto.utfall or 0.0
-    budget_ack = netto.budget_ack
-    kostnad = abs(utfall)
-    budget = abs(budget_ack)
-    pct = round(kostnad / budget * 100, 1)
-    status = ekonomi_status(pct)
-    # Headline: avvikelse mot ackumulerad budget i mnkr, med tecken enligt kommunal
-    # konvention — minus = över budget (spenderat mer än budget), plus = under budget.
-    avvikelse = round(budget - kostnad, 1)
-    if avvikelse > 0:
-        value_text = f"+{_num(avvikelse)} mnkr"
-    elif avvikelse < 0:
-        value_text = f"−{_num(abs(avvikelse))} mnkr"
-    else:
-        value_text = "±0 mnkr"
-
-    # Trend: nettokostnad i år mot fg år (ack, jämförbar period). Högre kostnad = sämre.
-    trend_dir: TrendDir | None = None
-    trend_good: bool | None = None
-    trend_text = "Inget jämförelseår"
-    if netto.utfall_fg:
-        diff = round(abs(utfall) - abs(netto.utfall_fg), 1)
-        if diff > 0:
-            trend_dir, trend_good = TrendDir.up, False
-            trend_text = f"+{_num(diff)} mnkr vs fg år"
-        elif diff < 0:
-            trend_dir, trend_good = TrendDir.down, True
-            trend_text = f"−{_num(abs(diff))} mnkr vs fg år"
-        else:
-            trend_text = "Oförändrat vs fg år"
-
-    interp = {
-        Status.good: f"Nettokostnaden ligger inom budget (avvikelse {value_text} mot ackumulerad budget). Fortsätt följa kostnadsutvecklingen.",
-        Status.warn: f"Nettokostnaden ligger något över budget (avvikelse {value_text}). Bevaka utvecklingen.",
-        Status.alert: f"Nettokostnaden överskrider budget (avvikelse {value_text}). Vidta åtgärder och följ upp tätare.",
-    }[status]
+    if netto is None:
+        raise ValueError(f"{enhet.namn!r} saknar nettokostnad.")
+    bedomning = bedom_ekonomi(netto.budget_helar, netto.prognos)
 
     resultatrakning = [
         {
@@ -337,6 +303,8 @@ def _measurement_fields(
             "utfall": m.utfall,
             "utfall_fg": m.utfall_fg,
             "prognos": m.prognos,
+            "korrigerad": m.korrigerad,
+            "korrigering_orsak": m.korrigering_orsak,
         }
         for kod, m in sorted(enhet.matt.items())
     ]
@@ -352,19 +320,17 @@ def _measurement_fields(
         serie = _serie_med_period(befintlig_serie or [], enhet, period)
 
     return {
-        "value_text": value_text,
-        # Mätaren visar ackumulerat utfall mot ack. budget (mållinje) i mnkr —
-        # stapel förbi mållinjen = över budget. Färgen styrs av samma tröskel som förr.
-        "value_num": kostnad,
+        "value_text": bedomning.text,
+        "value_num": bedomning.diff,
         "unit": "mnkr",
-        "target_text": f"{_num(budget)} mnkr",
-        "target_num": budget,
-        "bar_max": round(max(kostnad, budget) * 1.15, 1),
-        "status": status,
-        "trend_dir": trend_dir,
-        "trend_good": trend_good,
-        "trend_text": trend_text,
-        "interpretation": interp,
+        "target_text": "Budget i balans",
+        "target_num": 0,
+        "bar_max": 1,  # Ekonomi visar ingen mätare.
+        "status": bedomning.status,
+        "trend_dir": None,
+        "trend_good": None,
+        "trend_text": "",
+        "interpretation": bedomning.tolkning,
         "details": {
             "typ": "ekonomi",
             "enhet": "mnkr",
@@ -419,8 +385,8 @@ async def import_ekonomi(session: AsyncSession, payload: EkonomiImport) -> dict:
             fields = _measurement_fields(enhet, payload.period, payload.kalla, befintlig_serie)
             if m is not None and not enhet.serie and (m.details or {}).get("period", "") > payload.period:
                 fields = {"details": {**m.details, "serie": fields["details"]["serie"]}}
-        except ValueError:
-            rader.append({"namn": enhet.namn, "kod": enhet.kod, "atgard": "ofullstandig"})
+        except ValueError as exc:
+            rader.append({"namn": enhet.namn, "kod": enhet.kod, "atgard": f"Ofullständigt underlag: {exc}"})
             hoppade_over += 1
             continue
 
@@ -439,7 +405,8 @@ async def import_ekonomi(session: AsyncSession, payload: EkonomiImport) -> dict:
                 "namn": enhet.namn,
                 "kod": enhet.kod,
                 "value": m.value_text if m is not None else fields["value_text"],
-                "status": (m.status if m is not None else fields["status"]).value,
+                "status": ((m.status if m is not None else fields["status"]).value
+                           if (m.status if m is not None else fields["status"]) else None),
                 "atgard": atgard,
             }
         )
