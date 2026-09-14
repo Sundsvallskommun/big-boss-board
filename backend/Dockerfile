@@ -17,9 +17,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 # Runtime-deps är låsta i requirements.lock. Projektet installeras därefter utan
 # ny beroendelösning; paketkatalogen behövs först i det steget.
-COPY pyproject.toml requirements.lock ./
+COPY requirements.lock ./
+# Bygg runtime-lxml först, med versionen från samma låsfil. Begränsa sedan
+# --no-binary till xmlsec: dess isolerade byggmiljö behöver bara lxml:s headers
+# och kan använda en wheel, i stället för att källkompilera en andra lxml-version.
+# Båda runtime-biblioteken byggs fortfarande mot systemets libxml2.
 RUN pip install --upgrade pip \
-    && pip install --no-binary lxml,xmlsec -r requirements.lock
+    && pip install --no-binary=lxml -c requirements.lock lxml \
+    && pip install --no-binary=xmlsec -r requirements.lock \
+    && pip check \
+    && python -c "from lxml import etree; import xmlsec; from onelogin.saml2.auth import OneLogin_Saml2_Auth"
+COPY pyproject.toml ./
 COPY app ./app
 RUN pip install --no-deps .
 
