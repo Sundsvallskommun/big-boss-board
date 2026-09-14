@@ -1,4 +1,4 @@
-# Big Boss Board — frontend (Next.js 15, standalone-output).
+# Big Boss Board — frontend (Next.js 16, standalone-output).
 # node:22-bookworm-slim (glibc), INTE alpine (musl): musl:s parallella A/AAAA-
 # uppslag träffar en conntrack-race i Docker och ger intermittenta ~5 s DNS-stopp
 # när servern slår upp `backend` vid SSR (symptom: sidan hänger, noll CPU, funkar
@@ -23,6 +23,8 @@ RUN npm run build
 
 # --- Runtime (minimal, standalone) ---
 FROM base AS runtime
+# Standalone kör bara Node. Pakethanterarna behövs endast i byggstegen.
+RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \

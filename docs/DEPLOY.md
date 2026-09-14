@@ -33,6 +33,10 @@ Operativ checklista för att driftsätta stacken. Teknisk översikt finns i
      `ALLOW_OPEN_ACCESS=true` sätts uttryckligen; sätt aldrig den flaggan i drift.
    - `ADMIN_ACCESSCODE` — separat kod som visar import-GUI:t på `/admin/import`. Vanlig
      `ACCESS_CODE` ser inte GUI:t. Sätts på frontend.
+   - `SESSION_SECRET` — oberoende hemlighet med minst 32 tecken (skapa med
+     `openssl rand -hex 32`). Krävs på frontend när kodinloggning används, även lokalt.
+     Sätt samma värde på alla repliker. Kommunens SAML-läge använder fortsatt `SECRET_KEY`
+     i backend och behöver inte denna nya variabel.
    - `BACKEND_INTERNAL_URL=http://backend:8000` (default räcker normalt).
    - `IMPORT_TOKEN` — hemlig nyckel för HME-importen (se steg 5). Tom = endpoint avstängd.
      Sätts på **både** backend (endpointen) och frontend (import-GUI:ts server-action).
@@ -105,3 +109,25 @@ förvandla inte saknat underlag till ett påhittat värde för att tvinga igenom
 
 Genomförd validering och kvarstående granskningspunkter dokumenteras i aktuell PR,
 inte i en separat arbetslogg i repot.
+
+
+## Införa säkerhets- och HME-uppdateringen
+
+Ändringen kräver ingen datamigrering. Kodinloggning kräver `SESSION_SECRET` på frontend
+före utrullning; äldre kakor med själva koden avvisas och användaren loggar in igen.
+Nyckel- eller kodrotation återkallar utfärdade kodsessioner. SAML:s inställningar och
+Redis-sessioner är oförändrade. Använd inte samma cookie eller nyckel för de två lägena.
+
+Verifiera i testmiljön att SAML-login, `/api/me`, adminbehörighet och utloggning fungerar
+genom kommunens proxy. Rewrites och runtime-ersättning av backend-URL behålls. Ingressen
+ska sätta betrodd sista `X-Forwarded-For`; kodinloggningens räknare är lokala per process
+och behöver kompletteras i ingressen vid flera frontend-repliker. Kontrollera även
+HME-kurvans gränser (mål och mål minus fem) i webbläsaren samt bygg båda containrarna.
+
+Backendens låsfil uppdateras för Python 3.12; SAML-/XML- och Redis-beroenden behålls.
+Node 22 och OpenShift-anpassningen (grupp 0, PORT, kontrollsocket, probes och runtime-URL)
+behålls. Gunicorn får uttryckliga tidsgränser och längre keep-alive. Pakethanterare tas
+bort ur runtime-imagerna. CSP tillåter SAML:s externa omdirigeringar.
+
+**Återställning:** återgå till föregående kod/image; ingen databasåterställning krävs för
+denna ändring. Kodsessioner kan kräva ny inloggning även efter återställning.

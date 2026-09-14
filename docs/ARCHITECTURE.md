@@ -75,6 +75,20 @@ host-port för `frontend` (`FRONTEND_PORT`). Dokploy använder **enbart** `docke
   är också undantagen (publik).
 - **Robusthet:** `frontend/lib/api.ts` (`fetchJson`) har timeout + retry på server-fetchar;
   varje route har `loading.tsx`/`error.tsx`. Se [fallgropar](#viktiga-designbeslut--fallgropar).
+- **Tokenkontroll före kropp:** import- och adminroutrarna använder `ImportTokenRoute`
+  i `app/auth/import_token.py`. Samma ägare validerar tokenen innan FastAPI läser JSON;
+  OpenAPI beskriver Bearer-auth. Inget separat proxyfilter tar bort SAML-cookies.
+- **Kodsession:** `lib/access-session.ts` signerar roll, nonce och 8 timmars giltighet
+  med `SESSION_SECRET`. Den delade koden skickas aldrig som cookie. Samma verifiering
+  används av middleware och adminvyer; kod-/nyckelrotation ogiltigförklarar sessionerna.
+  SAML:s sessionsägare, cookie och `SECRET_KEY` är separata.
+- **Loginspärr:** tio försök per klient och kvart, reserverade före asynkront arbete.
+  IP hämtas ur betrodd sista `X-Forwarded-For`; IPv6 grupperas per /64. Räknarna är
+  minnesbegränsade och lokala per frontend-process. För access_code över flera repliker
+  behövs även gemensam begränsning i ingressen; SAML:s backendspärr är oförändrad.
+- **Headers:** Next sätter CSP för inbäddning, objekt och bas-URL samt nosniff,
+  referrer-/permissions-policy och HSTS. CSP begränsar inte formulärens externa
+  omdirigeringar, eftersom IdP-adressen konfigureras först vid containerstart.
 
 ## Datamodell
 
@@ -237,6 +251,7 @@ aldrig i repo.
 | `HME_DATA_DIR` | backend | Valfri värdkatalog med `HME_totalindex.json` för fil-bootstrap vid start. |
 | `BACKEND_INTERNAL_URL` | frontend | Intern backend-URL för SSR/rewrites (default `http://backend:8000`). |
 | `ACCESS_CODE` | frontend + backend | Åtkomstkod. Tom kod kräver `ALLOW_OPEN_ACCESS=true`, annars fail-closed. |
+| `SESSION_SECRET` | frontend | Minst 32 tecken för signerade kodsessioner. Krävs när koder används, även lokalt; samma värde på alla frontend-repliker. Används inte av SAML. |
 | `ALLOW_OPEN_ACCESS` | frontend | Explicit lokal/demo-flagga för öppen access. Ska aldrig vara `true` i drift. |
 | `ADMIN_ACCESSCODE` | frontend | Admin-kod som dessutom visar import-GUI:t (`/admin/import`). |
 | `NODE_ENV` / `PORT` | frontend | Standard `production` / `3000`. |

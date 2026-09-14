@@ -40,7 +40,7 @@ vill köra en tjänst utanför Docker eller köra importskripten.)
 git clone https://github.com/Sundsvallskommun/big-boss-board.git
 cd big-boss-board
 cp .env.example .env          # sätt POSTGRES_PASSWORD (och matcha den i DATABASE_URL)
-# sätt även ACCESS_CODE, eller ALLOW_OPEN_ACCESS=true för en öppen lokal/demo-körning
+# sätt ACCESS_CODE och SESSION_SECRET, eller ALLOW_OPEN_ACCESS=true för öppen lokal/demo
 docker compose up --build
 ```
 
@@ -73,7 +73,10 @@ lokal/demo-körning.
 ### Åtkomstkod
 
 Sätt `ACCESS_CODE` i `.env` för vanlig inloggning. `ADMIN_ACCESSCODE` ger dessutom
-import-GUI:t på `/admin/import`. Tomma koder släpper inte längre igenom trafik av
+import-GUI:t på `/admin/import`. Kodinloggning kräver även `SESSION_SECRET` med minst
+32 tecken (skapa med `openssl rand -hex 32`); cookien innehåller en signerad session
+som gäller i åtta timmar. SAML använder fortsatt backendens separata `SECRET_KEY`.
+Tomma koder släpper inte längre igenom trafik av
 misstag; för en helt öppen lokal/demo-körning krävs `ALLOW_OPEN_ACCESS=true`
 uttryckligen. Sätt aldrig den flaggan i drift.
 

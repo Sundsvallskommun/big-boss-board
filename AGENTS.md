@@ -147,8 +147,12 @@ Införande och återställning: [`docs/DEPLOY.md`](docs/DEPLOY.md#införa-nyckel
 
 Två lägen, valt med `AUTH_MODE` (frontend-middleware och backend läser samma variabel):
 
-- **access_code** (default): stubben — `ACCESS_CODE`/`ADMIN_ACCESSCODE`, cookie `bbb_access`,
-  gating i `frontend/middleware.ts`.
+- **access_code** (default): `ACCESS_CODE`/`ADMIN_ACCESSCODE` används bara vid login.
+  `lib/access-session.ts` äger signerad roll + 8 timmars giltighet i `bbb_access`;
+  kräver oberoende `SESSION_SECRET` (minst 32 tecken). Kod/nyckelrotation återkallar
+  sessionerna. Middleware och `isAdmin()` använder samma verifiering. Begränsning av
+  inloggningsförsök i `lib/login-attempts.ts` gäller per frontend-process; ingressen
+  måste sätta betrodd sista `X-Forwarded-For`. SAML-kakan `bbb_session` är separat.
 - **saml**: backend äger SAML mot kommunens IdP (draken-mönstret, portat till FastAPI +
   **python3-saml** — inte pysaml2, som saknar knappar för test-IdP:ns kvirkar; se
   `docs/SAML_SSO_PLAN.md`). Kod i `backend/app/auth/`: `router.py` (`/api/auth/saml/

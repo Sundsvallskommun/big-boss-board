@@ -21,5 +21,8 @@ exec gunicorn app.main:app \
   --workers "${WEB_CONCURRENCY:-2}" \
   --bind "0.0.0.0:${PORT:-8000}" \
   --no-control-socket \
+  --timeout "${WEB_TIMEOUT:-60}" \
+  --graceful-timeout 30 \
+  --keep-alive 75 \
   --access-logfile - \
   --error-logfile -
