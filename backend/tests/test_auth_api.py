@@ -149,3 +149,16 @@ def test_logout_callback_redirectar_sakert(client):
     )
     assert response.status_code == 302
     assert response.headers["location"] == "http://localhost:3399/"
+
+
+def test_admin_session_ger_import_utan_token(client):
+    """Hela appen (lifespan + sessionstore): admin-session når kroppsvalideringen utan IMPORT_TOKEN."""
+    seed_session(client, {"user": {**USER, "role": "admin"}})
+    response = client.post("/api/import/hme", content=b"{", headers={"content-type": "application/json"})
+    assert response.status_code == 422
+
+
+def test_user_session_nekas_import(client):
+    seed_session(client, {"user": USER})
+    response = client.post("/api/import/hme", json={})
+    assert response.status_code == 403

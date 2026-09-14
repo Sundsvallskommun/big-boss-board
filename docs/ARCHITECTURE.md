@@ -71,8 +71,8 @@ host-port för `frontend` (`FRONTEND_PORT`). Dokploy använder **enbart** `docke
   `next.config` **rewrites** proxar `/api/*` → backend. Samma domän → inga CORS.
 - **Access-gate:** `frontend/middleware.ts` kontrollerar SAML-sessionen via `/api/me`
   i kommunens `AUTH_MODE=saml`. Åtkomstkakor används endast i `access_code`-läget. `/api/import/*` och `/api/admin/*` **undantas** —
-  de är maskin-till-maskin och har egen token-auth (`IMPORT_TOKEN`). `/brand` (loggan)
-  är också undantagen (publik).
+  backend gatar dem själv (`auth/admin_access.py`: import-token **eller** inloggad
+  admin-session, kontrollerat före kroppen läses). `/brand` (loggan) är också undantagen (publik).
 - **Robusthet:** `frontend/lib/api.ts` (`fetchJson`) har timeout + retry på server-fetchar;
   varje route har `loading.tsx`/`error.tsx`. Se [fallgropar](#viktiga-designbeslut--fallgropar).
 - **Tokenkontroll före kropp:** import- och adminroutrarna använder `ImportTokenRoute`
@@ -141,8 +141,10 @@ koden — de skapar aldrig förvaltningar. Malländringar påverkar inte befintl
 organisationsändringar i drift kräver en separat granskad datamigrering.
 
 Riktig data (HME, ekonomi, sjukfrånvaro) **versionshanteras aldrig** och matas in via
-token-skyddade endpoints (`IMPORT_TOKEN`). Alla är **idempotenta upsertar** — säkra att
-köra om. Skripten i [`../scripts/`](../scripts/) använder enbart Python-stdlib.
+admin-skyddade endpoints: `IMPORT_TOKEN` (skript/automation) **eller** inloggad
+admin-session (`/api/docs` i webbläsaren, inkorgen). Alla är
+**idempotenta upsertar** — säkra att köra om. Skripten i [`../scripts/`](../scripts/)
+använder enbart Python-stdlib.
 
 | Nyckeltal | Endpoint(s) | Skript | Källformat |
 | --- | --- | --- | --- |
@@ -193,14 +195,20 @@ Nyckeln kopplas till rätt förvaltning via masterdata-koden (`organisation.kod`
 
 OpenShift exponerar frontend på `https://chefdialog.sundsvall.se`. Frontend proxar
 `/api/*` till backend. Backend och PostgreSQL behöver inga egna publika portar.
-Importerna kräver `Authorization: Bearer <IMPORT_TOKEN>` och `Content-Type: application/json`.
-De kräver ingen SAML-session; tokenen valideras av backend före läsning av kroppen.
-Saknad/fel token ger 401, och saknad serverkonfiguration av `IMPORT_TOKEN` ger 503.
-Appen har ingen importvy eller server action för filuppladdning.
+Importerna tar `Content-Type: application/json` och accepterar **en av två** behörigheter,
+kontrollerade av backend före läsning av kroppen (`auth/admin_access.py`):
 
-API-dokumentationen finns på `/api/docs` och schemat på `/api/openapi.json`. Dessa
-vägar följer den vanliga inloggningen, så öppna dokumentationen efter inloggning.
-Import-API:erna kan även anropas direkt från egna integrationer:
+- `Authorization: Bearer <IMPORT_TOKEN>` — skript, curl, integrationer. Finns headern
+  avgör den ensam. Fel token ger 401; tom `IMPORT_TOKEN` på servern ger 503.
+- **Inloggad admin-session** (`bbb_session`, roll `admin` via `SAML_ADMIN_GROUPS`) — utan
+  header. Vanlig `user` ger 403, utloggad 401.
+
+Appen har ingen importvy eller server action för filuppladdning. I stället fungerar
+API-dokumentationen på `/api/docs` (schema `/api/openapi.json`) som gränssnitt: den
+följer den vanliga inloggningen, och sessionskakan följer med anropen på samma domän,
+så en inloggad admin kan köra importerna därifrån **utan token**. Swagger visar båda
+vägarna (`HTTPBearer` och `AdminSession`). Import-API:erna kan även anropas direkt från
+egna integrationer:
 
 | POST-väg | JSON-kropp |
 | --- | --- |
@@ -220,11 +228,13 @@ python3 scripts/import_sjukfranvaro.py --url https://chefdialog.sundsvall.se --d
 
 Kör från en dator eller server som når appdomänen över HTTPS och litar på dess
 certifikat. Det krävs ingen direkt databasanslutning från datorn som kör importen.
-`IMPORT_TOKEN` på frontend behålls eftersom status-sidans admin-inkorg använder det
-server-side för läsning; importer från CLI använder backendens token.
+Status-sidans admin-inkorg hämtas server-side via `lib/admin-api.ts adminAuthHeaders()`:
+i saml-läget vidarebefordras admin-sessionen, så frontend behöver `IMPORT_TOKEN` **bara i
+access_code-läget** (där backend saknar sessioner). Importer från CLI använder backendens token.
 
 **Status-sidan** (`/status`) har egna vägar: en publik inkorg (`POST /api/submissions`,
-gatas av access-koden) och token-skyddad triage/publicering (`/api/admin/...`).
+gatas av access-koden) och admin-skyddad triage/publicering (`/api/admin/...`, samma
+behörighet som importen).
 
 ## Migrationer & seed
 
@@ -302,7 +312,7 @@ aldrig i repo.
 | --- | --- | --- |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | db | Postgres-uppgifter. |
 | `DATABASE_URL` | backend | `postgresql+asyncpg://…@db:5432/…` (måste matcha ovan). |
-| `IMPORT_TOKEN` | backend + frontend | Nyckel för `/api/import/*` och `/api/admin/*`. Tom = import avstängd. |
+| `IMPORT_TOKEN` | backend (+ frontend endast i access_code) | Maskinnyckel för `/api/import/*` och `/api/admin/*`. Tom = tokenvägen avstängd; inloggad admin-session (saml) fungerar ändå. |
 | `BACKEND_INTERNAL_URL` | frontend | Intern backend-URL för SSR/rewrites (default `http://backend:8000`). |
 | `ACCESS_CODE` | frontend + backend | Åtkomstkod. Tom kod kräver `ALLOW_OPEN_ACCESS=true`, annars fail-closed. |
 | `SESSION_SECRET` | frontend | Minst 32 tecken för signerade kodsessioner. Krävs när koder används, även lokalt; samma värde på alla frontend-repliker. Används inte av SAML. |
