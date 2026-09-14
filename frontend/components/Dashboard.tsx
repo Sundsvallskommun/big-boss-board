@@ -341,12 +341,6 @@ export function Dashboard({
               />
             ))}
         </div>
-
-        <footer className="mt-40 text-center">
-          <p className="eyebrow-sm opacity-70">
-            Använd endast öppen och publik information i dialogen.
-          </p>
-        </footer>
       </main>
     </>
   );

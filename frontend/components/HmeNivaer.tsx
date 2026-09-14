@@ -3,8 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 
-import { STATUS } from "./status";
-import type { Status } from "@/lib/api";
+import { STATUS, hmeStatus } from "./status";
 
 /** HME-talet byggs av tre delperspektiv. Totalen ligger först eftersom det är den
  *  rubriksiffran på kortet visar — de tre förklarar vad den består av. Nycklarna är
@@ -22,16 +21,6 @@ const HmeLineChart = dynamic(() => import("./charts/HmeLineChart").then((m) => m
   ssr: false,
   loading: () => <div className="h-[320px] w-full animate-pulse rounded-12 bg-background-200" aria-hidden="true" />,
 });
-
-/** Färgnivå för ett HME-värde mot målet. Måste hållas i synk med backends hme_status():
- *  grön på eller över målet, gul inom 5 procentenheter under, annars röd. Delkorten sätter
- *  färgen själva — backend statusmärker bara totalen, medan varje perspektiv har sitt eget
- *  värde och kan ligga på en helt annan nivå (Miljökontoret: motivation 73, ledarskap 91). */
-function hmeStatus(value: number, mal: number): Status {
-  if (value >= mal) return "good";
-  if (value >= mal - 5) return "warn";
-  return "alert";
-}
 
 /** Heltal utan decimal, annars en svensk decimal: 78 → "78", 78.5 → "78,5". */
 const visa = (v: number) =>

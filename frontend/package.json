@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "test:product": "node --experimental-transform-types --test --test-concurrency=1 tests/product.test.mjs",
     "test:theme": "node --test --test-concurrency=1 tests/theme.test.mjs",
-    "test:middleware": "node --test --test-concurrency=1 tests/middleware.test.cjs"
+    "test:middleware": "node --test --test-concurrency=1 tests/middleware.test.cjs",
+    "test:security": "node --test --test-concurrency=1 tests/access-auth.test.cjs tests/middleware.test.cjs",
+    "test:hme": "node --test --test-concurrency=1 tests/hme-chart.test.cjs"
   },
   "dependencies": {
     "lucide-react": "^1.43.0",
