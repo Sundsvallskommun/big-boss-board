@@ -268,6 +268,15 @@ UI-primitiver finns i `frontend/components/ui/`. Fullständiga regler i [`../AGE
 
 Sådant som inte syns i koden men är lätt att gå på:
 
+- **Backendens XML-bibliotek byggs från källa i två installationssteg.** Dockerfilen
+  installerar först `lxml` med versionen från `requirements.lock`, sedan resten med
+  `--no-binary=xmlsec`. Då kan xmlsec:s isolerade byggmiljö hämta lxml:s headers från
+  en wheel utan att källkompilera en extra lxml-version. Runtime-lxml och xmlsec
+  länkas fortfarande mot systemets libxml2; `pip check` och import av SAML-biblioteken
+  verifieras i bygget. Låsfilen äger alla runtime-versioner. Projektmetadata och
+  appkod kopieras efter beroendeinstallationen så att de kan ändras utan att bygga
+  om XML-biblioteken. Byggmiljön måste behålla Dockerlagren för att cachen ska återanvändas.
+
 - **Frontend-basimage måste vara glibc** (`node:22-bookworm-slim`), **inte** Alpine/musl.
   musl:s parallella DNS-uppslag träffar en conntrack-race i Docker → intermittenta ~5 s
   DNS-stopp när SSR slår upp `backend` (symptom: sidan hänger, noll CPU, gateway timeout).
