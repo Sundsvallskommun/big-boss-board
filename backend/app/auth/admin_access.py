@@ -9,8 +9,10 @@ Två legitima vägar in, avgjorda före kroppen läses:
   `/api/docs` och status-sidans inkorg fungerar utan att frontend behöver hålla tokenen.
   I access_code-läget skapar backend inga sessioner, så bara tokenvägen gäller där.
 
-CSRF: kakan är SameSite=Lax och endpoints tar JSON, så cross-site-anrop får ingen kaka.
-Som extra skydd avvisas ändrande anrop som webbläsaren märkt `Sec-Fetch-Site: cross-site`.
+CSRF: kakan är SameSite=Lax och endpoints tar JSON (preflight), så andra sajter kan inte
+skicka ändrande anrop med kakan. Som extra skydd avvisas ändrande anrop där webbläsarens
+`Sec-Fetch-Site` inte är `same-origin`/`none` — Lax skickar kakan även från syskondomäner
+(`same-site`), och inga sådana anropare finns.
 """
 
 from __future__ import annotations
@@ -24,6 +26,9 @@ from app.auth import sessions
 from app.auth.import_token import require_import_token
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+# Sec-Fetch-Site-värden som får skriva med sessionskaka. Saknad header = icke-webbläsare
+# (server-side fetch från frontend) och släpps igenom; kakan är då redan betrodd.
+TRUSTED_FETCH_SITES = frozenset({"same-origin", "none"})
 
 
 def _unauthorized(detail: str) -> HTTPException:
@@ -43,8 +48,9 @@ async def require_admin_access(request: Request) -> None:
     if not request.cookies.get(sessions.SESSION_COOKIE):
         raise _unauthorized("Import-token eller inloggad admin-session krävs.")
 
-    if request.method not in SAFE_METHODS and request.headers.get("sec-fetch-site") == "cross-site":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-site-anrop tillåts inte.")
+    fetch_site = request.headers.get("sec-fetch-site")
+    if request.method not in SAFE_METHODS and fetch_site and fetch_site not in TRUSTED_FETCH_SITES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Anrop från annan sajt tillåts inte.")
 
     session = await sessions.get_session(request)
     user = session.get("user") if session else None

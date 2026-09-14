@@ -195,7 +195,7 @@ Båda routrarna gatas av `backend/app/auth/admin_access.py` (`AdminAccessRoute`,
   (`SAML_ADMIN_GROUPS`). Bara i saml-läget, där backend äger sessionen. `user` får 403.
   Gör att `/api/docs` (importgränssnittet — ingen importvy finns) och inkorgen fungerar
   för en inloggad admin **utan** att frontend håller tokenen. CSRF: SameSite=Lax + JSON-kroppar,
-  och ändrande anrop med `Sec-Fetch-Site: cross-site` avvisas.
+  och ändrande anrop med `Sec-Fetch-Site` utanför `same-origin`/`none` avvisas.
 
 Frontend väljer väg i `lib/admin-api.ts adminAuthHeaders()`: saml → vidarebefordra
 sessionskakan; access_code → `IMPORT_TOKEN` (backend har ingen session där). Middleware

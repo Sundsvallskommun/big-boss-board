@@ -111,14 +111,31 @@ async def test_tampered_session_cookie_is_rejected():
     assert response.status_code == 401
 
 
-async def test_cross_site_writes_with_session_are_rejected():
+@pytest.mark.parametrize("fetch_site,expected", [
+    ("cross-site", 403), ("same-site", 403),  # Lax skickar kakan från syskondomäner.
+    ("same-origin", 422), ("none", 422), (None, 422),  # Swagger, adressfält, server-side fetch.
+])
+async def test_session_writes_require_same_origin_browser_context(fetch_site, expected):
     cookies = await session_cookie("admin")
+    headers = {"content-type": "application/json"}
+    if fetch_site:
+        headers["sec-fetch-site"] = fetch_site
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test", cookies=cookies) as client:
-        response = await client.post(
-            "/api/import/hme", content=b"{}",
-            headers={"content-type": "application/json", "sec-fetch-site": "cross-site"},
-        )
-    assert response.status_code == 403
+        response = await client.post("/api/import/hme", content=b"{", headers=headers)
+    assert response.status_code == expected
+
+
+async def test_session_reads_ignore_fetch_site():
+    """Läsning gatas inte av Sec-Fetch-Site — bara ändrande metoder (spärren körs före handlern)."""
+    from fastapi import Request
+
+    from app.auth.admin_access import require_admin_access
+
+    cookies = await session_cookie("admin")
+    cookie_header = f"{sessions.SESSION_COOKIE}={cookies[sessions.SESSION_COOKIE]}".encode()
+    headers = [(b"cookie", cookie_header), (b"sec-fetch-site", b"cross-site")]
+    scope = {"type": "http", "method": "GET", "path": "/api/admin/status-cards", "headers": headers, "app": app}
+    await require_admin_access(Request(scope))  # Får inte kasta.
 
 
 async def test_bearer_header_decides_even_with_admin_session(monkeypatch):
