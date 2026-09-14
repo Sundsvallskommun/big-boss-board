@@ -1,42 +1,81 @@
-"""Idempotent seed med fiktiv dummydata (motsvarar prototypen).
+"""Uttrycklig engångsinitiering av en tom appdatabas.
 
-Körs i entrypoint efter migrationer. Säker att köra om och om — kontrollerar
-existens på naturliga nycklar innan rader skapas. ENDAST fiktiv, öppen information.
+Vanlig backend-start kör endast Alembic och servern. Detta kommando skapar
+referensdata och dialoger i en transaktion, utan mätvärden eller filimport.
+Finns någon appdata lämnas hela databasen orörd, även vid manuell återkörning.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
+from typing import Literal, NotRequired, TypedDict
 
-from sqlalchemy import delete, func, select
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import SessionLocal
+from app.db import Base, SessionLocal
 from app.models import (
-    Activity,
-    AreaStatus,
     Dialogue,
     KpiArea,
-    Measurement,
     Organisation,
     Person,
     Question,
-    Status,
-    Statusrapport,
     StatusFraga,
+    Statusrapport,
     SupportFunction,
     Tool,
 )
-from app.schemas import EkonomiImport, HmeImport, SjukImport
-from app.services.ekonomi_import import csv_to_payload as ekonomi_csv_to_payload
-from app.services.ekonomi_import import import_ekonomi
-from app.services.ekonomi_import import report_to_payload as ekonomi_report_to_payload
-from app.services.hme_import import FICTIV_MEASUREMENTS, import_hme, report_to_payload, slugify
-from app.services.sjukfranvaro_import import SjukExportMetodError
-from app.services.sjukfranvaro_import import csv_to_payload as sjuk_csv_to_payload
-from app.services.sjukfranvaro_import import import_sjukfranvaro
+from app.services.hme_import import slugify
+
+
+class QuestionTemplate(TypedDict):
+    text: str
+    rubrik: NotRequired[str]
+    bygger_pa: NotRequired[str]
+
+
+class KpiTemplate(TypedDict):
+    key: str
+    namn: str
+    short: str | None
+    ikon: str
+    lower_better: bool
+    support: str
+    questions: list[str | tuple[str, str] | QuestionTemplate]
+    info: NotRequired[str]
+
+
+class StatusQuestionTemplate(TypedDict):
+    nummer: int
+    kategori: str
+    fraga: str
+    bakgrund: NotRequired[str]
+    svar: NotRequired[str]
+    forum: NotRequired[str]
+    datum: NotRequired[str]
+    forslag: NotRequired[str]
+    mer: NotRequired[list[str]]
+
+
+class StatusReportTemplate(TypedDict):
+    datum: str
+    rubrik: str
+    text: str
+    punkter: NotRequired[list[str]]
+
+
+class SeedOrganisation(BaseModel):
+    org_id: int = Field(alias="orgId", gt=0)
+    namn: str = Field(min_length=1)
+    forvaltning: bool = True
+    dialogbaserad: list[Literal["ekonomi", "hme", "sjukfranvaro"]] = Field(default_factory=list)
+
+
+class OrganisationMaster(BaseModel):
+    organisationer: list[SeedOrganisation] = Field(min_length=1)
+
 
 # Stödfunktioner + verktygslåda (key, namn, ikon, [verktyg]).
 SUPPORT_FUNCTIONS: list[tuple[str, str, str, list[str]]] = [
@@ -63,7 +102,7 @@ SUPPORT_FUNCTIONS: list[tuple[str, str, str, list[str]]] = [
 ]
 
 # KPI-områden (key, namn, short, ikon, lower_better, support-key, frågor).
-KPI_AREAS: list[dict] = [
+KPI_AREAS: list[KpiTemplate] = [
     {
         "key": "ekonomi", "namn": "Ekonomi", "short": None, "ikon": "landmark",
         "lower_better": False, "support": "Ekonomi",
@@ -208,16 +247,8 @@ DIALOGBASERADE_QUESTIONS: dict[str, list[str]] = {
     ],
 }
 
-# Nyckeltal som följs upp via dialogfrågor + manuellt satt status i stället för mätdata
-# (BYGGPLAN §16–17). Seeden rensar ev. gamla dummy-mätvärden så frontend visar dem som
-# dialogfråge-kort; status sätts manuellt per förvaltning (area_status).
-DIALOG_ONLY_KEYS = {"verksamhet", "digital", "kommunikativt"}
-
-# Status-sidans kort (Fas B). Bootstrap-innehåll transkriberat från den tidigare
-# hårdkodade frontend-filen (data.ts). Seedas EN gång (bara om tabellen är tom) så att
-# arbetsgruppens senare API-redigeringar/raderingar inte återuppstår vid omstart.
-# `nummer` = det publika "#N"; övergripande frågor har kategori "overgripande".
-STATUS_FRAGOR_SEED: list[dict] = [
+# Startinnehåll skapas endast vid uttrycklig initiering av en helt tom appdatabas.
+STATUS_FRAGOR_SEED: list[StatusQuestionTemplate] = [
     {
         "nummer": 1, "kategori": "fraga",
         "fraga": "Hur många organisationsnivåer på HME ska synas i BBB?",
@@ -350,7 +381,7 @@ STATUS_FRAGOR_SEED: list[dict] = [
     },
 ]
 
-STATUSRAPPORTER_SEED: list[dict] = [
+STATUSRAPPORTER_SEED: list[StatusReportTemplate] = [
     {
         "datum": "2026-06-26",
         "rubrik": "Lägesrapport vecka 26 — prototypen redo för test",
@@ -384,26 +415,7 @@ STATUSRAPPORTER_SEED: list[dict] = [
     },
 ]
 
-# Officiella HME-totalindexrapporten (flerårig, per enhet/förvaltning). Levereras utanför
-# git och monteras lokalt/vid deploy; i drift uppdateras HME istället via /api/import/hme.
-HME_REPORT_PATH = Path(__file__).resolve().parent / "data" / "hme_totalindex.json"
-# Delindex (motivation/ledarskap/styrning per verksamhet) levereras som en egen fil, samma
-# väg som totalindex. Finns den kopplas perspektivserierna på via enhetsnamnet; saknas den
-# visar HME-kortet bara totalen.
-HME_DELINDEX_PATH = Path(__file__).resolve().parent / "data" / "hme_delindex.json"
-
-# Ekonomirapporten (resultaträkning per förvaltning) levereras utanför git, samma väg som HME.
-# Qlik-exporten är CSV framåt; JSON stöds som tidigare format. CSV prioriteras om båda finns.
-EKONOMI_CSV_PATH = Path(__file__).resolve().parent / "data" / "ekonomi.csv"
-EKONOMI_REPORT_PATH = Path(__file__).resolve().parent / "data" / "ekonomi.json"
-
-# Sjukfrånvaro (personal-CSV från Qlik) — levereras utanför git, samma väg.
-SJUK_CSV_PATH = Path(__file__).resolve().parent / "data" / "sjukfranvaro.csv"
-
-# Masterdata-organisationsid → org-slug (de slugar HME redan skapat). Sätter Organisation.kod
-# så att ekonomi (och framtida dataset) kan kopplas på koden. Endast förvaltningarna behöver
-# stå här: Medelpads Räddningstjänstförbund (14) och Stadsbacken (4705) kom till senare och
-# får sin slug ur namnet, eftersom HME aldrig hunnit skapa någon åt dem.
+# Befintliga slugar bevaras för samma organisationskoder även i en ny installation.
 KOD_TILL_SLUG: dict[str, str] = {
     "24": "barn-och-utbildningsforvaltning",
     "23": "vard-och-omsorgsforvaltningen",
@@ -415,372 +427,101 @@ KOD_TILL_SLUG: dict[str, str] = {
     "29": "overformyndarkontoret",
     "27": "lantmaterikontoret",
 }
-
-# Organisationsmaster (BYGGPLAN §18): kanonisk förvaltningslista. orgId = organisation.kod
-# är nyckeln som nyckeltal knyts mot. Bundlad i imagen så seeden alltid kan läsa den.
 ORG_MASTER_PATH = Path(__file__).resolve().parent / "seed_data" / "organisationer.json"
 
-# Fiktiva bootstrap-mätvärden för de DATADRIVNA nyckeltalen, så korten renderas i en färsk
-# miljö innan riktig data importerats. Skrivs bara om inget mätvärde finns — riktig import
-# (HME/ekonomi/sjukfrånvaro) skriver över. Dialog-only-nyckeltal (§16–17) får inga.
-BOOTSTRAP_MEASUREMENTS: dict[str, dict] = {
-    "hme": {
-        "value_text": "77", "value_num": 77, "unit": "", "target_text": "≥ 75",
-        "target_num": 75, "bar_max": 100, "status": Status.good,
-        "trend_dir": None, "trend_good": None, "trend_text": "Ingen jämförelseperiod",
-        "interpretation": "Fiktiv platshållare tills HME importerats via /api/import/hme.",
-    },
-    "ekonomi": FICTIV_MEASUREMENTS["ekonomi"],
-    "sjukfranvaro": FICTIV_MEASUREMENTS["sjukfranvaro"],
-}
+
+def _question_fields(value: str | tuple[str, str] | QuestionTemplate) -> QuestionTemplate:
+    if isinstance(value, str):
+        return {"text": value}
+    if isinstance(value, tuple):
+        return {"text": value[0], "bygger_pa": value[1]}
+    return value
 
 
-def _load_org_master() -> list[dict]:
-    """Läs organisationsmastern (organisationer.json). Tom lista om filen saknas."""
-    if not ORG_MASTER_PATH.exists():
-        print(f"[seed] {ORG_MASTER_PATH.name} saknas — hoppar över organisationsmaster.")
-        return []
-    data = json.loads(ORG_MASTER_PATH.read_text(encoding="utf-8"))
-    return data.get("organisationer", [])
-
-
-def _dialogomraden(o: dict) -> set[str]:
-    """Vilka nyckeltal följer verksamheten upp via dialog i stället för mätdata?
-
-    Mastern anger dem som en lista av nyckeltalsnycklar, så ett nyckeltal kan få data utan
-    att de övriga gör det — HME finns i HME-rapporten även för Räddningstjänsten och
-    Stadsbacken, medan deras ekonomi och sjukfrånvaro fortfarande saknar källa. Listan anger exakt vilka nyckeltal som saknar datakälla.
-    """
-    v = o.get("dialogbaserad")
-    if isinstance(v, list):
-        return {str(k) for k in v}
-    return set()
-
-
-async def _seed_org_questions(
-    session: AsyncSession, org: Organisation, area_by_key: dict[str, KpiArea], dialogomraden: set[str]
-) -> None:
-    """Verksamhetsspecifika dialogfrågor, avstämda mot DIALOGBASERADE_QUESTIONS.
-
-    Bara de nyckeltal som faktiskt följs upp via dialog får egna frågor. Får ett nyckeltal
-    data tas dess frågor bort och nyckeltalets allmänna gäller igen — mastern är sanningen,
-    inte det som råkar ligga i basen.
-    """
-    for key, area in area_by_key.items():
-        texter = DIALOGBASERADE_QUESTIONS.get(key, []) if key in dialogomraden else []
-        befintliga = (
-            await session.execute(
-                select(Question)
-                .filter_by(kpi_area_id=area.id, organisation_id=org.id)
-                .order_by(Question.ordning)
-            )
-        ).scalars().all()
-        for i, text in enumerate(texter):
-            if i < len(befintliga):
-                befintliga[i].text = text
-                befintliga[i].ordning = i
-            else:
-                session.add(
-                    Question(
-                        kpi_area_id=area.id, organisation_id=org.id, text=text, ordning=i
-                    )
-                )
-        for extra in befintliga[len(texter):]:
-            await session.delete(extra)
-
-
-async def _seed_organisationer(session: AsyncSession, area_by_key: dict[str, KpiArea]) -> None:
-    """Organisationslistan är master (BYGGPLAN §18): skapas/uppdateras ur organisationer.json,
-    med en dialog per verksamhet och fiktiva bootstrap-mätvärden. Importerna (HME/ekonomi/
-    sjukfrånvaro) kopplar sedan bara mot dessa via masterdata-koden. Verksamheter som inte
-    finns i mastern (t.ex. utan kod) tas bort med sina dialoger/mätvärden.
-
-    Nyckeltal listade i `dialogbaserad` får inga bootstrap- eller importerade mätvärden.
-    De följs upp med organisationsspecifika frågor och manuell status. Frontend behöver ingen kännedom om detta: den väljer
-    dialogkort så snart mätvärdet saknas. Rensningen körs vid varje start, så flaggan är
-    sanningen — får verksamheten data någon gång tas flaggan bort ur mastern i stället."""
-    master = _load_org_master()
-    if not master:
-        return
-    master_kods = {str(o["orgId"]) for o in master}
-
-    # Generisk, anonym chef (inga personuppgifter).
-    person, _ = await _get_or_create(
-        session, Person, {"roll": "Ansvarig chef", "initialer": "FC"},
-        namn="Förvaltningschef (exempel)",
-    )
-
-    for o in master:
-        kod = str(o["orgId"])
-        namn = o["namn"]
-        slug = KOD_TILL_SLUG.get(kod) or slugify(namn)
-        org, _ = await _get_or_create(
-            session, Organisation, {"namn": namn, "slug": slug, "kod": kod}, kod=kod,
-        )
-        org.namn, org.slug = namn, slug  # håll i synk mot mastern
-        # Saknas nyckeln är verksamheten en förvaltning — så såg mastern ut före 1.2.
-        org.ar_forvaltning = bool(o.get("forvaltning", True))
-
-        dialogue = (
-            await session.execute(select(Dialogue).filter_by(organisation_id=org.id))
-        ).scalars().first()
-        if dialogue is None:
-            dialogue = Dialogue(
-                organisation_id=org.id, ansvarig_chef_id=person.id,
-                period="Senaste period", status="pagaende",
-            )
-            session.add(dialogue)
-            await session.flush()
-
-        dialogomraden = _dialogomraden(o)
-        await _seed_org_questions(session, org, area_by_key, dialogomraden)
-
-        for key, data in BOOTSTRAP_MEASUREMENTS.items():
-            area = area_by_key.get(key)
-            if area is None:
-                continue
-            if key in dialogomraden:
-                # Följs upp via dialog: inget mätvärde, så kortet renderas som dialogfråga
-                # med manuellt satt status. Rensa även ett ev. tidigare mätvärde, så att en
-                # ändrad master eller en gammal import inte lämnar kvar ett datakort som
-                # motsäger den. Rensningen är per nyckeltal — HME får finnas kvar.
-                await session.execute(
-                    delete(Measurement).where(
-                        Measurement.dialogue_id == dialogue.id,
-                        Measurement.kpi_area_id == area.id,
-                    )
-                )
-                continue
-            finns = (
-                await session.execute(
-                    select(Measurement).filter_by(dialogue_id=dialogue.id, kpi_area_id=area.id)
-                )
-            ).scalar_one_or_none()
-            if finns is None:
-                session.add(Measurement(dialogue_id=dialogue.id, kpi_area_id=area.id, **data))
-
-    # Ta bort förvaltningar utanför mastern (utan kod eller okänd kod) + deras data.
-    extra = (
-        await session.execute(
-            select(Organisation).where(
-                Organisation.kod.is_(None) | Organisation.kod.notin_(master_kods)
-            )
-        )
-    ).scalars().all()
-    for org in extra:
-        dlg_ids = [
-            d.id
-            for d in (
-                await session.execute(select(Dialogue).filter_by(organisation_id=org.id))
-            ).scalars()
-        ]
-        if dlg_ids:
-            await session.execute(delete(Measurement).where(Measurement.dialogue_id.in_(dlg_ids)))
-            await session.execute(delete(AreaStatus).where(AreaStatus.dialogue_id.in_(dlg_ids)))
-            await session.execute(delete(Activity).where(Activity.dialogue_id.in_(dlg_ids)))
-            await session.execute(delete(Dialogue).where(Dialogue.id.in_(dlg_ids)))
-        await session.execute(delete(Question).where(Question.organisation_id == org.id))
-        await session.delete(org)
-        print(f"[seed] tog bort verksamhet utanför mastern: {org.namn} (kod {org.kod}).")
-
-    await session.commit()
-    dialog = sum(1 for o in master if _dialogomraden(o))
-    print(
-        f"[seed] organisationsmaster: {len(master)} verksamheter säkerställda "
-        f"({dialog} med ett eller flera dialogbaserade nyckeltal)."
-    )
-
-
-async def _get_or_create(session: AsyncSession, model, defaults: dict | None = None, **filters):
-    """Hämta rad på filters eller skapa den. Returnerar (objekt, skapad?)."""
-    existing = (await session.execute(select(model).filter_by(**filters))).scalar_one_or_none()
-    if existing is not None:
-        return existing, False
-    obj = model(**{**filters, **(defaults or {})})
-    session.add(obj)
-    await session.flush()
-    return obj, True
-
-
-async def _bootstrap_status_content(session: AsyncSession) -> None:
-    """Fyll status_fraga/statusrapport med startinnehållet — bara om tabellen är tom.
-
-    Engångs-bootstrap: när arbetsgruppen börjat redigera/publicera via API rör vi
-    aldrig innehållet igen (annars skulle raderade kort återuppstå vid omstart).
-    """
-    antal_fragor = (await session.execute(select(func.count()).select_from(StatusFraga))).scalar()
-    if antal_fragor == 0:
-        for f in STATUS_FRAGOR_SEED:
-            session.add(StatusFraga(publicerad=True, **f))
-        print(f"[seed] status-frågor bootstrappade: {len(STATUS_FRAGOR_SEED)} kort.")
-
-    antal_rapporter = (
-        await session.execute(select(func.count()).select_from(Statusrapport))
-    ).scalar()
-    if antal_rapporter == 0:
-        for r in STATUSRAPPORTER_SEED:
-            session.add(Statusrapport(publicerad=True, **r))
-        print(f"[seed] statusrapporter bootstrappade: {len(STATUSRAPPORTER_SEED)} st.")
-
-    await session.commit()
-
-
-async def seed(session: AsyncSession) -> None:
-    # Stödfunktioner + verktyg.
+async def _create_reference_data(session: AsyncSession) -> dict[str, KpiArea]:
     support_by_key: dict[str, SupportFunction] = {}
     for key, namn, ikon, tools in SUPPORT_FUNCTIONS:
-        sf, _ = await _get_or_create(
-            session, SupportFunction, {"namn": namn, "ikon": ikon}, key=key
+        support = SupportFunction(key=key, namn=namn, ikon=ikon)
+        session.add(support)
+        await session.flush()
+        support_by_key[key] = support
+        session.add_all(
+            Tool(support_function_id=support.id, namn=tool, ordning=index)
+            for index, tool in enumerate(tools)
         )
-        support_by_key[key] = sf
-        for ordning, tool_namn in enumerate(tools):
-            await _get_or_create(
-                session, Tool, {"ordning": ordning},
-                support_function_id=sf.id, namn=tool_namn,
-            )
 
-    # KPI-områden + frågor.
     area_by_key: dict[str, KpiArea] = {}
-    for ordning, a in enumerate(KPI_AREAS):
-        area, _ = await _get_or_create(
-            session, KpiArea,
-            {
-                "namn": a["namn"], "short": a["short"], "ikon": a["ikon"],
-                "lower_better": a["lower_better"], "ordning": ordning,
-                "support_function_id": support_by_key[a["support"]].id,
-                "info": a.get("info"),
-            },
-            key=a["key"],
+    for index, template in enumerate(KPI_AREAS):
+        area = KpiArea(
+            key=template["key"], namn=template["namn"], short=template["short"],
+            ikon=template["ikon"], lower_better=template["lower_better"], ordning=index,
+            support_function_id=support_by_key[template["support"]].id,
+            info=template.get("info"),
         )
-        # Håll seed-ägt innehåll i synk även för redan skapade areor. Utan detta får
-        # areor som skapades innan ett fält lades till (t.ex. info-texten "Att tänka på
-        # om siffran") aldrig värdet i drift — _get_or_create uppdaterar inte befintliga.
-        if area.info != a.get("info"):
-            area.info = a.get("info")
-        area_by_key[a["key"]] = area
-        # Reconcilera frågeställningarna mot seed-listan (positionsvis): uppdatera text på
-        # befintliga, lägg till nya, ta bort överflödiga. Utan detta blir gamla frågor kvar
-        # i drift (_get_or_create tar aldrig bort) när en areas frågor ändras.
-        # Endast de allmänna frågorna (organisation_id = None). Verksamhetsspecifika frågor
-        # ägs av _seed_organisationer — utan filtret hade den här loopen skrivit över dem.
-        befintliga = (
-            await session.execute(
-                select(Question)
-                .filter_by(kpi_area_id=area.id, organisation_id=None)
-                .order_by(Question.ordning)
-            )
-        ).scalars().all()
-        # En fråga anges på tre former: ren text; (text, bygger_pa) när den är härledd ur
-        # ett påstående i medarbetarenkäten; eller en dict när den har en rubrik.
-        # Normaliseras till (text, bygger_pa, rubrik).
-        def _normalisera(q) -> tuple[str, str | None, str | None]:
-            if isinstance(q, str):
-                return q, None, None
-            if isinstance(q, dict):
-                return q["text"], q.get("bygger_pa"), q.get("rubrik")
-            text, bygger_pa = q
-            return text, bygger_pa, None
+        session.add(area)
+        await session.flush()
+        area_by_key[area.key] = area
+        session.add_all(
+            Question(kpi_area_id=area.id, ordning=order, **_question_fields(question))
+            for order, question in enumerate(template["questions"])
+        )
+    session.add_all(StatusFraga(publicerad=True, **item) for item in STATUS_FRAGOR_SEED)
+    session.add_all(Statusrapport(publicerad=True, **item) for item in STATUSRAPPORTER_SEED)
+    return area_by_key
 
-        onskade = [_normalisera(q) for q in a["questions"]]
-        for i, (text, bygger_pa, rubrik) in enumerate(onskade):
-            if i < len(befintliga):
-                befintliga[i].text = text
-                befintliga[i].bygger_pa = bygger_pa
-                befintliga[i].rubrik = rubrik
-                befintliga[i].ordning = i
-            else:
-                session.add(
-                    Question(
-                        kpi_area_id=area.id, text=text, bygger_pa=bygger_pa,
-                        rubrik=rubrik, ordning=i,
-                    )
+
+async def _create_organisations(
+    session: AsyncSession, master: OrganisationMaster, areas: dict[str, KpiArea]
+) -> None:
+    person = Person(namn="Ansvarig chef", roll="Ansvarig chef", initialer="AC")
+    session.add(person)
+    await session.flush()
+    for item in master.organisationer:
+        kod = str(item.org_id)
+        org = Organisation(
+            kod=kod, namn=item.namn, slug=KOD_TILL_SLUG.get(kod) or slugify(item.namn),
+            ar_forvaltning=item.forvaltning,
+        )
+        session.add(org)
+        await session.flush()
+        session.add(Dialogue(
+            organisation_id=org.id, ansvarig_chef_id=person.id,
+            period="Senaste period", status="pagaende",
+        ))
+        for key in item.dialogbaserad:
+            session.add_all(
+                Question(
+                    organisation_id=org.id, kpi_area_id=areas[key].id, text=text, ordning=index
                 )
-        for extra in befintliga[len(onskade):]:
-            await session.delete(extra)
-
-    # BYGGPLAN §17: dessa nyckeltal följs upp via dialogfrågor och ska aldrig ha mätdata.
-    # Rensa ev. gamla dummy-mätvärden (från den ursprungliga seeden) så de renderas som
-    # dialogfråge-kort. Idempotent — inget skapar mätvärden för dem, så de dyker inte upp igen.
-    dialog_only_ids = [area_by_key[k].id for k in DIALOG_ONLY_KEYS if k in area_by_key]
-    if dialog_only_ids:
-        await session.execute(
-            delete(Measurement).where(Measurement.kpi_area_id.in_(dialog_only_ids))
-        )
-
-    await session.commit()
-
-    # Status-sidans kort (Fas B) — engångs-bootstrap av startinnehållet.
-    await _bootstrap_status_content(session)
-
-    # Organisationsmaster (BYGGPLAN §18): skapa förvaltningarna ur organisationer.json innan
-    # importerna, så de bara kopplar mot befintliga orgar (skapar dem inte). Tar bort orgar
-    # utanför mastern (t.ex. utan kod).
-    await _seed_organisationer(session, area_by_key)
-
-    # HME-rapporten levereras utanför git (monteras lokalt/vid deploy). Finns den kopplas
-    # HME-mätvärdet till befintliga förvaltningar via samma väg som /api/import/hme. Saknas
-    # den kör appen vidare med bootstrap-platshållaren tills HME importerats via endpointen.
-    if HME_REPORT_PATH.exists():
-        report = json.loads(HME_REPORT_PATH.read_text(encoding="utf-8"))
-        delindex = (
-            json.loads(HME_DELINDEX_PATH.read_text(encoding="utf-8"))
-            if HME_DELINDEX_PATH.exists()
-            else None
-        )
-        payload = HmeImport(**report_to_payload(report, delindex=delindex))
-        resultat = await import_hme(session, payload)
-        print(
-            f"[seed] HME importerad ur {HME_REPORT_PATH.name}: "
-            f"{resultat['skapade']} skapade, {resultat['uppdaterade']} uppdaterade."
-        )
-    else:
-        print(
-            f"[seed] {HME_REPORT_PATH.name} saknas — hoppar över HME-import "
-            "(importera via /api/import/hme)."
-        )
-
-    # (Masterdata-koden sätts nu i _seed_organisationer ovan — inte längre i efterhand.)
-
-    # Ekonomirapporten levereras utanför git (samma som HME). Finns den importeras ekonomidata
-    # per förvaltning via samma väg som /api/import/ekonomi (matchar på masterdata-koden).
-    ek = kalla = None
-    if EKONOMI_CSV_PATH.exists():
-        text = EKONOMI_CSV_PATH.read_text(encoding="utf-8-sig")
-        ek = await import_ekonomi(session, EkonomiImport(**ekonomi_csv_to_payload(text)))
-        kalla = EKONOMI_CSV_PATH.name
-    elif EKONOMI_REPORT_PATH.exists():
-        rapport = json.loads(EKONOMI_REPORT_PATH.read_text(encoding="utf-8"))
-        ek = await import_ekonomi(session, EkonomiImport(**ekonomi_report_to_payload(rapport)))
-        kalla = EKONOMI_REPORT_PATH.name
-
-    if ek is not None:
-        print(
-            f"[seed] Ekonomi importerad ur {kalla}: "
-            f"{ek['skapade']} skapade, {ek['uppdaterade']} uppdaterade, {ek['hoppade_over']} hoppade över."
-        )
-    else:
-        print("[seed] ingen ekonomifil (ekonomi.csv/ekonomi.json) — hoppar över ekonomidata.")
-
-    # Sjukfrånvaro (personal-CSV). Finns den importeras den per förvaltning (matchar på kod).
-    if SJUK_CSV_PATH.exists():
-        try:
-            payload = SjukImport(**sjuk_csv_to_payload(SJUK_CSV_PATH.read_text(encoding="utf-8-sig")))
-        except SjukExportMetodError as exc:
-            print(f"[seed] {SJUK_CSV_PATH.name} används inte: {exc} Importera nytt R12-underlag.")
-        else:
-            sj = await import_sjukfranvaro(session, payload)
-            print(
-                f"[seed] Sjukfrånvaro importerad ur {SJUK_CSV_PATH.name}: "
-                f"{sj['skapade']} skapade, {sj['uppdaterade']} uppdaterade, {sj['hoppade_over']} hoppade över."
+                for index, text in enumerate(DIALOGBASERADE_QUESTIONS[key])
             )
-    else:
-        print(f"[seed] {SJUK_CSV_PATH.name} saknas — hoppar över sjukfrånvarodata.")
+
+
+async def seed(session: AsyncSession) -> bool:
+    """Initiera bara en helt tom appdatabas; True om data skapades.
+
+    Kontrollera alla modeller, även inkorg/status, så att en delvis fylld databas
+    aldrig tolkas som ny. Alembics revisionstabell ingår inte i appens metadata.
+    En enda transaktion omfattar kontrollen och alla inserts. Fel rullar tillbaka
+    hela initieringen; ingen delmängd av referensdata blir kvar.
+    """
+    async with session.begin():
+        for table in Base.metadata.sorted_tables:
+            if await session.scalar(select(1).select_from(table).limit(1)) is not None:
+                return False
+        master = OrganisationMaster.model_validate_json(ORG_MASTER_PATH.read_text(encoding="utf-8"))
+        areas = await _create_reference_data(session)
+        await _create_organisations(session, master, areas)
+    return True
 
 
 async def main() -> None:
     async with SessionLocal() as session:
-        await seed(session)
-    print("[seed] klart (idempotent).")
+        created = await seed(session)
+    if created:
+        print("[seed] tom databas initierad med referensdata och dialoger. Importera mätdata separat.")
+    else:
+        print("[seed] databasen innehåller redan appdata — inga ändringar gjorda.")
 
 
 if __name__ == "__main__":

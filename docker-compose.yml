@@ -57,12 +57,6 @@ services:
       API_BASE_URL: ${API_BASE_URL:-https://api-test.sundsvall.se}
       CLIENT_KEY: ${CLIENT_KEY:-}
       CLIENT_SECRET: ${CLIENT_SECRET:-}
-    # HME-aggregatet versionshanteras inte. Lokalt monteras ./backend/app/data
-    # (innehåller hme_2025.json) read-only. På Dokploy sätts HME_DATA_DIR till en
-    # värdkatalog dit aggregatet laddats upp. Saknas filen kör appen vidare med
-    # enbart referensdata (se app/seed.py).
-    volumes:
-      - ${HME_DATA_DIR:-./backend/app/data}:/app/app/data:ro
     depends_on:
       db:
         condition: service_healthy
@@ -86,14 +80,14 @@ services:
       PORT: ${PORT:-3000}
       # Access-kod-stub: gatar UI:t server-side. Tom kräver ALLOW_OPEN_ACCESS=true.
       ACCESS_CODE: ${ACCESS_CODE:-}
-      # Separat admin-kod: visar import-GUI:t (/admin/import). Tom = inget admin-läge.
+      # Separat admin-kod: visar inkorgen på /status. Tom = inget admin-läge.
       ADMIN_ACCESSCODE: ${ADMIN_ACCESSCODE:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
       # Explicit lokal escape hatch. Sätt aldrig true i drift.
       ALLOW_OPEN_ACCESS: ${ALLOW_OPEN_ACCESS:-false}
       # I saml-läget gatar middleware via backend-sessionen i stället för access-kod.
       AUTH_MODE: ${AUTH_MODE:-access_code}
-      # Import-GUI:ts server-action anropar backend med detta token (hålls server-side).
+      # Admin-inkorgen hämtas från backend med detta token (hålls server-side).
       IMPORT_TOKEN: ${IMPORT_TOKEN:-}
     depends_on:
       backend:

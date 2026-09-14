@@ -69,7 +69,7 @@ Nuvarande modell:
 
 - backend startar;
 - `alembic upgrade head` körs;
-- idempotent seed körs;
+- seed körs inte vid start; en tom installation initieras uttryckligen före första användning;
 - Gunicorn startar.
 
 Detta är enkelt och fungerar bra när bara en backend-pod startar åt gången. I OpenShift/prod behöver vi välja ett av två mönster:
@@ -161,5 +161,5 @@ Dataverifiering:
 | Fel `DATABASE_URL` | Backend startar men DB är unavailable | Korrigera Secret och rollouta om backend |
 | Automatisk migrering körs parallellt | Race vid schemaändring | Separera migrationsjobb eller styr rollout |
 | Ingen backup | Data kan inte återställas | Kräv backup/restore-verifiering före skarp drift |
-| Seed skriver över manuellt innehåll | Oväntad dataändring | Håll seed idempotent och begränsad till referensdata |
+| Seed skriver över manuellt innehåll | Oväntad dataändring | Kör aldrig seed vid start; explicit initiering gör ingenting om någon appdata finns |
 

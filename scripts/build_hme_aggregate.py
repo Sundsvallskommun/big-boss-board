@@ -3,7 +3,7 @@
 
 Läser den anonymiserade undersökningsfilen i ``indata/`` och skriver
 ``backend/app/data/hme_2025.json`` med *endast* aggregat per förvaltning —
-aldrig radnivådata. Aggregatet konsumeras av ``backend/app/seed.py``.
+aldrig radnivådata. Aggregatet används för separat rådataanalys; seed läser inga rapportfiler.
 
 Kör manuellt vid behov (engångs-/uppdateringssteg, ej en del av runtime)::
 

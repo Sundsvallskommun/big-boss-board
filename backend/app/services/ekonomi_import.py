@@ -1,6 +1,6 @@
 """Import/upsert av ekonomidata (resultaträkning per förvaltning, mnkr).
 
-Delad logik som både import-endpointen (`routers/import_data.py`) och seed använder,
+Importlogik för API och CLI via import-endpointen (`routers/import_data.py`),
 så det bara finns EN väg in i databasen för ekonomi — speglar `hme_import.py`.
 
 Kopplar enheter till organisationer via **masterdata-koden** (`enhet_kod` ↔
@@ -179,7 +179,7 @@ def valj_ekonomifiler(filer: list[ExportFil]) -> list[str]:
     """Senaste ordinarie uttag dag 1–9 månaden efter perioden, annars senaste tillgängliga.
 
     Filnamnet används bara för uttagsdatum. Perioden läses alltid ur filinnehållet.
-    Samma urval används av webb och CLI via /ekonomi-filer.
+    API och CLI använder samma urval via /ekonomi-filer.
     """
     valda: dict[str, tuple[tuple[bool, str, str], str]] = {}
     for fil in filer:
@@ -249,7 +249,7 @@ def csvs_to_serie_payload(
 def _serie_med_period(befintlig: list[dict], enhet: EkonomiEnhet, period: str) -> list[dict]:
     """Uppsertera den här periodens nettokostnad i en redan importerad månadsserie.
 
-    Används vid **enkelperiod-import** (en CSV via GUI/`/ekonomi-csv`), där payloaden
+    Används vid **enkelperiod-import** (en CSV via `/ekonomi-csv`), där payloaden
     saknar serie. Utan detta skulle en enskild uppladdning nolla hela månadsserien.
     Samma period igen → punkten ersätts (korrigerat dagsuttag vinner).
     """
