@@ -4,7 +4,7 @@ import { ACCESS_COOKIE, accessSessionConfigError, verifyAccessSession } from "./
 /** Gatar tjänsten server-side i två lägen (AUTH_MODE):
  *
  *  - "access_code" (default): access-kod-stubben (BYGGPLAN §12). ACCESS_CODE (vanlig)
- *    och ADMIN_ACCESSCODE (admin — ser även import-GUI). Ingen kod satt kräver
+ *    och ADMIN_ACCESSCODE (admin — ser även inkorgen). Ingen kod satt kräver
  *    ALLOW_OPEN_ACCESS=true, annars fail-closed.
  *  - "saml": backend äger sessionen (SAML mot kommunens IdP). Middleware validerar
  *    sessionskakan mot backendens /api/me på varje förfrågan.

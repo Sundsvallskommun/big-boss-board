@@ -1,7 +1,7 @@
 """Import/upsert av HME-data (officiella rapportens fleråriga format).
 
 Import-endpointen (`routers/import_data.py`) äger den uttryckliga importvägen.
-Webb och CLI använder samma normalisering och upsert av befintliga rader
+API och CLI använder samma normalisering och upsert av befintliga rader
 (idempotent upsert), så en ny årsmätning kan läsas in om och om igen utan dubbletter
 och utan att nollställa databasen.
 """

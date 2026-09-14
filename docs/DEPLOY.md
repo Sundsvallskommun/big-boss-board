@@ -31,20 +31,17 @@ Operativ checklista för att driftsätta stacken. Teknisk översikt finns i
    - `DATABASE_URL=postgresql+asyncpg://<user>:<password>@db:5432/<db>`
    - `ACCESS_CODE` — åtkomstkod för UI:t. Tom kod släpper inte igenom trafik om inte
      `ALLOW_OPEN_ACCESS=true` sätts uttryckligen; sätt aldrig den flaggan i drift.
-   - `ADMIN_ACCESSCODE` — separat kod som visar import-GUI:t på `/admin/import`. Vanlig
-     `ACCESS_CODE` ser inte GUI:t. Sätts på frontend.
+   - `ADMIN_ACCESSCODE` — separat kod som visar inkorgen på `/status`. Vanlig
+     `ACCESS_CODE` ser inte inkorgen. Sätts på frontend.
    - `SESSION_SECRET` — oberoende hemlighet med minst 32 tecken (skapa med
      `openssl rand -hex 32`). Krävs på frontend när kodinloggning används, även lokalt.
      Sätt samma värde på alla repliker. Kommunens SAML-läge använder fortsatt `SECRET_KEY`
      i backend och behöver inte denna nya variabel.
    - `BACKEND_INTERNAL_URL=http://backend:8000` (default räcker normalt).
    - `IMPORT_TOKEN` — hemlig nyckel för HME-importen (se steg 5). Tom = endpoint avstängd.
-     Sätts på **både** backend (endpointen) och frontend (import-GUI:ts server-action).
+     Sätts på **både** backend (endpointen) och frontend (admin-inkorgens serverhämtning).
 4. **Persistent volym:** säkerställ att `db-data` är en bestående volym.
-5. **HME-data (utanför git).** HME-siffror versionshanteras inte. Två vägar:
-   - **Admin-GUI (enklast):** logga in med `ADMIN_ACCESSCODE`, öppna `/admin/import` (länk
-     "Importera HME" syns på startsidan endast för admin) och ladda upp `HME_totalindex.json`.
-     Kräver `IMPORT_TOKEN` på frontend.
+5. **Mätdata (utanför git).** Data importeras uttryckligen via API eller CLI:
    - **Import-endpoint/CLI (för automation):** sätt `IMPORT_TOKEN` och kör efter deploy
      `IMPORT_TOKEN=... python3 scripts/import_hme.py --url https://bbb.sundsvall.dev` med den
      officiella rapporten (`HME_totalindex.json`). Endpointen **upsertar** — kör om vid ny mätning
@@ -75,7 +72,7 @@ Operativ checklista för att driftsätta stacken. Teknisk översikt finns i
 Tjänsten används **endast för öppen och publik information**. Ny initiering skapar inga
 mätvärden; HME importeras som riktiga **anonymiserade aggregat**. Inga personuppgifter
 eller känsliga uppgifter — gäller även testdata. Råfiler och HME-aggregat versionshanteras
-aldrig. Import sker uttryckligen via webb eller CLI (se steg 5).
+aldrig. Import sker uttryckligen via API eller CLI (se steg 5).
 
 
 ## Införa nyckeltalsuppdateringen
@@ -94,10 +91,10 @@ Tailwind 4 behöver Safari 16.4+, Chrome 111+ eller Firefox 128+; stäm av klien
    uppdaterade även frågor och organisationsmaster via seed. Efter ändringen till säker
    uppstart måste sådana innehållsändringar göras genom en separat granskad datamigrering
    på en befintlig databas. Seed kan bara initiera en helt tom installation.
-4. Importera aktuellt R12-underlag och HME med delindex via webb eller CLI.
+4. Importera aktuellt R12-underlag och HME med delindex via API eller CLI.
    Kontrollera datadefinition och kostnadsschablon med respektive dataägare. Äldre
    sjukfrånvarouttag används inte som R12. Import av ekonomimånader bevarar historiken
-   via webb/CLI; `/ekonomi-serie` ersätter uttryckligen serien.
+   via API/CLI; `/ekonomi-serie` ersätter uttryckligen serien.
 5. Kontrollera importresultatets överhoppade enheter, senaste period, diagram och
    prognosstatus. Verifiera att manuella bedömningar och aktiviteter finns kvar.
 
@@ -141,10 +138,11 @@ frågor och organisationer lämnas orörda; även tidigare dummydata ligger kvar
 separat, granskad åtgärd eller uttrycklig import ändrar den.
 
 1. Bygg och publicera backend-imagen, uppdatera dess referens i GitOps-repot och synka
-   Argo enligt den vanliga deployvägen. Kontrollera att imagen finns före synk.
+   Argo enligt den vanliga deployvägen. Borttagningen av importvyn kräver även den nya
+   frontend-imagen. Kontrollera att båda imagerna finns före synk.
 2. Kontrollera rätt image och friska pods. Startloggen ska visa migrationer följt av
    Gunicorn, utan ett seed-steg. Kontrollera befintliga dialoger och importerade värden.
-3. Fortsätt importera mätdata via admin-GUI eller CLI. `HME_DATA_DIR` och gamla monterade
+3. Fortsätt importera mätdata via API eller CLI. `HME_DATA_DIR` och gamla monterade
    rapportfiler används inte längre. Befintliga installationer ska inte initieras på nytt.
 
 Endast en **ny installation med tom appdatabas** behöver `python -m app.seed`, efter

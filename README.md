@@ -50,7 +50,7 @@ docker compose exec backend python -m app.seed
 frontend-porten lokalt. Backend kör **migrationer** innan Gunicorn startar
 (se `backend/entrypoint.sh`). Referensdata och dialoger skapas separat med kommandot
 ovan, i en enda transaktion och bara om hela appdatabasen är tom. Finns redan data
-gör kommandot ingenting. Mätvärden importeras uttryckligen via webb eller CLI;
+gör kommandot ingenting. Mätvärden importeras uttryckligen via API eller CLI;
 inga dummyvärden eller datafiler läses in vid uppstart.
 
 Verifiera:
@@ -77,7 +77,7 @@ lokal/demo-körning.
 ### Åtkomstkod
 
 Sätt `ACCESS_CODE` i `.env` för vanlig inloggning. `ADMIN_ACCESSCODE` ger dessutom
-import-GUI:t på `/admin/import`. Kodinloggning kräver även `SESSION_SECRET` med minst
+inkorgen på statussidan. Kodinloggning kräver även `SESSION_SECRET` med minst
 32 tecken (skapa med `openssl rand -hex 32`); cookien innehåller en signerad session
 som gäller i åtta timmar. SAML använder fortsatt backendens separata `SECRET_KEY`.
 Tomma koder släpper inte längre igenom trafik av
@@ -104,6 +104,11 @@ docker compose logs -f backend                                    # följ loggar
 | **Importera riktig data** | token-skyddade endpoints via skripten i [`scripts/`](scripts/) — se [Datainläsning](#datainläsning) nedan. |
 
 ## Datainläsning
+
+Import sker via API eller CLI; appen har ingen importvy. I kommunens drift nås
+API-dokumentationen efter inloggning på [chefdialog.sundsvall.se/api/docs](https://chefdialog.sundsvall.se/api/docs).
+Import-API:erna använder en separat Bearer-token och kräver ingen SAML-session.
+Se [endpoints, format och kommandon](docs/ARCHITECTURE.md#api-åtkomst-i-kommunens-drift).
 
 Ordningen spelar roll: **organisationerna (förvaltningarna) är master** och måste finnas
 först — nyckeltalen **kopplas** till dem via masterdata-koden (`orgId`), de skapar dem inte.
@@ -180,7 +185,7 @@ bbb/
 │  ├─ alembic/versions/      # migrationer
 │  └─ entrypoint.sh          # migrate → gunicorn
 ├─ frontend/                 # Next.js-app (App Router)
-│  ├─ app/                   # sidor (/, /dialog/[id], /status, /login, /admin/import)
+│  ├─ app/                   # sidor (/, /dialog/[id], /status, /login)
 │  ├─ components/            # Dashboard, DetailPanel, QuestionPanel, charts/, ui/, …
 │  ├─ lib/                   # api-klient, auth, admin-api
 │  ├─ app/globals.css (@theme)   # token-lagret (färger, spacing, klasser)

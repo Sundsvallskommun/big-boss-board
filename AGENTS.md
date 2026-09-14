@@ -69,7 +69,7 @@ implementerar det i ett **eget, litet token-lager** — **inte** hela designsyst
 - Dummydata för KPI:er utan källa är **fiktiv**. HME använder **riktiga anonymiserade
   aggregat** per förvaltning ur den officiella rapporten (flerårig serie → historik + trend).
 - **HME-data (rapport/rådata) versionshanteras aldrig** (`indata/` och `backend/app/data/*.json`
-  är gitignorerade). Import sker uttryckligen via webb eller `scripts/import_hme.py`,
+  är gitignorerade). Import sker uttryckligen via API eller `scripts/import_hme.py`,
   genom token-skyddade `/api/import/hme-rapport` eller `/api/import/hme` (`IMPORT_TOKEN`).
   Normalisering och upsert ägs av `app/services/hme_import.py`. Ingen filimport sker vid start.
   `scripts/build_hme_aggregate.py` finns kvar som rådata-analys: delindex + chef/medarbetare
@@ -138,14 +138,14 @@ Införande och återställning: [`docs/DEPLOY.md`](docs/DEPLOY.md#införa-nyckel
   import och läsning (`MeasurementOut`). Saknad budget/prognos ger null i status/värde.
   Månadsdiagrammet är `EkonomiDiffChart`; det gamla nettokostnadsdiagrammet är borttaget.
 - `POST /api/import/ekonomi-filer` tar namngivna CSV/TXT-uttag och väljer senaste ordinarie
-  uttag dag 1–9 månaden efter rapportperioden. Webb och CLI använder samma backendregel.
+  uttag dag 1–9 månaden efter rapportperioden. API och CLI använder samma backendregel.
   Fil- och enkelperiodimport bevarar historik och huvudvärdet vid äldre uttag. Explicit serieimport
   ersätter serien. Dokumenterad aprilrättning ägs av `services/ekonomi.py`.
 - Sjukfrånvaro använder **R12**, kvartalstrend och uppskattad årskostnad. Backend avvisar
   gammal/okänd personalexport. Äldre lagrade aggregat visas som "Inväntar R12".
   `/api/import/sjukfranvaro-filer` normaliserar flera filer och bevarar historik.
 - HME har totalindex + motivation, ledarskap och styrning. `/api/import/hme-rapport` tar
-  totalindex och valfri separat delindexrapport; webb och CLI delar normalisering.
+  totalindex och valfri separat delindexrapport; API och CLI delar normalisering.
 - Organisationsmastern skiljer förvaltningar från Stadsbacken/MRF. `dialogbaserad` är en
   lista med KPI-nycklar som ska följas upp med organisationsspecifika frågor utan mätdata.
 - Frågor har valfri `rubrik` och `bygger_pa`; statusrapporter har valfri `aterstaende`.

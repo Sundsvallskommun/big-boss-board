@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, Upload } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { listDialogues, type DialogueSummary } from "@/lib/api";
 import { BrandBar } from "@/components/BrandBar";
-import { isAdmin } from "@/lib/auth";
 
 // Alltid färsk data (dialoger kan ändras).
 export const dynamic = "force-dynamic";
@@ -62,7 +61,6 @@ export default async function Home() {
   // den behandlas verksamheten som förvaltning, så listan aldrig tappar en post.
   const forvaltningar = sorted.filter((d) => d.organisation.ar_forvaltning !== false);
   const ovriga = sorted.filter((d) => d.organisation.ar_forvaltning === false);
-  const admin = await isAdmin();
 
   return (
     <>
@@ -81,15 +79,6 @@ export default async function Home() {
               Öppna en uppföljningsdialog för att gå igenom nyckeltalen tillsammans, ett område i taget.
             </p>
           </div>
-          {admin && (
-            <Link
-              href="/admin/import"
-              className="inline-flex items-center gap-8 rounded-full border border-hairline bg-background-content px-16 py-8 text-small font-semibold transition hover:border-vattjom-surface-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              <Upload size={16} className="text-vattjom-text-primary" aria-hidden="true" />
-              Importera data
-            </Link>
-          )}
         </div>
 
         {sorted.length === 0 ? (
