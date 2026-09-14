@@ -1,6 +1,6 @@
 """Import/upsert av ekonomidata (resultaträkning per förvaltning, mnkr).
 
-Delad logik som både import-endpointen (`routers/import_data.py`) och seed använder,
+Importlogik för webb och CLI via import-endpointen (`routers/import_data.py`),
 så det bara finns EN väg in i databasen för ekonomi — speglar `hme_import.py`.
 
 Kopplar enheter till organisationer via **masterdata-koden** (`enhet_kod` ↔

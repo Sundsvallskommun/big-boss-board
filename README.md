@@ -41,13 +41,17 @@ git clone https://github.com/Sundsvallskommun/big-boss-board.git
 cd big-boss-board
 cp .env.example .env          # sätt POSTGRES_PASSWORD (och matcha den i DATABASE_URL)
 # sätt ACCESS_CODE och SESSION_SECRET, eller ALLOW_OPEN_ACCESS=true för öppen lokal/demo
-docker compose up --build
+docker compose up --build -d
+# Vänta tills backend har startat. Bara för en ny, tom databas, före första användning:
+docker compose exec backend python -m app.seed
 ```
 
 `docker compose up` laddar automatiskt `docker-compose.override.yml`, som publicerar
-frontend-porten lokalt. Backend kör vid uppstart **migrationer + idempotent seed** innan
-Gunicorn startar (se `backend/entrypoint.sh`), så databasen fylls med referens- och
-dummydata automatiskt.
+frontend-porten lokalt. Backend kör **migrationer** innan Gunicorn startar
+(se `backend/entrypoint.sh`). Referensdata och dialoger skapas separat med kommandot
+ovan, i en enda transaktion och bara om hela appdatabasen är tom. Finns redan data
+gör kommandot ingenting. Mätvärden importeras uttryckligen via webb eller CLI;
+inga dummyvärden eller datafiler läses in vid uppstart.
 
 Verifiera:
 
@@ -86,7 +90,7 @@ Snabb iterationsloop (bygg om + starta bara den ändrade tjänsten):
 
 ```bash
 docker compose build frontend && docker compose up -d frontend   # efter frontend-ändring
-docker compose build backend  && docker compose up -d backend    # kör migrationer + seed på nytt
+docker compose build backend  && docker compose up -d backend    # kör eventuella nya migrationer
 docker compose logs -f backend                                    # följ loggar
 ```
 
@@ -104,11 +108,12 @@ docker compose logs -f backend                                    # följ loggar
 Ordningen spelar roll: **organisationerna (förvaltningarna) är master** och måste finnas
 först — nyckeltalen **kopplas** till dem via masterdata-koden (`orgId`), de skapar dem inte.
 
-### 1. Organisationer (master) — läses in automatiskt
+### 1. Organisationer — initiera en ny databas
 
 Förvaltningslistan bor i **[`backend/app/seed_data/organisationer.json`](backend/app/seed_data/organisationer.json)**
-och läses av seeden vid **varje backend-start** (bundlad i imagen). `orgId` är masterdata-koden
-som allt annat knyts till. Format:
+och används som mall av `python -m app.seed` vid uttrycklig initiering av en **tom databas**.
+Efter initiering äger databasen organisationerna. `orgId` motsvarar `organisation.kod`,
+som importer kopplar mot. Format:
 
 ```json
 {
@@ -120,9 +125,11 @@ som allt annat knyts till. Format:
 }
 ```
 
-Seeden skapar/uppdaterar förvaltningarna (kod/namn/slug) + en dialog per förvaltning, och
-**tar bort** förvaltningar som inte finns i listan. Vill du ändra vilka förvaltningar som visas
-— redigera filen och starta om backend (`docker compose build backend && docker compose up -d backend`).
+Initieringen skapar organisationer, en dialog per organisation och referensdata utan
+mätvärden. Den uppdaterar eller raderar aldrig befintliga rader. Ändringar i mallfilen
+påverkar endast nya installationer. Befintliga organisationer och dialogfrågor ändras
+genom en separat granskad datamigrering; statusinnehåll kan redigeras via admin-API:t.
+En omstart återställer inte redigeringar eller borttaget innehåll.
 
 ### 2. Nyckeltal — importeras och kopplas på koden
 
@@ -168,10 +175,10 @@ bbb/
 │  │  ├─ schemas.py          # Pydantic-scheman
 │  │  ├─ routers/            # dialogues, kpi_areas, activities, import_data, admin, …
 │  │  ├─ services/           # import-/domänlogik (hme, ekonomi, sjukfranvaro, …)
-│  │  ├─ seed.py             # idempotent seed (org-master + referensdata + dummydata)
+│  │  ├─ seed.py             # explicit initiering av tom databas, utan mätvärden
 │  │  └─ seed_data/           # organisationer.json (förvaltnings-master, orgId = kod)
 │  ├─ alembic/versions/      # migrationer
-│  └─ entrypoint.sh          # migrate → seed → gunicorn
+│  └─ entrypoint.sh          # migrate → gunicorn
 ├─ frontend/                 # Next.js-app (App Router)
 │  ├─ app/                   # sidor (/, /dialog/[id], /status, /login, /admin/import)
 │  ├─ components/            # Dashboard, DetailPanel, QuestionPanel, charts/, ui/, …

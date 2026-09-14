@@ -56,7 +56,7 @@ Definierade i [`../docker-compose.yml`](../docker-compose.yml):
 | Tjänst | Image/Build | Exponerar | Anteckning |
 | --- | --- | --- | --- |
 | `db` | `postgres:16-alpine` | `5432` (internt) | Namngiven volym `db-data`. |
-| `backend` | `./backend` (Python 3.12-slim) | `8000` (internt) | `entrypoint.sh`: migrate → seed → gunicorn (uvicorn-workers). |
+| `backend` | `./backend` (Python 3.12-slim) | `8000` (internt) | `entrypoint.sh`: migrate → gunicorn (uvicorn-workers). |
 | `frontend` | `./frontend` (Node 22 **bookworm-slim**) | `3000` (internt; publik via Traefik) | Next standalone. Healthcheck är node-baserad. |
 
 Lokalt lägger [`../docker-compose.override.yml`](../docker-compose.override.yml) till en
@@ -126,8 +126,8 @@ Två sorters nyckeltal, som renderas olika i frontend:
 | **Dialog-only** | `verksamhet`, `digital`, `kommunikativt` | inga mätvärden — dialogfrågor + `area_status` | Frågeställningar + manuellt satt status/kommentar med historik (`QuestionPanel`) |
 
 `GET /api/dialogues/{id}` returnerar **alla** områden; `measurement = null` för dialog-only.
-Seeden håller `DIALOG_ONLY_KEYS` fria från mätvärden (rensar ev. gamla dummies). Manuell
-status sätts i dialogflödet: `POST /api/dialogues/{id}/areas/{area_id}/status` (append).
+Nyinitierade dialoger saknar mätvärden. Befintliga mätvärden rensas aldrig vid uppstart
+eller initiering. Manuell status sätts i dialogflödet: `POST /api/dialogues/{id}/areas/{area_id}/status` (append).
 
 Bakgrund/roadmap för dialog-only-nyckeltalen finns i [`BYGGPLAN.md`](BYGGPLAN.md) §16–17.
 
@@ -135,8 +135,10 @@ Bakgrund/roadmap för dialog-only-nyckeltalen finns i [`BYGGPLAN.md`](BYGGPLAN.m
 
 **Organisationerna är master** (BYGGPLAN §18): förvaltningslistan bor i
 [`../backend/app/seed_data/organisationer.json`](../backend/app/seed_data/organisationer.json)
-(`orgId` = `organisation.kod`) och läses av seeden vid varje start. Nyckeltalen nedan **kopplar**
-mot dessa via koden — de skapar aldrig förvaltningar. Förvaltningar utanför mastern tas bort.
+(`orgId` = `organisation.kod`) som mall för uttrycklig initiering av en tom databas.
+Därefter äger databasen organisationerna. Nyckeltalen nedan **kopplar** mot dessa via
+koden — de skapar aldrig förvaltningar. Malländringar påverkar inte befintliga rader;
+organisationsändringar i drift kräver en separat granskad datamigrering.
 
 Riktig data (HME, ekonomi, sjukfrånvaro) **versionshanteras aldrig** och matas in via
 token-skyddade endpoints (`IMPORT_TOKEN`). Alla är **idempotenta upsertar** — säkra att
@@ -144,7 +146,7 @@ köra om. Skripten i [`../scripts/`](../scripts/) använder enbart Python-stdlib
 
 | Nyckeltal | Endpoint(s) | Skript | Källformat |
 | --- | --- | --- | --- |
-| HME | `POST /api/import/hme-rapport` (rapport + valfria delindex), `/hme` (normaliserat) | `import_hme.py` | JSON (officiell rapport); alt. fil-bootstrap via `HME_DATA_DIR` |
+| HME | `POST /api/import/hme-rapport` (rapport + valfria delindex), `/hme` (normaliserat) | `import_hme.py` | JSON (officiell rapport) |
 | Ekonomi | `POST /api/import/ekonomi-filer` (webb/CLI), `/ekonomi`, `/ekonomi-csv`, `/ekonomi-serie` | `import_ekonomi.py`, `import_ekonomi_serie.py` | Qlik-CSV (månadsserie ur flera dagsuttag) |
 | Sjukfrånvaro | `POST /api/import/sjukfranvaro-filer` (webb/CLI), `/sjukfranvaro-csv` | `import_sjukfranvaro.py` | Qlik personal-CSV (senaste uttag per period) |
 
@@ -195,10 +197,20 @@ gatas av access-koden) och token-skyddad triage/publicering (`/api/admin/...`).
 `backend/entrypoint.sh` kör vid **varje** start:
 
 1. `alembic upgrade head` — migrationer i [`../backend/alembic/versions/`](../backend/alembic/versions/) (kedjad revisionshistorik).
-2. `python -m app.seed` — **idempotent** seed. Skapar referensdata (stödfunktioner, KPI-områden,
-   frågor, exempeldialog) första gången, och **reconcilerar** seed-ägt innehåll vid varje körning
-   (t.ex. `kpi_area.info`, dialogfrågor) så ändringar slår igenom i drift. Rensar även dummy-
-   mätvärden för dialog-only-nyckeltal.
+2. Gunicorn — startas endast om migrationerna lyckas.
+
+`python -m app.seed` är ett **separat engångskommando**, före första användning av en ny
+installation. Kommandot kontrollerar samtliga apptabeller. Finns någon rad avslutas det
+utan ändringar, även om andra tabeller är tomma. Alembics revisionstabell ingår inte i
+kontrollen. En enda transaktion skapar referensdata, organisationer, dialoger och initialt
+statusinnehåll; fel rullar tillbaka hela initieringen. Inga mätvärden skapas och inga
+rapportfiler läses. Kör initieringen en gång utan samtidig användartrafik.
+
+Efter initiering äger databasen innehållet. Importer sker via webb/CLI och befintliga
+importtjänster. Ändringar i organisationer, frågor och övrig referensdata behöver en
+uttrycklig, granskad datamigrering; att redigera seed-mallar ändrar bara nya installationer.
+Statuskort och rapporter kan redigeras via sina admin-API:er. Seed återställer aldrig
+borttaget innehåll och används inte för reparation av en delvis fylld databas.
 
 Ny migration: lägg en fil i [`../backend/alembic/versions/`](../backend/alembic/versions/) —
 kopiera formatet från en befintlig och kedja `down_revision` till nuvarande head. Källkoden är
@@ -233,7 +245,7 @@ Sådant som inte syns i koden men är lätt att gå på:
 - **`force-dynamic`-sidor har `loading.tsx` + `error.tsx`**, och server-fetcharna i
   `lib/api.ts` har timeout + retry. Utan det kan en trög/hängande backend frysa en mjuk
   navigering utan återkoppling.
-- **Migrationer + seed körs vid varje backend-start.** En trasig migration blockerar starten
+- **Endast migrationer körs vid varje backend-start; seed körs separat för tom databas.** En trasig migration blockerar starten
   (och därmed Traefik-routingen). Testa lokalt först.
 - **En domän + proxy.** Lägg aldrig till CORS/host-portar på interna tjänster; låt frontend
   proxa `/api/*`.
@@ -248,7 +260,6 @@ aldrig i repo.
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | db | Postgres-uppgifter. |
 | `DATABASE_URL` | backend | `postgresql+asyncpg://…@db:5432/…` (måste matcha ovan). |
 | `IMPORT_TOKEN` | backend + frontend | Nyckel för `/api/import/*` och `/api/admin/*`. Tom = import avstängd. |
-| `HME_DATA_DIR` | backend | Valfri värdkatalog med `HME_totalindex.json` för fil-bootstrap vid start. |
 | `BACKEND_INTERNAL_URL` | frontend | Intern backend-URL för SSR/rewrites (default `http://backend:8000`). |
 | `ACCESS_CODE` | frontend + backend | Åtkomstkod. Tom kod kräver `ALLOW_OPEN_ACCESS=true`, annars fail-closed. |
 | `SESSION_SECRET` | frontend | Minst 32 tecken för signerade kodsessioner. Krävs när koder används, även lokalt; samma värde på alla frontend-repliker. Används inte av SAML. |

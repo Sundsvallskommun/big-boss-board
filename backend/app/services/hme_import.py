@@ -1,9 +1,7 @@
 """Import/upsert av HME-data (officiella rapportens fleråriga format).
 
-Delad logik som både import-endpointen (`routers/import_data.py`) och seed
-(`seed.py`) använder, så det bara finns EN väg in i databasen för HME.
-
-Till skillnad från seedens `_get_or_create` *uppdaterar* importen befintliga rader
+Import-endpointen (`routers/import_data.py`) äger den uttryckliga importvägen.
+Webb och CLI använder samma normalisering och upsert av befintliga rader
 (idempotent upsert), så en ny årsmätning kan läsas in om och om igen utan dubbletter
 och utan att nollställa databasen.
 """
@@ -48,43 +46,6 @@ def sjukfranvaro_status(value: float, kvartalsokning: float | None = None) -> St
     if value <= SJUK_GUL_TAK:
         return Status.warn
     return Status.alert
-
-
-# Fiktiva platshållarvärden för KPI:er som ännu saknar riktig källa (QlikSense, fråga #4).
-# Skapas bara när en dialog nyskapas, så dashboarden är komplett tills källan finns.
-FICTIV_MEASUREMENTS: dict[str, dict] = {
-    "ekonomi": {
-        "value_text": "72", "value_num": 72, "unit": "index", "target_text": "≥ 75",
-        "target_num": 75, "bar_max": 100, "status": Status.warn,
-        # Ekonomi har ingen trend — se _measurement_fields i ekonomi_import.py.
-        "trend_dir": None, "trend_good": None, "trend_text": "",
-        "interpretation": "Strax under mål, men i positiv riktning. Håll i de åtgärder som börjat ge effekt.",
-    },
-    "sjukfranvaro": {
-        "value_text": "6,6 %", "value_num": 6.6, "unit": "", "target_text": "≤ 6,0 %",
-        "target_num": SJUK_MAL, "bar_max": 10,
-        # Färgnivå sätts av tröskelvärdena: 6,6 % med +0,8 p.e./kvartal → gul (reagera).
-        "status": sjukfranvaro_status(6.6, 0.8),
-        "trend_dir": TrendDir.up, "trend_good": False, "trend_text": "+0,8 p.e. på ett kvartal",
-        "interpretation": (
-            "Strax över målet och svagt stigande (gul nivå – reagera), mätt som rullande 12 "
-            "månader. Analysera mönstret, t.ex. korttids- kontra långtidsfrånvaro, och håll "
-            "tätare uppföljning."
-        ),
-    },
-    "verksamhet": {
-        "value_text": "62", "value_num": 62, "unit": "index", "target_text": "≥ 70",
-        "target_num": 70, "bar_max": 100, "status": Status.warn,
-        "trend_dir": TrendDir.down, "trend_good": False, "trend_text": "−2 sedan T3",
-        "interpretation": "Under mål och vikande. Prioritera utvecklingsinsatser där effekten blir störst.",
-    },
-    "digital": {
-        "value_text": "58", "value_num": 58, "unit": "index", "target_text": "≥ 70",
-        "target_num": 70, "bar_max": 100, "status": Status.warn,
-        "trend_dir": TrendDir.up, "trend_good": True, "trend_text": "+4 sedan T3",
-        "interpretation": "I ett tidigt skede men på rätt väg. Säkra förflyttningen från pilot till bred användning.",
-    },
-}
 
 
 def slugify(namn: str) -> str:

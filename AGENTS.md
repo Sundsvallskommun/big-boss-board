@@ -58,7 +58,7 @@ implementerar det i ett **eget, litet token-lager** — **inte** hela designsyst
   Proxar `/api/*` → backend via `next.config` rewrites (en domän, inga CORS-bekymmer).
 - **Backend:** FastAPI + SQLAlchemy 2.0 + Pydantic v2 + Alembic. Uvicorn (Gunicorn i prod).
   Alla endpoints under prefix `/api`. OpenAPI på `/api/docs`.
-- **Databas:** PostgreSQL 16. Namngiven volym, ej publik. Migrationer + idempotent seed vid deploy.
+- **Databas:** PostgreSQL 16. Namngiven volym, ej publik. Migrationer vid start; explicit seed endast för en tom appdatabas.
 - **Infra:** kommunen använder OpenShift-anpassade containrar och SAML/Redis.
   Compose/Dokploy finns kvar som separat körväg. Endast `frontend` exponeras publikt.
 
@@ -69,12 +69,20 @@ implementerar det i ett **eget, litet token-lager** — **inte** hela designsyst
 - Dummydata för KPI:er utan källa är **fiktiv**. HME använder **riktiga anonymiserade
   aggregat** per förvaltning ur den officiella rapporten (flerårig serie → historik + trend).
 - **HME-data (rapport/rådata) versionshanteras aldrig** (`indata/` och `backend/app/data/*.json`
-  är gitignorerade). Två vägar in: (1) **import-endpoint** `POST /api/import/hme` (token-skyddad,
-  `IMPORT_TOKEN`) via `scripts/import_hme.py` — upsertar, rekommenderas i drift och vid nya år;
-  (2) **fil vid uppstart** — `backend/app/data/hme_matning.json` (monteras via `HME_DATA_DIR`)
-  läses av seed. Saknas båda kör appen vidare med enbart referensdata. Upsert-logiken delas av
-  endpoint och seed i `app/services/hme_import.py`. (`scripts/build_hme_aggregate.py` finns kvar
-  som rådata-analys: delindex + chef/medarbetare med n<5-suppression — ej primär källa.)
+  är gitignorerade). Import sker uttryckligen via webb eller `scripts/import_hme.py`,
+  genom token-skyddade `/api/import/hme-rapport` eller `/api/import/hme` (`IMPORT_TOKEN`).
+  Normalisering och upsert ägs av `app/services/hme_import.py`. Ingen filimport sker vid start.
+  `scripts/build_hme_aggregate.py` finns kvar som rådata-analys: delindex + chef/medarbetare
+  med n<5-suppression — ej primär källa.
+
+## Initiering och uppstart
+
+`backend/entrypoint.sh` kör Alembic och därefter Gunicorn. `python -m app.seed` är
+ett separat engångskommando för en helt tom appdatabas, före första användning.
+Kontroll av alla apptabeller och skapande sker i en transaktion; fel rullar tillbaka
+hela initieringen. Seed skapar inga mätvärden och importerar inga rapportfiler.
+Befintligt innehåll ägs av databasen. Ändringar i referensdata i drift behöver en
+separat granskad datamigrering; malländringar får bara effekt i nya installationer.
 
 ## Inkorg / intake (status-sidan)
 
@@ -115,7 +123,8 @@ Modeller i `models.py`, migration `7a2b3c4d5e06_status_content.py`, logik i
 - **Publiceringsväg:** läs inkorgen via API lokalt → `POST /api/admin/status-cards` med
   `submission_id` → kortet hamnar i rätt kolumn och submissionen markeras publicerad.
 - **Bootstrap:** startinnehållet (de tidigare `data.ts`-korten) seedas **en gång** i
-  `seed.py` (bara om tabellen är tom), så senare API-redigeringar inte återuppstår.
+  `seed.py` vid explicit initiering av en helt tom appdatabas. Finns någon appdata ändras
+  ingenting, även om statustabellerna är tomma. Senare redigeringar och borttagningar bevaras.
 - **Ännu ej byggt:** inget webb-GUI för triage (sker via API/Codex); statuskort
   saknar ändringshistorik (`uppdaterad_at` räcker).
 
@@ -136,7 +145,7 @@ Införande och återställning: [`docs/DEPLOY.md`](docs/DEPLOY.md#införa-nyckel
   gammal/okänd personalexport. Äldre lagrade aggregat visas som "Inväntar R12".
   `/api/import/sjukfranvaro-filer` normaliserar flera filer och bevarar historik.
 - HME har totalindex + motivation, ledarskap och styrning. `/api/import/hme-rapport` tar
-  totalindex och valfri separat delindexrapport; webb, CLI och seed delar normalisering.
+  totalindex och valfri separat delindexrapport; webb och CLI delar normalisering.
 - Organisationsmastern skiljer förvaltningar från Stadsbacken/MRF. `dialogbaserad` är en
   lista med KPI-nycklar som ska följas upp med organisationsspecifika frågor utan mätdata.
 - Frågor har valfri `rubrik` och `bygger_pa`; statusrapporter har valfri `aterstaende`.

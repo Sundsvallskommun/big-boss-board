@@ -57,12 +57,6 @@ services:
       API_BASE_URL: ${API_BASE_URL:-https://api-test.sundsvall.se}
       CLIENT_KEY: ${CLIENT_KEY:-}
       CLIENT_SECRET: ${CLIENT_SECRET:-}
-    # HME-aggregatet versionshanteras inte. Lokalt monteras ./backend/app/data
-    # (innehåller hme_2025.json) read-only. På Dokploy sätts HME_DATA_DIR till en
-    # värdkatalog dit aggregatet laddats upp. Saknas filen kör appen vidare med
-    # enbart referensdata (se app/seed.py).
-    volumes:
-      - ${HME_DATA_DIR:-./backend/app/data}:/app/app/data:ro
     depends_on:
       db:
         condition: service_healthy

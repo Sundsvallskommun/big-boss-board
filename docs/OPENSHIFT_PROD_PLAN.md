@@ -28,7 +28,7 @@ Prod behöver gå via kommunens etablerade deploykedja för att få rätt nät, 
 
 - `backend/` och `frontend/` som standardmonorepo-layout.
 - `backend/Dockerfile` och `frontend/Dockerfile` som imagekällor.
-- `backend/entrypoint.sh` för migration och idempotent seed.
+- `backend/entrypoint.sh` för migration följt av Gunicorn. Seed körs separat endast för en tom databas (se [DEPLOY.md](DEPLOY.md#införa-säker-uppstart)).
 - `/api/health` som bas för probe-konfiguration, med komplettering för readiness.
 - Importskripten i `scripts/` för dataimport efter deploy.
 

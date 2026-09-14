@@ -1,17 +1,10 @@
 #!/usr/bin/env sh
 set -e
 
-# Migrationer + seed kopplas på i Fas 1 (alembic upgrade head && python -m app.seed).
-# Förbered redan nu: kör om konfigurationen finns, hoppa annars tyst över.
-if [ -f "alembic.ini" ]; then
-  echo "[entrypoint] kör databasmigrationer..."
-  alembic upgrade head
-fi
-
-if python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('app.seed') else 1)" 2>/dev/null; then
-  echo "[entrypoint] kör seed (idempotent)..."
-  python -m app.seed
-fi
+# Uppstart ändrar schemat genom granskade migrationer, aldrig verksamhetsdata via seed.
+# En ny, tom databas initieras uttryckligen med python -m app.seed före första användning.
+echo "[entrypoint] kör databasmigrationer..."
+alembic upgrade head
 
 echo "[entrypoint] startar Gunicorn (Uvicorn-workers)..."
 # PORT konfigurerbar: compose kör 8000; OpenShift/kustomize-basen antar Node-appars
