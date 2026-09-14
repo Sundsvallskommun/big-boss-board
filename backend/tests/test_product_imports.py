@@ -177,21 +177,6 @@ async def test_import_http_contract_keeps_token_auth_and_accepts_hme_reports(db,
         app.dependency_overrides.pop(get_session, None)
 
 
-async def test_seed_can_restart_with_old_personnel_file_without_importing_it(db, monkeypatch, tmp_path, capsys):
-    from app import seed as seed_module
-    for name in ["HME_REPORT_PATH", "HME_DELINDEX_PATH", "EKONOMI_CSV_PATH", "EKONOMI_REPORT_PATH"]:
-        monkeypatch.setattr(seed_module, name, tmp_path / "missing")
-    old = tmp_path / "old.csv"
-    old.write_text(personnel("2026-04-30", 5, new=False))
-    monkeypatch.setattr(seed_module, "SJUK_CSV_PATH", old)
-    await seed_module.seed(db)
-    await seed_module.seed(db)
-    assert "Importera nytt R12-underlag" in capsys.readouterr().out
-    for org in (await db.scalars(select(Organisation))).all():
-        if org.kod in ("14", "4705"):
-            assert not org.ar_forvaltning
-
-
 async def test_backfill_of_pre_upgrade_measurement_keeps_headline_point_and_projects_result(db):
     await import_ekonomi(db, EkonomiImport(**csv_to_payload(export("2026-06-30").replace("K18,-1200", "K18,-1300"))))
     m = await db.scalar(select(Measurement))

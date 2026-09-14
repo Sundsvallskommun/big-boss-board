@@ -31,54 +31,48 @@ Operativ checklista för att driftsätta stacken. Teknisk översikt finns i
    - `DATABASE_URL=postgresql+asyncpg://<user>:<password>@db:5432/<db>`
    - `ACCESS_CODE` — åtkomstkod för UI:t. Tom kod släpper inte igenom trafik om inte
      `ALLOW_OPEN_ACCESS=true` sätts uttryckligen; sätt aldrig den flaggan i drift.
-   - `ADMIN_ACCESSCODE` — separat kod som visar import-GUI:t på `/admin/import`. Vanlig
-     `ACCESS_CODE` ser inte GUI:t. Sätts på frontend.
+   - `ADMIN_ACCESSCODE` — separat kod som visar inkorgen på `/status`. Vanlig
+     `ACCESS_CODE` ser inte inkorgen. Sätts på frontend.
    - `SESSION_SECRET` — oberoende hemlighet med minst 32 tecken (skapa med
      `openssl rand -hex 32`). Krävs på frontend när kodinloggning används, även lokalt.
      Sätt samma värde på alla repliker. Kommunens SAML-läge använder fortsatt `SECRET_KEY`
      i backend och behöver inte denna nya variabel.
    - `BACKEND_INTERNAL_URL=http://backend:8000` (default räcker normalt).
    - `IMPORT_TOKEN` — hemlig nyckel för HME-importen (se steg 5). Tom = endpoint avstängd.
-     Sätts på **både** backend (endpointen) och frontend (import-GUI:ts server-action).
-   - `HME_DATA_DIR` — valfri värdkatalog med `HME_totalindex.json` för bootstrap vid uppstart.
+     Sätts på **både** backend (endpointen) och frontend (admin-inkorgens serverhämtning).
 4. **Persistent volym:** säkerställ att `db-data` är en bestående volym.
-5. **HME-data (utanför git).** HME-siffror versionshanteras inte. Två vägar:
-   - **Admin-GUI (enklast):** logga in med `ADMIN_ACCESSCODE`, öppna `/admin/import` (länk
-     "Importera HME" syns på startsidan endast för admin) och ladda upp `HME_totalindex.json`.
-     Kräver `IMPORT_TOKEN` på frontend.
+5. **Mätdata (utanför git).** Data importeras uttryckligen via API eller CLI:
    - **Import-endpoint/CLI (för automation):** sätt `IMPORT_TOKEN` och kör efter deploy
      `IMPORT_TOKEN=... python3 scripts/import_hme.py --url https://bbb.sundsvall.dev` med den
      officiella rapporten (`HME_totalindex.json`). Endpointen **upsertar** — kör om vid ny mätning
      (t.ex. när 2027 tillkommer) utan redeploy eller DB-nollning.
-   - **Fil vid uppstart (bootstrap):** lägg `HME_totalindex.json` i en värdkatalog och peka
-     `HME_DATA_DIR` dit; seed läser den vid start. Saknas både fil och import startar appen ändå
-     med enbart referensdata (väljaren visar tomt läge tills HME importerats).
    - **Ekonomi & sjukfrånvaro** matas in på samma sätt (token-skyddade endpoints, upsert) med
      `scripts/import_ekonomi_serie.py` resp. `scripts/import_sjukfranvaro.py`. Se
      [`ARCHITECTURE.md`](ARCHITECTURE.md#datainflöden).
-6. **Deploya.** Vid start kör backend automatiskt `alembic upgrade head` → seed
-   (idempotent) → Gunicorn. Kör därefter importen (steg 5) om du inte använt fil-bootstrap.
+6. **Deploya.** Vid start kör backend automatiskt `alembic upgrade head` → Gunicorn.
+   Endast för en **ny, tom databas**, kör därefter `docker compose exec backend python -m app.seed`
+   en gång före första användning. Befintliga installationer behöver ingen initiering.
+   Importera sedan mätdata via steg 5. Se även [säker uppstart](#införa-säker-uppstart).
 
 ## Verifiering efter deploy
 
-- `https://bbb.sundsvall.dev` laddar dashboarden med seedad data.
+- `https://bbb.sundsvall.dev` laddar dashboarden med befintlig eller uttryckligen initierad data.
 - `https://bbb.sundsvall.dev/api/health` svarar `{"status":"ok",...,"db":"ok"}` via proxyn.
 - Om `ACCESS_CODE` är satt: oinloggad träffar `/login`; rätt kod ger åtkomst.
 - Backend och db har inga publika portar (endast frontend nås utifrån).
 
 ## Drift
 
-- **Migrationer/seed** körs vid varje deploy via `backend/entrypoint.sh` (idempotent).
+- **Migrationer** körs vid varje backend-start via `backend/entrypoint.sh`; redan körda revisioner hoppas över. Seed körs aldrig automatiskt.
 - **Loggar/health:** alla tjänster har healthchecks och `restart: unless-stopped`.
-- **Rulla tillbaka:** redeploya tidigare commit i Dokploy. Datat ligger kvar i volymen.
+- **Rulla tillbaka:** välj en schema-kompatibel image som behåller säker uppstart (se nedan). Datat ligger kvar i volymen, men äldre seed-kod kan ändra det vid start.
 
 ## Dataregel
 
-Tjänsten används **endast för öppen och publik information**. Fiktiv dummydata för de KPI:er
-som saknar källa, och riktiga **anonymiserade aggregat** för HME (per förvaltning, med
-segment-suppression vid n<5). Inga personuppgifter eller känsliga uppgifter — gäller även
-testdata. Råfiler och HME-aggregat versionshanteras aldrig; aggregatet levereras via
-`HME_DATA_DIR` (se steg 5).
+Tjänsten används **endast för öppen och publik information**. Ny initiering skapar inga
+mätvärden; HME importeras som riktiga **anonymiserade aggregat**. Inga personuppgifter
+eller känsliga uppgifter — gäller även testdata. Råfiler och HME-aggregat versionshanteras
+aldrig. Import sker uttryckligen via API eller CLI (se steg 5).
 
 
 ## Införa nyckeltalsuppdateringen
@@ -93,12 +87,14 @@ Tailwind 4 behöver Safari 16.4+, Chrome 111+ eller Firefox 128+; stäm av klien
    från `a0d5e6f7b109` till `a6d1e2f3a746` lägger till frågornas ursprung, rubrik och
    organisation, rapporters återstående aktiviteter och organisationsgruppering samt
    gör mätvärde/status nullable. SQL-generering ensam verifierar inte migreringen.
-3. Kör migrationer och seed via den befintliga deployvägen. Seed uppdaterar frågor
-   och organisationsmaster, men skriver inte över befintliga statusrapporter.
-4. Importera aktuellt R12-underlag och HME med delindex via webb eller CLI.
+3. Kör migrationer via den befintliga deployvägen. Den ursprungliga utrullningen
+   uppdaterade även frågor och organisationsmaster via seed. Efter ändringen till säker
+   uppstart måste sådana innehållsändringar göras genom en separat granskad datamigrering
+   på en befintlig databas. Seed kan bara initiera en helt tom installation.
+4. Importera aktuellt R12-underlag och HME med delindex via API eller CLI.
    Kontrollera datadefinition och kostnadsschablon med respektive dataägare. Äldre
    sjukfrånvarouttag används inte som R12. Import av ekonomimånader bevarar historiken
-   via webb/CLI; `/ekonomi-serie` ersätter uttryckligen serien.
+   via API/CLI; `/ekonomi-serie` ersätter uttryckligen serien.
 5. Kontrollera importresultatets överhoppade enheter, senaste period, diagram och
    prognosstatus. Verifiera att manuella bedömningar och aktiviteter finns kvar.
 
@@ -129,5 +125,41 @@ Node 22 och OpenShift-anpassningen (grupp 0, PORT, kontrollsocket, probes och ru
 behålls. Gunicorn får uttryckliga tidsgränser och längre keep-alive. Pakethanterare tas
 bort ur runtime-imagerna. CSP tillåter SAML:s externa omdirigeringar.
 
-**Återställning:** återgå till föregående kod/image; ingen databasåterställning krävs för
-denna ändring. Kodsessioner kan kräva ny inloggning även efter återställning.
+**Återställning:** återgå till en schema-kompatibel kod/image som behåller säker uppstart;
+ingen databasåterställning krävs för denna ändring. Kodsessioner kan kräva ny inloggning även efter återställning.
+
+
+## Införa säker uppstart
+
+Backend kör migrationer följt av Gunicorn. Ingen seed, rensning eller filimport körs vid
+omstart eller deploy. Ändringen kräver **ingen ny databasrevision** och ingen manuell
+initiering i befintlig produktion. Befintliga mätvärden, aktiviteter, manuella bedömningar,
+frågor och organisationer lämnas orörda; även tidigare dummydata ligger kvar tills en
+separat, granskad åtgärd eller uttrycklig import ändrar den.
+
+1. Bygg och publicera backend-imagen, uppdatera dess referens i GitOps-repot och synka
+   Argo enligt den vanliga deployvägen. Borttagningen av importvyn kräver även den nya
+   frontend-imagen. Kontrollera att båda imagerna finns före synk.
+2. Kontrollera rätt image och friska pods. Startloggen ska visa migrationer följt av
+   Gunicorn, utan ett seed-steg. Kontrollera befintliga dialoger och importerade värden.
+3. Fortsätt importera mätdata via API eller CLI. `HME_DATA_DIR` och gamla monterade
+   rapportfiler används inte längre. Befintliga installationer ska inte initieras på nytt.
+
+Endast en **ny installation med tom appdatabas** behöver `python -m app.seed`, efter
+migrationerna och före första användning. Kör en enda initiering utan samtidig trafik,
+i backend-containern med dess befintliga `DATABASE_URL`; databasen får ligga på en
+annan server. I OpenShift kan en behörig operatör köra:
+
+```sh
+oc exec -n web-big-boss-board deployment/big-boss-board-backend -c backend -- python -m app.seed
+```
+
+Kommandot kräver rättighet till `pods/exec` och ska inte köras inne i Postgres-containern.
+Finns någon appdata avslutas initieringen utan ändringar. Vid fel rullas hela initieringen
+tillbaka; rätta orsaken och kör igen. En delvis fylld databas måste utredas separat,
+inte tömmas för att få seed att köra.
+
+**Återställning:** ingen schemaändring behöver återställas. En äldre image kan däremot
+återinföra automatisk seed och ändra data direkt vid start. Behåll den säkra uppstarten
+vid kodåtergång eller gör en korrigerande release. Återställ inte en gammal datakopia
+rutinmässigt, eftersom det skulle kasta bort senare verksamhetsdata.

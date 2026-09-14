@@ -6,7 +6,6 @@ const nextConfig = {
   // Liten Docker-image: serverar via en fristående Node-server.
   output: "standalone",
   poweredByHeader: false,
-  experimental: { serverActions: { bodySizeLimit: "20mb" } },
   outputFileTracingRoot: path.join(__dirname),
   async headers() {
     return [{ source: "/(.*)", headers: [

@@ -112,7 +112,7 @@ async def import_ekonomi_filer_endpoint(
     body: ExportFiler,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Välj ordinarie dagsuttag och importera månadsserien; gemensam väg för webb och CLI."""
+    """Välj ordinarie dagsuttag och importera månadsserien via API eller CLI."""
     try:
         payload = EkonomiImport(**csvs_to_serie_payload(valj_ekonomifiler(body.filer)))
     except ValueError as exc:

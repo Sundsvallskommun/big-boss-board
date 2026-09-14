@@ -1,7 +1,7 @@
 /** Server-side admin-hämtning mot token-skyddade backend-endpoints.
  *
- *  Använder IMPORT_TOKEN (hålls server-side, aldrig i webbläsaren) precis som
- *  admin-import-actionen. Anropas endast från server-komponenter/-actions. */
+ *  Använder IMPORT_TOKEN för inkorgen (hålls server-side, aldrig i webbläsaren).
+ *  Anropas endast från server-komponenter/-actions. */
 
 export interface Submission {
   id: number;

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "beskrivning": "Masterfil för organisationer. orgId (= organisation.kod) är nyckeln som nyckeltal från övriga källor knyts till. Läses av seeden vid uppstart. forvaltning=false markerar koncernens övriga verksamheter; de grupperas för sig på startsidan. dialogbaserad listar de NYCKELTAL som verksamheten följer upp genom dialog och manuellt satt status i stället för mätdata — seeden skapar inga mätvärden för dem, rensar ev. befintliga och ger dem verksamhetsanpassade frågor. Tom lista = alla nyckeltal har data. Får ett nyckeltal data, ta bort det ur listan (HME för Räddningstjänsten och Stadsbacken finns i HME-rapporten och togs därför bort 2026-08-31).",
+    "beskrivning": "Mall för uttrycklig initiering av en tom appdatabas med python -m app.seed. orgId (= organisation.kod) är nyckeln som importer kopplar mot. forvaltning=false grupperar koncernens övriga verksamheter separat. dialogbaserad anger vilka nyckeltal som får verksamhetsanpassade frågor. Seed skapar inga mätvärden. Befintliga organisationer, frågor och mätdata ändras aldrig; malländringar påverkar bara nya installationer. Innehållsändringar i drift behöver en separat granskad datamigrering.",
     "version": "1.3",
     "senastUppdaterad": "2026-08-31"
   },
