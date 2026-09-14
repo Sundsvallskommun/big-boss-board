@@ -1,18 +1,81 @@
 {
   "meta": {
-    "beskrivning": "Masterfil för organisationer. orgId (= organisation.kod) är nyckeln som nyckeltal från övriga källor knyts till. Läses av seeden vid uppstart.",
-    "version": "1.0",
-    "senastUppdaterad": "2026-07-03"
+    "beskrivning": "Masterfil för organisationer. orgId (= organisation.kod) är nyckeln som nyckeltal från övriga källor knyts till. Läses av seeden vid uppstart. forvaltning=false markerar koncernens övriga verksamheter; de grupperas för sig på startsidan. dialogbaserad listar de NYCKELTAL som verksamheten följer upp genom dialog och manuellt satt status i stället för mätdata — seeden skapar inga mätvärden för dem, rensar ev. befintliga och ger dem verksamhetsanpassade frågor. Tom lista = alla nyckeltal har data. Får ett nyckeltal data, ta bort det ur listan (HME för Räddningstjänsten och Stadsbacken finns i HME-rapporten och togs därför bort 2026-08-31).",
+    "version": "1.3",
+    "senastUppdaterad": "2026-08-31"
   },
   "organisationer": [
-    { "orgId": 23, "namn": "Vård och omsorgsförvaltningen" },
-    { "orgId": 24, "namn": "Barn och utbildningsförvaltning" },
-    { "orgId": 25, "namn": "Miljökontoret" },
-    { "orgId": 26, "namn": "Stadsbyggnadskontoret" },
-    { "orgId": 27, "namn": "Lantmäterikontoret" },
-    { "orgId": 28, "namn": "Kommunstyrelsekontoret" },
-    { "orgId": 29, "namn": "Överförmyndarkontoret" },
-    { "orgId": 30, "namn": "Kultur och fritid" },
-    { "orgId": 31, "namn": "Individ och arbetsmarknadsförvaltning" }
+    {
+      "orgId": 23,
+      "namn": "Vård och omsorgsförvaltningen",
+      "dialogbaserad": [],
+      "forvaltning": true
+    },
+    {
+      "orgId": 24,
+      "namn": "Barn och utbildningsförvaltning",
+      "dialogbaserad": [],
+      "forvaltning": true
+    },
+    {
+      "orgId": 25,
+      "namn": "Miljökontoret",
+      "dialogbaserad": [],
+      "forvaltning": true
+    },
+    {
+      "orgId": 26,
+      "namn": "Stadsbyggnadskontoret",
+      "dialogbaserad": [],
+      "forvaltning": true
+    },
+    {
+      "orgId": 27,
+      "namn": "Lantmäterikontoret",
+      "dialogbaserad": [],
+      "forvaltning": true
+    },
+    {
+      "orgId": 28,
+      "namn": "Kommunstyrelsekontoret",
+      "dialogbaserad": [],
+      "forvaltning": true
+    },
+    {
+      "orgId": 29,
+      "namn": "Överförmyndarkontoret",
+      "dialogbaserad": [],
+      "forvaltning": true
+    },
+    {
+      "orgId": 30,
+      "namn": "Kultur och fritid",
+      "dialogbaserad": [],
+      "forvaltning": true
+    },
+    {
+      "orgId": 31,
+      "namn": "Individ och arbetsmarknadsförvaltning",
+      "dialogbaserad": [],
+      "forvaltning": true
+    },
+    {
+      "orgId": 14,
+      "namn": "Medelpads Räddningstjänstförbund",
+      "dialogbaserad": [
+        "ekonomi",
+        "sjukfranvaro"
+      ],
+      "forvaltning": false
+    },
+    {
+      "orgId": 4705,
+      "namn": "Stadsbacken",
+      "dialogbaserad": [
+        "ekonomi",
+        "sjukfranvaro"
+      ],
+      "forvaltning": false
+    }
   ]
 }

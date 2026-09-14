@@ -56,7 +56,8 @@ FICTIV_MEASUREMENTS: dict[str, dict] = {
     "ekonomi": {
         "value_text": "72", "value_num": 72, "unit": "index", "target_text": "≥ 75",
         "target_num": 75, "bar_max": 100, "status": Status.warn,
-        "trend_dir": TrendDir.up, "trend_good": True, "trend_text": "+3 sedan T3",
+        # Ekonomi har ingen trend — se _measurement_fields i ekonomi_import.py.
+        "trend_dir": None, "trend_good": None, "trend_text": "",
         "interpretation": "Strax under mål, men i positiv riktning. Håll i de åtgärder som börjat ge effekt.",
     },
     "sjukfranvaro": {
@@ -64,10 +65,11 @@ FICTIV_MEASUREMENTS: dict[str, dict] = {
         "target_num": SJUK_MAL, "bar_max": 10,
         # Färgnivå sätts av tröskelvärdena: 6,6 % med +0,8 p.e./kvartal → gul (reagera).
         "status": sjukfranvaro_status(6.6, 0.8),
-        "trend_dir": TrendDir.up, "trend_good": False, "trend_text": "+0,8 p.e. sedan T3",
+        "trend_dir": TrendDir.up, "trend_good": False, "trend_text": "+0,8 p.e. på ett kvartal",
         "interpretation": (
-            "Strax över målet och svagt stigande (gul nivå – reagera). Analysera mönstret, "
-            "t.ex. korttids- kontra långtidsfrånvaro, och håll tätare uppföljning."
+            "Strax över målet och svagt stigande (gul nivå – reagera), mätt som rullande 12 "
+            "månader. Analysera mönstret, t.ex. korttids- kontra långtidsfrånvaro, och håll "
+            "tätare uppföljning."
         ),
     },
     "verksamhet": {
@@ -92,6 +94,16 @@ def slugify(namn: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", n).strip("-")
 
 
+#: Enhetsnamn i HME-rapporten → masterdata-kod, för de fall rapportnamnet inte slugar till
+#: samma sak som verksamheten heter hos oss. Totalindex-filen saknar `orgId` (äldre format)
+#: och matchas därför på slug: "Räddningstjänsten" blir `raddningstjansten`, medan
+#: verksamheten heter Medelpads Räddningstjänstförbund. Stadsbacken matchar redan på namnet.
+#: Håll listan kort — kommer en fil med orgId används den i stället och tabellen kringgås.
+KALLNAMN_TILL_KOD: dict[str, str] = {
+    "Räddningstjänsten": "14",
+}
+
+
 def hme_status(value: float, target: float = HME_TARGET) -> Status:
     """HME-status mot målet (good ≥ mål, warn inom 5 p.e. under, annars alert)."""
     if value >= target:
@@ -114,17 +126,65 @@ def _num(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:.1f}".replace(".", ",")
 
 
+def delindex_till_uppslag(delindex: dict | None) -> dict[str, dict[str, dict]]:
+    """Delindexrapporten → {enhetsnamn: {perspektivnyckel: matningar}}.
+
+    Delindex levereras som en **egen fil**, pivoterad tvärtom mot totalindex: perspektivet
+    ligger överst med en egen enhetslista under (`perspektiv.Motivation[].grupp/matningar`),
+    medan totalindex har enheten överst. Här vänds den så att varje enhet får sina tre
+    serier samlade — samma form som `_perspektiv` läser.
+
+    Perspektivnamnen står versaliserade i filen ("Motivation") men lagras gemena, eftersom
+    det är nycklarna frontend och `details.perspektiv` använder.
+    """
+    if not delindex:
+        return {}
+    ut: dict[str, dict[str, dict]] = {}
+    perspektiv = delindex.get("perspektiv")
+    if not isinstance(perspektiv, dict):
+        raise ValueError("Delindexrapporten saknar perspektivobjekt.")
+    for namn, rader in perspektiv.items():
+        nyckel = namn.strip().lower()
+        if nyckel not in PERSPEKTIV:
+            print(f"[import] okänt HME-perspektiv {namn!r} — hoppas över.")
+            continue
+        if not isinstance(rader, list):
+            raise ValueError("Varje perspektiv ska innehålla en lista med verksamheter.")
+        for rad in rader:
+            if not isinstance(rad, dict):
+                raise ValueError("Delindexraden måste vara ett objekt.")
+            grupp = rad.get("grupp")
+            if grupp and isinstance(rad.get("matningar"), dict):
+                ut.setdefault(grupp, {})[nyckel] = rad["matningar"]
+    return ut
+
+
 def report_to_payload(
-    report: dict, *, enhet: str = "index", mal: float = HME_TARGET,
-    kalla: str = "HME-mätning (officiell rapport)",
+    report: dict, *, delindex: dict | None = None, enhet: str = "index",
+    mal: float = HME_TARGET, kalla: str = "HME-mätning (officiell rapport)",
 ) -> dict:
     """Officiella rapporten (`dimensioner.Förvaltning`) → normaliserad importpayload.
 
     Per-enhetsdimensionen heter "Enhet" (totalindex-filen) eller "Förvaltning"
     (äldre rapport). Ålder/Kön är koncernnivå och tas inte med.
+
+    `delindex` är den separata delindexrapporten. Ges den kopplas varje enhets tre
+    perspektivserier på via enhetsnamnet — det är den enda nyckel filerna delar, ingen
+    av dem bär orgId.
     """
     dims = report.get("dimensioner", {})
+    if not isinstance(dims, dict):
+        raise ValueError("dimensioner måste vara ett objekt.")
     forv = dims.get("Enhet") or dims.get("Förvaltning") or []
+    if not isinstance(forv, list) or any(not isinstance(f, dict) for f in forv):
+        raise ValueError("Enhet/Förvaltning måste vara en lista med objekt.")
+    if any(not isinstance(f.get("matningar"), dict) for f in forv):
+        raise ValueError("Varje verksamhet måste innehålla ett matningar-objekt.")
+    per_grupp = delindex_till_uppslag(delindex)
+    if per_grupp:
+        okanda = sorted(set(per_grupp) - {f["grupp"] for f in forv})
+        if okanda:
+            print(f"[import] delindex för enheter utan totalindex, hoppas över: {okanda}")
     return {
         "kpi": "hme",
         "enhet": enhet,
@@ -136,10 +196,32 @@ def report_to_payload(
                 "kod": str(f["orgId"]) if f.get("orgId") is not None else None,
                 "matningar": {str(k): v for k, v in f.get("matningar", {}).items()},
                 "antal_svar": f.get("antal_svar_2025"),
+                "perspektiv": _perspektiv(f) or per_grupp.get(f["grupp"]) or None,
             }
             for f in forv
         ],
     }
+
+
+#: Delperspektiven HME-talet byggs av, i den ordning de visas. Nyckeln är den som används
+#: i rapporten och i `details.perspektiv`; etiketten sätts i frontend.
+PERSPEKTIV = ("motivation", "ledarskap", "styrning")
+
+
+def _perspektiv(f: dict) -> dict[str, dict[str, float | None]] | None:
+    """Plocka ut delperspektivens årsserier ur en enhet i rapporten.
+
+    Accepterar både `perspektiv: {motivation: {år: värde}}` och perspektiven som egna
+    nycklar direkt på enheten (`motivation: {år: värde}`), eftersom rapporten levereras
+    på båda formerna. Saknas de returneras None och kortet visar bara totalen.
+    """
+    kalla = f.get("perspektiv") if isinstance(f.get("perspektiv"), dict) else f
+    ut = {
+        namn: {str(y): v for y, v in kalla[namn].items()}
+        for namn in PERSPEKTIV
+        if isinstance(kalla.get(namn), dict) and kalla[namn]
+    }
+    return ut or None
 
 
 def _measurement_fields(f: HmeForvaltning, enhet: str, mal: float, kalla: str) -> dict:
@@ -189,6 +271,16 @@ def _measurement_fields(f: HmeForvaltning, enhet: str, mal: float, kalla: str) -
             "antal_svar": f.antal_svar,
             "senaste_ar": senaste,
             "matningar": {str(y): serie[y] for y in years},
+            # Delperspektivens egna årsserier — null-år rensas bort, som för totalen, så
+            # grafen ritar hål i stället för nollor. None när rapporten saknar dem.
+            "perspektiv": (
+                {
+                    namn: {y: float(v) for y, v in sorted(serie_p.items()) if v is not None}
+                    for namn, serie_p in f.perspektiv.items()
+                }
+                if f.perspektiv
+                else None
+            ),
             "trend": trend_meta,
         },
     }, senaste
@@ -205,15 +297,20 @@ async def import_hme(session: AsyncSession, payload: HmeImport) -> dict:
     rader: list[dict] = []
 
     for f in payload.forvaltningar:
+        if not any(v is not None for v in f.matningar.values()):
+            hoppade_over += 1
+            continue
         fields, senaste = _measurement_fields(f, payload.enhet, payload.mal, payload.kalla)
 
-        # Koppla mot befintlig förvaltning (org är master, BYGGPLAN §18) — skapa inte org/dialog.
-        # Matcha på masterdata-koden när filen har den (robust), annars på slug (äldre filer).
-        if f.kod:
+        # Koppla mot befintlig verksamhet (org är master, BYGGPLAN §18) — skapa inte org/dialog.
+        # Matcha på masterdata-koden när filen har den (robust), annars på ett känt rapportnamn,
+        # annars på slug (äldre filer).
+        kod = f.kod or KALLNAMN_TILL_KOD.get(f.namn)
+        if kod:
             org = (
-                await session.execute(select(Organisation).filter_by(kod=f.kod))
+                await session.execute(select(Organisation).filter_by(kod=kod))
             ).scalar_one_or_none()
-            matchnyckel = f"kod {f.kod}"
+            matchnyckel = f"kod {kod}"
         else:
             org = (
                 await session.execute(select(Organisation).filter_by(slug=slugify(f.namn)))
@@ -243,6 +340,10 @@ async def import_hme(session: AsyncSession, payload: HmeImport) -> dict:
             skapade += 1
             atgard = "skapad"
         else:
+            # En ny totalindexrapport ska inte radera tidigare importerade delperspektiv.
+            # En explicit tom perspektivkarta kan användas för att rensa dem.
+            if f.perspektiv is None and m.details:
+                fields["details"]["perspektiv"] = m.details.get("perspektiv")
             for key, val in fields.items():
                 setattr(m, key, val)
             uppdaterade += 1
@@ -270,4 +371,4 @@ async def import_hme(session: AsyncSession, payload: HmeImport) -> dict:
         f"[import] klart: {skapade} skapade, {uppdaterade} uppdaterade, "
         f"{hoppade_over} hoppade över, {len(rader)} förvaltningar kopplade."
     )
-    return {"skapade": skapade, "uppdaterade": uppdaterade, "forvaltningar": rader}
+    return {"skapade": skapade, "uppdaterade": uppdaterade, "hoppade_over": hoppade_over, "forvaltningar": rader}

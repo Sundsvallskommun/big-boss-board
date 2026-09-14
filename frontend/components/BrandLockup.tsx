@@ -7,7 +7,7 @@ export function BrandLockup() {
     <Link
       href="/"
       aria-label="Dialogstöd – till startsidan"
-      className="flex items-center gap-16 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+      className="flex items-center gap-16 rounded-md focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
     >
       {/* Sundsvalls kommuns officiella logotyp (svart variant, ui.sundsvall.dev).
           Plain <img> är medvetet: en lokal SVG behöver ingen next/image-optimering. */}

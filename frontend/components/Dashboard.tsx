@@ -15,7 +15,8 @@ import {
   markActivityKlar,
 } from "@/lib/api";
 import { areaIcon } from "./icons";
-import { AREA_DIMENSIONS, STATUS, kortStatus } from "./status";
+import { AREA_DIMENSIONS, STATUS, measurementTokens, kortStatus } from "./status";
+import { diffLegend, diffText } from "@/lib/ekonomi";
 import { DetailPanel } from "./DetailPanel";
 import { QuestionPanel } from "./QuestionPanel";
 
@@ -87,10 +88,10 @@ export function Dashboard({
           <span className="flex items-center gap-16">
             <Link
               href="/"
-              className="inline-flex items-center gap-4 truncate rounded-md text-base font-semibold tracking-tight text-dark-secondary transition hover:text-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="inline-flex items-center gap-4 truncate rounded-md text-base font-semibold tracking-tight text-dark-secondary transition hover:text-dark-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <ChevronLeft size={16} aria-hidden="true" />
-              Alla förvaltningar
+              Alla verksamheter
             </Link>
             {sessionUser && <UserMenu user={sessionUser} />}
           </span>
@@ -100,7 +101,7 @@ export function Dashboard({
       <main
         id="huvudinnehall"
         tabIndex={-1}
-        className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-32 outline-none md:px-32 md:pt-40 xl:max-w-[1440px]"
+        className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-32 outline-hidden md:px-32 md:pt-40 xl:max-w-[1440px]"
       >
         {/* ===== Rubrik + kontext ===== */}
         <div className="mb-32 flex flex-wrap items-end justify-between gap-x-32 gap-y-16">
@@ -160,13 +161,12 @@ export function Dashboard({
                 <button
                   key={area.key}
                   type="button"
-                  aria-selected={isSel}
                   aria-pressed={isSel}
                   onClick={() => {
                     setSelected(area.key);
                     scrollToDetail();
                   }}
-                  className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                  className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
                     st ? st.soft : "bg-background-content"
                   } ${isSel ? "border-vattjom-surface-primary card-selected" : "border-hairline"}`}
                 >
@@ -219,22 +219,28 @@ export function Dashboard({
               );
             }
 
-            const s = STATUS[m.status];
+            // Ekonomikortet visar EN datapunkt: diff budget–prognos. Ingen trendrad
+            // (jämförelsen finns i diagrammet) och ingen mätare (den mäter ackumulerat
+            // utfall mot ackumulerad budget — ett annat mått). Samma regel i DetailPanel.
+            const ekonomi = m.details?.typ === "ekonomi" ? m.details : null;
+            const ekDiff = ekonomi ? m.value_num : null;
+            const s = measurementTokens(m.status);
+            const visaTrend = !ekonomi;
+            const visaMatare = !ekonomi && m.value_num !== null;
             const TrendIcon = m.trend_dir === "up" ? TrendingUp : TrendingDown;
-            const fillPct = Math.min(100, (m.value_num / m.bar_max) * 100);
+            const fillPct = Math.min(100, ((m.value_num ?? 0) / m.bar_max) * 100);
             const targetPct = Math.min(100, (m.target_num / m.bar_max) * 100);
 
             return (
               <button
                 key={area.key}
                 type="button"
-                aria-selected={isSel}
                 aria-pressed={isSel}
                 onClick={() => {
                   setSelected(area.key);
                   scrollToDetail();
                 }}
-                className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${s.soft} ${
+                className={`flex flex-col overflow-hidden rounded-12 border text-left transition hover:-translate-y-2 hover:border-dark-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${s.soft} ${
                   isSel ? "border-vattjom-surface-primary card-selected" : "border-hairline"
                 }`}
               >
@@ -252,38 +258,52 @@ export function Dashboard({
 
                   {/* Värdet på egen rad (får hela bredden → radbryts inte), förändringen under. */}
                   <span className="block">
-                    <span className="block font-header text-h1 font-bold leading-none tracking-tight xl:text-h3">
-                      {m.value_text}
+                    <span className="block font-header text-h1 font-bold leading-none tracking-tight xl:text-h3 xl:leading-tight">
+                      {ekonomi ? diffText(ekDiff) : m.value_text}
                     </span>
-                    <span
-                      className={`mt-6 flex items-center gap-6 text-small font-semibold ${
-                        m.trend_dir === null
-                          ? "text-dark-secondary"
-                          : m.trend_good
-                          ? "text-status-good"
-                          : "text-status-alert"
-                      }`}
-                    >
-                      {m.trend_dir && (
-                        <TrendIcon size={16} strokeWidth={2.4} aria-hidden="true" />
-                      )}
-                      <span className="truncate">{m.trend_text}</span>
-                    </span>
+                    {ekonomi && (
+                      <span className="mt-6 block text-small text-dark-secondary">
+                        Diff budget–prognos
+                      </span>
+                    )}
+                    {visaTrend && (
+                      <span
+                        className={`mt-6 flex items-center gap-6 text-small font-semibold ${
+                          m.trend_dir === null
+                            ? "text-dark-secondary"
+                            : m.trend_good
+                            ? "text-status-good"
+                            : "text-status-alert"
+                        }`}
+                      >
+                        {m.trend_dir && (
+                          <TrendIcon size={16} strokeWidth={2.4} aria-hidden="true" />
+                        )}
+                        <span className="truncate">{m.trend_text}</span>
+                      </span>
+                    )}
                   </span>
 
-                  {/* Mätare + mål */}
+                  {/* Mätare + mål. Ekonomi saknar mätare — målet är ett tillstånd,
+                      inte ett tal att fylla upp mot. */}
                   <span className="mt-auto block">
-                    <span className="meter block">
-                      <span className={`meter-fill block ${s.solid}`} style={{ width: `${fillPct}%` }} />
-                      <span className="meter-target" style={{ left: `calc(${targetPct}% - 1px)` }} />
-                    </span>
+                    {visaMatare && (
+                      <span className="meter block">
+                        <span className={`meter-fill block ${s.solid}`} style={{ width: `${fillPct}%` }} />
+                        <span className="meter-target" style={{ left: `calc(${targetPct}% - 1px)` }} />
+                      </span>
+                    )}
                     <span className="eyebrow-sm mt-8 flex items-center justify-between gap-8">
                       <span className="truncate">
-                        {area.lower_better ? `Lägre = bättre · Mål ${m.target_text}` : `Mål ${m.target_text}`}
+                        {ekonomi
+                          ? "Mål Budget i balans"
+                          : area.lower_better
+                          ? `Lägre = bättre · Mål ${m.target_text}`
+                          : `Mål ${m.target_text}`}
                       </span>
                       <span className={`flex shrink-0 items-center gap-6 ${s.text}`}>
                         <span className={`inline-block h-8 w-8 rounded-full ${s.solid}`} aria-hidden="true" />
-                        {s.legend}
+                        {ekonomi ? diffLegend(ekDiff) : s.legend}
                       </span>
                     </span>
                   </span>
@@ -303,6 +323,7 @@ export function Dashboard({
                 index={selectedIndex}
                 total={areas.length}
                 activities={activities[current.area.key] ?? []}
+                organisationKod={dialogue.organisation.kod}
                 onAddActivity={(text) => addActivity(current.area.key, current.area.id, text)}
                 onMarkKlar={(activityId, notering) => markKlar(current.area.key, activityId, notering)}
               />
@@ -323,7 +344,7 @@ export function Dashboard({
 
         <footer className="mt-40 text-center">
           <p className="eyebrow-sm opacity-70">
-            Använd endast öppen och publik information i dialogen. All data i tjänsten är fiktiv.
+            Använd endast öppen och publik information i dialogen.
           </p>
         </footer>
       </main>

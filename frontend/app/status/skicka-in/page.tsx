@@ -20,11 +20,11 @@ export default function SkickaInPage() {
       <main
         id="huvudinnehall"
         tabIndex={-1}
-        className="mx-auto max-w-[680px] px-24 pb-[96px] pt-32 outline-none md:px-32 md:pt-40"
+        className="mx-auto max-w-[680px] px-24 pb-[96px] pt-32 outline-hidden md:px-32 md:pt-40"
       >
         <Link
           href="/status"
-          className="mb-16 inline-flex items-center gap-4 rounded-md text-small font-semibold text-dark-secondary transition hover:text-dark-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="mb-16 inline-flex items-center gap-4 rounded-md text-small font-semibold text-dark-secondary transition hover:text-dark-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <ChevronLeft size={16} aria-hidden="true" />
           Till frågor &amp; beslut

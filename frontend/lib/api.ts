@@ -21,7 +21,11 @@ export interface SupportFunction {
 
 export interface Question {
   id: number;
+  /** Kort etikett över frågan ("Uppdraget"). Saknas för de flesta frågor. */
+  rubrik?: string | null;
   text: string;
+  /** Påstående ur medarbetarenkäten som frågan är härledd ur. */
+  bygger_pa?: string | null;
   ordning: number;
 }
 
@@ -67,6 +71,9 @@ export interface HmeDetails {
   antal_svar?: number | null;
   senaste_ar?: number;
   matningar?: Record<string, number>;
+  /** Delperspektivens egna årsserier: { motivation: { "2025": 80 }, … }. Samma mätår som
+   *  totalen. Saknas nyckeln visas bara totalen — äldre rapporter har inga perspektiv. */
+  perspektiv?: Record<string, Record<string, number>> | null;
   trend?: HmeTrendMeta | null;
   // Rådata-aggregat (valfritt — delindex + chef/medarbetare).
   ar?: number;
@@ -96,12 +103,16 @@ export interface EkonomiOmradeRad {
 
 /** Nettokostnad (RR.005) en rapportperiod — en punkt i månadsserien (mnkr). */
 export interface EkonomiSeriePunkt {
+  /** Beräknad i backend med samma definition som huvudvärdet. */
+  diff?: number | null;
   period: string;
   budget_helar?: number | null;
   budget_ack?: number | null;
   utfall?: number | null;
   utfall_fg?: number | null;
   prognos?: number | null;
+  /** Manuellt korrigerad punkt — märks ut i diagrammet. */
+  korrigerad?: boolean;
 }
 
 /** Nedbrytning för ekonomi-mätvärdet: resultaträkning + nettokostnad per område (mnkr). */
@@ -122,7 +133,9 @@ export interface SjukAldersgrupp {
   varde?: number | null;
 }
 
-/** Sjukfrånvaro en period (tidsserie): total %, kvinnors andel %, mäns andel %. */
+/** Sjukfrånvaro en månadsstängning: total %, kvinnors %, mäns % — en punkt i R12-serien.
+ *  Varje punkt är ett rullande 12-månadersvärde (samlat värde för de tolv månader som slutar
+ *  på `period`), inte månadens eget utfall. */
 export interface SjukPunkt {
   period: string;
   total?: number | null;
@@ -130,26 +143,31 @@ export interface SjukPunkt {
   man?: number | null;
 }
 
-/** Nedbrytning för sjukfrånvaro-mätvärdet: kön, långtidsandel, åldersgrupper + tidsserie. */
+/** Nedbrytning för sjukfrånvaro-mätvärdet: kön, långtidsandel, åldersgrupper + månadsserie. */
 export interface SjukfranvaroDetails {
   typ: "sjukfranvaro";
   period?: string;
   kalla?: string;
+  /** Hur värdena är aggregerade. "rullande12" sedan personalexporten lades om 2026-08;
+   *  saknas fältet kommer datat från den gamla tertialackumulerade exporten. */
+  matmetod?: string;
   kvinnor?: number | null;
   man?: number | null;
   langtidsandel?: number | null;
+  /** Antal tillsvidareanställda (SK.P.AM.001) för perioden — underlag för kostnadsrutan. */
+  anstallda?: number | null;
   aldersgrupper?: SjukAldersgrupp[];
   serie?: SjukPunkt[];
 }
 
 export interface Measurement {
   value_text: string;
-  value_num: number;
+  value_num: number | null;
   unit: string;
   target_text: string;
   target_num: number;
   bar_max: number;
-  status: Status;
+  status: Status | null;
   /** null när jämförelseperiod saknas (visas som neutral platshållare). */
   trend_dir: TrendDir | null;
   trend_good: boolean | null;
@@ -192,6 +210,11 @@ export interface Organisation {
   id: number;
   namn: string;
   slug: string;
+  /** Masterdata-kod (BYGGPLAN §18) — kanonisk nyckel för referensdata. */
+  kod?: string | null;
+  /** Förvaltning, eller en av koncernens övriga verksamheter? Startsidan grupperar på detta.
+   *  Äldre svar saknar fältet — behandla det som en förvaltning då. */
+  ar_forvaltning?: boolean;
 }
 
 export interface Person {
@@ -232,34 +255,32 @@ export class ApiError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Hämta JSON med kort timeout + retry på transienta fel.
- *
- *  Sidorna är `force-dynamic` och renderas om vid varje mjuk navigering; en hängande
- *  eller flaky backend (t.ex. 502/503/504 eller en uppkoppling som aldrig svarar) ska
- *  därför inte kunna frysa navigeringen på obestämd tid. Vi bryter efter `TIMEOUT_MS`,
- *  försöker igen på nätverksfel/timeout/5xx (med liten backoff) och ger upp direkt på
- *  4xx (ett bestående fel som 404 ska bubbla vidare, inte döljas av omförsök). */
-async function fetchJson<T>(path: string, label: string): Promise<T> {
-  const url = `${apiBase()}${path}`;
-  const TIMEOUT_MS = 5000; // bryt en hängande uppkoppling snabbt
-  const ATTEMPTS = 3; // täcker en transient blipp; worst case ~15 s med loading-vy synlig
-  let lastErr: unknown;
-
-  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    let res: Response;
+/** Gemensam transport: läsningar får omförsök, skrivningar görs exakt en gång.
+ * Timeout på ett skrivanrop betyder okänt utfall, eftersom backend kan ha sparat redan. */
+async function fetchJson<T>(path: string, label: string, init: RequestInit = {}): Promise<T> {
+  const writing = init.method !== undefined && init.method !== "GET";
+  const attempts = writing ? 1 : 3;
+  const timeout = writing ? 15_000 : 5000;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
     try {
-      res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
-    } catch (err) {
-      lastErr = err; // timeout (AbortError) eller nätverksfel → transient, försök igen
-      if (attempt < ATTEMPTS - 1) await sleep(150 * (attempt + 1));
-      continue;
+      const res = await fetch(`${apiBase()}${path}`, {
+        ...init, cache: "no-store", signal: AbortSignal.timeout(timeout),
+      });
+      if (res.ok) return await res.json() as T;
+      const error = new ApiError(`${label} (HTTP ${res.status}).`, res.status);
+      if (res.status < 500 || writing) throw error;
+      lastError = error;
+    } catch (error) {
+      if (error instanceof ApiError && (writing || (error.status ?? 500) < 500)) throw error;
+      if (writing) throw new ApiError(
+        `${label}. Svaret uteblev; ändringen kan ha sparats. Ladda om och kontrollera innan du försöker igen.`,
+      );
+      lastError = error;
     }
-    if (res.ok) return (await res.json()) as T;
-    if (res.status < 500) throw new ApiError(`${label} (HTTP ${res.status}).`, res.status);
-    lastErr = new ApiError(`${label} (HTTP ${res.status}).`, res.status); // 5xx → transient
-    if (attempt < ATTEMPTS - 1) await sleep(150 * (attempt + 1));
+    if (attempt < attempts - 1) await sleep(150 * (attempt + 1));
   }
-  throw lastErr instanceof Error ? lastErr : new ApiError(label);
+  throw lastError instanceof ApiError ? lastError : new ApiError(`${label}. Tjänsten svarade inte i tid.`);
 }
 
 export interface DialogueSummary {
@@ -304,6 +325,7 @@ export interface Statusrapport {
   rubrik: string;
   text: string;
   punkter: string[] | null;
+  aterstaende: string[] | null;
   ordning: number;
   publicerad: boolean;
 }
@@ -324,15 +346,12 @@ export async function createActivity(
   areaId: number,
   text: string,
 ): Promise<Activity> {
-  const res = await fetch(`/api/dialogues/${dialogueId}/areas/${areaId}/activities`, {
+  return fetchJson(`/api/dialogues/${dialogueId}/areas/${areaId}/activities`, "Kunde inte lägga till aktiviteten", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   });
-  if (!res.ok) {
-    throw new Error("Kunde inte lägga till aktiviteten.");
-  }
-  return res.json();
+
 }
 
 /** Spara en ny manuell status + kommentar för ett område (per förvaltning). Append-only:
@@ -344,26 +363,20 @@ export async function addAreaStatus(
   kommentar: string,
   dimension: string | null = null,
 ): Promise<AreaStatus> {
-  const res = await fetch(`/api/dialogues/${dialogueId}/areas/${areaId}/status`, {
+  return fetchJson(`/api/dialogues/${dialogueId}/areas/${areaId}/status`, "Kunde inte spara statusen", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status, kommentar, dimension }),
   });
-  if (!res.ok) {
-    throw new Error("Kunde inte spara statusen.");
-  }
-  return res.json();
+
 }
 
 /** Klarrapportera en aktivitet med en kort notering. */
 export async function markActivityKlar(activityId: number, notering: string): Promise<Activity> {
-  const res = await fetch(`/api/activities/${activityId}/klar`, {
+  return fetchJson(`/api/activities/${activityId}/klar`, "Kunde inte klarrapportera aktiviteten", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ notering }),
   });
-  if (!res.ok) {
-    throw new Error("Kunde inte klarrapportera aktiviteten.");
-  }
-  return res.json();
+
 }

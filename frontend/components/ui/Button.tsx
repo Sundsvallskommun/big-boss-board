@@ -34,7 +34,7 @@ export function Button({
       className={[
         "inline-flex items-center justify-center gap-8 rounded-12 px-16 py-10",
         "text-base font-semibold leading-none transition",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        "focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         "disabled:cursor-not-allowed disabled:opacity-60",
         VARIANT[variant],
         className,

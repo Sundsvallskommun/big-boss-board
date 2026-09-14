@@ -6,11 +6,13 @@ prototypens AREAS-objekt (område + mätvärde + verktyg + frågor + ev. överen
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, FiniteFloat, JsonValue, model_validator
 
 from app.models import Status, TrendDir
+from app.services.ekonomi import bedom_ekonomi
 
 
 class ORMModel(BaseModel):
@@ -36,7 +38,11 @@ class SupportFunctionOut(ORMModel):
 
 class QuestionOut(ORMModel):
     id: int
+    # Kort etikett över frågan; None för de flesta frågor.
+    rubrik: str | None = None
     text: str
+    # Påstående ur medarbetarenkäten som frågan bygger på (None för de flesta frågor).
+    bygger_pa: str | None = None
     ordning: int
 
 
@@ -58,17 +64,45 @@ class KpiAreaOut(ORMModel):
 
 class MeasurementOut(ORMModel):
     value_text: str
-    value_num: float
+    value_num: float | None
     unit: str
     target_text: str
     target_num: float
     bar_max: float
-    status: Status
+    status: Status | None
     trend_dir: TrendDir | None = None
     trend_good: bool | None = None
     trend_text: str
     interpretation: str
     details: dict | None = None
+
+
+    @model_validator(mode="after")
+    def ekonomins_bedomning(self):
+        # Äldre lagrade huvudfält använder ackumulerad budget. Läs alltid den aktuella
+        # definitionen ur underlaget, även innan nästa import har uppdaterat huvudfälten.
+        if self.details and self.details.get("typ") == "ekonomi":
+            details = dict(self.details)
+            netto = next((r for r in details.get("resultatrakning", [])
+                          if r.get("matt_kod") == "SK.EK.RR.005"), {})
+            b = bedom_ekonomi(netto.get("budget_helar"), netto.get("prognos"))
+            self.value_num, self.status, self.value_text = b.diff, b.status, b.text
+            self.interpretation = b.tolkning
+            self.target_text, self.target_num = "Budget i balans", 0
+            self.trend_dir = self.trend_good = None
+            self.trend_text = ""
+            details["serie"] = [
+                {**p, "diff": bedom_ekonomi(p.get("budget_helar"), p.get("prognos")).diff}
+                for p in details.get("serie", [])
+            ]
+            self.details = details
+        if self.details and self.details.get("typ") == "sjukfranvaro" and self.details.get("matmetod") != "rullande12":
+            self.value_num = self.status = None
+            self.value_text = "Inväntar R12"
+            self.trend_dir = self.trend_good = None
+            self.trend_text = ""
+            self.interpretation = "Importera ett aktuellt R12-uttag. Tidigare ackumulerade värden är inte jämförbara med rullande 12 månader."
+        return self
 
 
 class ActivityOut(ORMModel):
@@ -145,6 +179,7 @@ class StatusrapportOut(ORMModel):
     rubrik: str
     text: str
     punkter: list[str] | None = None
+    aterstaende: list[str] | None = None
     ordning: int
     publicerad: bool
     skapad_at: datetime
@@ -195,6 +230,7 @@ class StatusrapportCreate(BaseModel):
     rubrik: str
     text: str
     punkter: list[str] | None = None
+    aterstaende: list[str] | None = None
     ordning: int = 0
     publicerad: bool = True
 
@@ -204,11 +240,29 @@ class StatusrapportUpdate(BaseModel):
     rubrik: str | None = None
     text: str | None = None
     punkter: list[str] | None = None
+    aterstaende: list[str] | None = None
     ordning: int | None = None
     publicerad: bool | None = None
 
 
 # ---- Dataimport ----------------------------------------------------------
+
+
+def _rapportperiod(value: str) -> str:
+    if date.fromisoformat(value).isoformat() != value:
+        raise ValueError("Rapportperiod ska anges som YYYY-MM-DD.")
+    return value
+
+
+Rapportperiod = Annotated[str, AfterValidator(_rapportperiod)]
+Matningsar = Annotated[str, Field(pattern=r"^[0-9]{4}$")]
+Procent = Annotated[float, Field(ge=0, le=100, allow_inf_nan=False)]
+
+
+
+class HmeRapportImport(BaseModel):
+    rapport: dict[str, JsonValue]
+    delindex: dict[str, JsonValue] | None = None
 
 
 class HmeForvaltning(BaseModel):
@@ -217,8 +271,12 @@ class HmeForvaltning(BaseModel):
     namn: str
     # Masterdata-kod (orgId) om filen har den — då kopplas HME robust på kod (BYGGPLAN §18).
     kod: str | None = None
-    matningar: dict[str, float | None]
-    antal_svar: int | None = None
+    matningar: dict[Matningsar, Procent | None]
+    antal_svar: int | None = Field(default=None, ge=0)
+    # HME-talet byggs av tre delperspektiv (motivation, ledarskap, styrning). Var och ett
+    # har en egen årsserie med samma mätår som totalen: {"motivation": {"2025": 80.0, …}}.
+    # Saknas de visas bara totalen — nyckeln är valfri så äldre rapporter fungerar oförändrat.
+    perspektiv: dict[str, dict[Matningsar, Procent | None]] | None = None
 
 
 class HmeImport(BaseModel):
@@ -227,7 +285,7 @@ class HmeImport(BaseModel):
     kpi: str = "hme"
     enhet: str = "index"
     kalla: str = ""
-    mal: float = 75.0
+    mal: Procent = 75.0
     forvaltningar: list[HmeForvaltning]
 
 
@@ -240,7 +298,7 @@ class ImportRad(BaseModel):
     senaste_ar: int
     trend: str
     status: str
-    antal_svar: int | None = None
+    antal_svar: int | None = Field(default=None, ge=0)
     ar: list[str] = []
 
 
@@ -249,6 +307,7 @@ class ImportResultat(BaseModel):
 
     skapade: int
     uppdaterade: int
+    hoppade_over: int = 0
     forvaltningar: list[ImportRad]
 
 
@@ -291,11 +350,13 @@ class EkonomiMatt(BaseModel):
     """Ett resultaträkningsmått för en enhet (kolumnvärden i mnkr; null = saknas)."""
 
     namn: str
-    budget_helar: float | None = None
-    budget_ack: float | None = None
-    utfall: float | None = None
-    utfall_fg: float | None = None
-    prognos: float | None = None
+    budget_helar: FiniteFloat | None = None
+    budget_ack: FiniteFloat | None = None
+    utfall: FiniteFloat | None = None
+    utfall_fg: FiniteFloat | None = None
+    prognos: FiniteFloat | None = None
+    korrigerad: bool = False
+    korrigering_orsak: str | None = None
 
 
 class EkonomiOmrade(BaseModel):
@@ -303,25 +364,31 @@ class EkonomiOmrade(BaseModel):
 
     omrade_kod: str | None = None
     namn: str | None = None
-    utfall: float | None = None
-    budget_ack: float | None = None
+    utfall: FiniteFloat | None = None
+    budget_ack: FiniteFloat | None = None
 
 
 class EkonomiSeriePunkt(BaseModel):
     """Nettokostnad (RR.005) en rapportperiod — en punkt i månadsserien (mnkr)."""
 
-    period: str
-    budget_helar: float | None = None
-    budget_ack: float | None = None
-    utfall: float | None = None
-    utfall_fg: float | None = None
-    prognos: float | None = None
+    period: Rapportperiod
+    budget_helar: FiniteFloat | None = None
+    budget_ack: FiniteFloat | None = None
+    utfall: FiniteFloat | None = None
+    utfall_fg: FiniteFloat | None = None
+    prognos: FiniteFloat | None = None
+    # Sant när punkten är manuellt korrigerad (se services/ekonomi.py).
+    # Följer med ut i API:t så gränssnittet kan märka ut månaden.
+    korrigerad: bool = False
+    korrigering_orsak: str | None = None
 
 
 class EkonomiEnhet(BaseModel):
     """En förvaltning: huvudmått (per mått_kod) + nettokostnad per område."""
 
     kod: str
+    # Senaste underlaget för just denna enhet kan vara äldre än filsamlingens senaste period.
+    period: Rapportperiod | None = None
     namn: str
     niva: str = "förvaltning"
     matt: dict[str, EkonomiMatt]
@@ -334,9 +401,26 @@ class EkonomiImport(BaseModel):
     """Normaliserad importpayload för ekonomi (per förvaltning)."""
 
     kpi: str = "ekonomi"
-    period: str = ""
+    period: Rapportperiod
     kalla: str = ""
     enheter: list[EkonomiEnhet]
+
+
+class ExportFil(BaseModel):
+    """Namngivet Qlik-uttag. Backend äger periodtolkning och val av dagsuttag."""
+
+    namn: str = Field(min_length=1, max_length=255)
+    text: str = Field(min_length=1, max_length=20_000_000)
+
+
+class ExportFiler(BaseModel):
+    filer: list[ExportFil] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def total_storlek(self):
+        if sum(len(f.text.encode("utf-8")) for f in self.filer) > 15_000_000:
+            raise ValueError("Filerna får sammanlagt vara högst 15 MB.")
+        return self
 
 
 class EkonomiCsvSerie(BaseModel):
@@ -349,7 +433,7 @@ class EkonomiCsvSerie(BaseModel):
 class EkonomiPost(BaseModel):
     """En rad i den råa ekonomirapporten (long-format)."""
 
-    period: str | None = None
+    period: Rapportperiod | None = None
     enhet_kod: str
     enhet_namn: str
     niva: str
@@ -359,7 +443,7 @@ class EkonomiPost(BaseModel):
     omrade_kod: str | None = None
     kolumn_kod: str
     kolumn_namn: str
-    matvarde_mnkr: float | None = None
+    matvarde_mnkr: FiniteFloat | None = None
 
 
 class EkonomiRapport(BaseModel):
@@ -396,38 +480,52 @@ class SjukAldersgrupp(BaseModel):
     """Sjukfrånvaro (% av ordinarie arbetstid) för en åldersgrupp."""
 
     grupp: str
-    varde: float | None = None
+    varde: Procent | None = None
 
 
 class SjukPunkt(BaseModel):
-    """Sjukfrånvaro en period: total %, kvinnors andel %, mäns andel % (för tidsserien)."""
+    """Sjukfrånvaro en månadsstängning: total %, kvinnors %, mäns % — en punkt i R12-serien.
 
-    period: str
-    total: float | None = None
-    kvinnor: float | None = None
-    man: float | None = None
+    Varje punkt är ett **rullande 12-månadersvärde**: snittet för de tolv månader som
+    slutar med `period`. Punkterna rör sig därför långsamt — en ny månad byter ut en
+    tolftedel av underlaget.
+    """
+
+    period: Rapportperiod
+    total: Procent | None = None
+    kvinnor: Procent | None = None
+    man: Procent | None = None
 
 
 class SjukEnhet(BaseModel):
-    """En förvaltnings sjukfrånvaro: senaste periodens värden + tidsserie."""
+    """En förvaltnings sjukfrånvaro: senaste månadens R12-värden + månadsserie."""
 
     kod: str
     namn: str
-    period: str = ""
-    total: float | None = None
-    kvinnor: float | None = None
-    man: float | None = None
-    langtidsandel: float | None = None
+    period: Rapportperiod
+    total: Procent | None = None
+    kvinnor: Procent | None = None
+    man: Procent | None = None
+    langtidsandel: Procent | None = None
+    # Antal tillsvidareanställda (SK.P.AM.001/K9) — underlag för kostnadsuppskattningen.
+    anstallda: int | None = Field(default=None, ge=0)
     aldersgrupper: list[SjukAldersgrupp] = []
     serie: list[SjukPunkt] = []
 
 
 class SjukImport(BaseModel):
-    """Normaliserad importpayload för sjukfrånvaro (per förvaltning)."""
+    """Normaliserad importpayload för sjukfrånvaro (per förvaltning).
+
+    `matmetod` märker hur värdena är aggregerade. Personalexporten levererar sedan
+    2026-08 **rullande 12 månader**; tidigare uttag var tertialackumulerade och har
+    andra tal för samma period. Märkningen gör att en R12-import aldrig ärver punkter
+    ur en serie som byggts av det gamla aggregatet.
+    """
 
     kpi: str = "sjukfranvaro"
-    period: str = ""
+    period: Rapportperiod
     kalla: str = ""
+    matmetod: Literal["rullande12"]
     enheter: list[SjukEnhet]
 
 
@@ -491,6 +589,11 @@ class OrganisationOut(ORMModel):
     id: int
     namn: str
     slug: str
+    # Masterdata-koden är den kanoniska nyckeln (BYGGPLAN §18) — frontend kopplar
+    # referensdata (t.ex. antal anställda) på den, aldrig på namn eller slug.
+    kod: str | None = None
+    # Förvaltning eller en av koncernens övriga verksamheter. Startsidan grupperar på detta.
+    ar_forvaltning: bool = True
 
 
 class DialogueDetail(BaseModel):

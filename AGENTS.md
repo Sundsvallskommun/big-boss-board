@@ -5,7 +5,8 @@ Publik domän: `bbb.sundsvall.dev`. Produkten är ett **dialogstöd för chefsup
 en chef går igenom nyckeltal område för område med en underställd chef och fångar
 överenskommelser direkt i samtalet.
 
-Den fullständiga byggplanen finns i [`docs/BYGGPLAN.md`](docs/BYGGPLAN.md).
+Aktuell arkitektur finns i [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Den ursprungliga byggplanen finns i [`docs/BYGGPLAN.md`](docs/BYGGPLAN.md).
 Designreferens/prototyp: [`docs/uppfoljningsdialog.html`](docs/uppfoljningsdialog.html).
 
 ## Visuellt språk (eget lättviktslager)
@@ -14,13 +15,12 @@ Frontend hämtar sitt **visuella grundintryck** från Sundsvalls kommuns profil 
 implementerar det i ett **eget, litet token-lager** — **inte** hela designsystemet.
 `@sk-web-gui` används **inte längre** (beslut: avkoppla beroendet, behåll utseendet).
 
-- **Tokens bor i två filer:** `frontend/tailwind.config.js` (färger, spacing, radie, typografi)
-  och `frontend/app/globals.css` (CSS-bas + komponentklasser `.eyebrow`, `.meter`, `.card-selected`).
-  Markupen använger token-utilities (`bg-background-content`, `text-dark-secondary`,
-  `vattjom-surface-primary` …) precis som förr — bara underlaget bytt.
-- **Hex hör hemma i token-filerna**, inte spridda i markup. Centralt: config + globals + de tre
+- **Tokens bor i `frontend/app/globals.css`:** Tailwind 4 `@theme` äger färger, spacing,
+  radie och typografi tillsammans med CSS-bas och komponentklasser. `tailwind.config.js`
+  är borttagen. Använd token-utilities i markup; `--spacing: 1px` behåller px-skalan.
+- **Hex hör hemma i token-filerna**, inte spridda i markup. Centralt: globals + de tre
   graf-filerna (`components/charts/*` har seriefärger som hex). Skriv aldrig nya hex i sid-markup —
-  använd en token-utility, lägg värdet i config om det saknas.
+  använd en token-utility, lägg värdet i globals.css om det saknas.
 - **Palett (ur kommunens profil):** vattjom-blå `#0055B8` (`vattjom-surface-primary`), blå text/ikon
   `#00427D` (`vattjom-text-primary`), ljus blå ton `#E6EEF7` (`vattjom-background-100`), ink `#1F1F25`
   (`dark-primary`), dämpad `#51515C` (`dark-secondary`), sidyta `#F0F0F0` (`background-200`), kort
@@ -30,9 +30,9 @@ implementerar det i ett **eget, litet token-lager** — **inte** hela designsyst
   gult — skilj "Bevaka" från rött), `status-alert #D32F2F`. Semantiska ytor: `success/warning/error`
   med `-text` och `-background-*`. Mappning i `components/status.ts`.
 - **Spacing/radie = px-lik skala (`token-N` = N px):** `p-16`=16px, `gap-12`=12px, `rounded-12`=12px,
-  `h-48`=48px. Genereras i config (`pxScale`), så vilken px-nivå som helst funkar. Roten är vanlig
+  `h-48`=48px. Spacing beräknas med `--spacing: 1px`; radier definieras uttryckligen i `@theme`. Roten är vanlig
   **16px** (inte SK:s 62.5%), så **typografi anges i absoluta px** — text-tokens (`text-small`,
-  `text-base`, `text-h1` …) definieras i `tailwind.config.js`, egna storlekar (t.ex. `.eyebrow`)
+  `text-base`, `text-h1` …) definieras i `globals.css`, egna storlekar (t.ex. `.eyebrow`)
   i `px` i `globals.css`.
 - **UI-primitiver:** lokala i `frontend/components/ui/` (`Button`, `Input`, `Textarea`,
   `FormControl`, `FormLabel`, `Logo`) via barrel `@/components/ui`. Stödjer de props appen använder
@@ -53,13 +53,14 @@ implementerar det i ett **eget, litet token-lager** — **inte** hela designsyst
 
 ## Stack
 
-- **Frontend:** Next.js 15 (App Router) + React 19 + TypeScript, Tailwind + eget token-lager
+- **Frontend:** Next.js 16 (App Router) + React 19 + TypeScript, Tailwind 4 + eget token-lager
   (se "Visuellt språk"). Standalone-output.
   Proxar `/api/*` → backend via `next.config` rewrites (en domän, inga CORS-bekymmer).
 - **Backend:** FastAPI + SQLAlchemy 2.0 + Pydantic v2 + Alembic. Uvicorn (Gunicorn i prod).
   Alla endpoints under prefix `/api`. OpenAPI på `/api/docs`.
 - **Databas:** PostgreSQL 16. Namngiven volym, ej publik. Migrationer + idempotent seed vid deploy.
-- **Infra:** Docker Compose via Dokploy + Traefik (TLS). Endast `frontend` exponeras publikt.
+- **Infra:** kommunen använder OpenShift-anpassade containrar och SAML/Redis.
+  Compose/Dokploy finns kvar som separat körväg. Endast `frontend` exponeras publikt.
 
 ## Dataregel (viktig)
 
@@ -118,20 +119,57 @@ Modeller i `models.py`, migration `7a2b3c4d5e06_status_content.py`, logik i
 - **Ännu ej byggt:** inget webb-GUI för triage (sker via API/Codex); statuskort
   saknar ändringshistorik (`uppdaterad_at` räcker).
 
-## Ekonomi: månadsserie (hela året)
+## Produktfunktioner och importer (september 2026)
 
-Nettokostnadsdiagrammet (`components/charts/EkonomiNettokostnadChart`) ritar en **månadsserie**.
-Serien ligger i mätvärdets `details.serie` (per förvaltning) och byggs ur flera Qlik-CSV-uttag:
+Kommunens SAML/ADFS, sessioner, behörigheter och OpenShift-anpassningar är bevarade.
+Importkontrakt: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#datainflöden).
+Införande och återställning: [`docs/DEPLOY.md`](docs/DEPLOY.md#införa-nyckeltalsuppdateringen).
 
-- **Rapportperiod ≠ uttagsdatum.** CSV:ns `Period`-kolumn är månadsstängningen (t.ex. `2026-05-31`);
-  filnamnets datum (`kpidata_RR_2026-06-26`) är dagsuttaget. Flera dagsuttag per period — det
-  **sista** är mest komplett.
-- **Import:** `scripts/import_ekonomi_serie.py --dir ekonomi-indata --url <bas-url>` grupperar på
-  period, väljer senaste uttag per period och POSTar hela serien till `POST /api/import/ekonomi-serie`
-  (token-skyddad). Backend (`services/ekonomi_import.csvs_to_serie_payload`) sätter senaste perioden
-  som kortets huvudvärde och fyller `details.serie`. Enkelperiod-vägarna (`/ekonomi`, `/ekonomi-csv`,
-  seed) finns kvar; utan serie faller grafen tillbaka på senaste perioden.
-- **`ekonomi-indata/` versionshanteras aldrig** (gitignorerad, som HME/ekonomi-rådata).
+- Ekonomi visar **prognos minus helårsbudget**, beräknat av `services/ekonomi.py` vid
+  import och läsning (`MeasurementOut`). Saknad budget/prognos ger null i status/värde.
+  Månadsdiagrammet är `EkonomiDiffChart`; det gamla nettokostnadsdiagrammet är borttaget.
+- `POST /api/import/ekonomi-filer` tar namngivna CSV/TXT-uttag och väljer senaste ordinarie
+  uttag dag 1–9 månaden efter rapportperioden. Webb och CLI använder samma backendregel.
+  Fil- och enkelperiodimport bevarar historik och huvudvärdet vid äldre uttag. Explicit serieimport
+  ersätter serien. Dokumenterad aprilrättning ägs av `services/ekonomi.py`.
+- Sjukfrånvaro använder **R12**, kvartalstrend och uppskattad årskostnad. Backend avvisar
+  gammal/okänd personalexport. Äldre lagrade aggregat visas som "Inväntar R12".
+  `/api/import/sjukfranvaro-filer` normaliserar flera filer och bevarar historik.
+- HME har totalindex + motivation, ledarskap och styrning. `/api/import/hme-rapport` tar
+  totalindex och valfri separat delindexrapport; webb, CLI och seed delar normalisering.
+- Organisationsmastern skiljer förvaltningar från Stadsbacken/MRF. `dialogbaserad` är en
+  lista med KPI-nycklar som ska följas upp med organisationsspecifika frågor utan mätdata.
+- Frågor har valfri `rubrik` och `bygger_pa`; statusrapporter har valfri `aterstaende`.
+- Rådata versionshanteras aldrig. Undvik statiska rapportkopior och separata metadatafiler
+  som dubblerar appens datakontrakt.
+
+## Inloggning (AUTH_MODE: access_code | saml)
+
+Två lägen, valt med `AUTH_MODE` (frontend-middleware och backend läser samma variabel):
+
+- **access_code** (default): stubben — `ACCESS_CODE`/`ADMIN_ACCESSCODE`, cookie `bbb_access`,
+  gating i `frontend/middleware.ts`.
+- **saml**: backend äger SAML mot kommunens IdP (draken-mönstret, portat till FastAPI +
+  **python3-saml** — inte pysaml2, som saknar knappar för test-IdP:ns kvirkar; se
+  `docs/SAML_SSO_PLAN.md`). Kod i `backend/app/auth/`: `router.py` (`/api/auth/saml/
+  {login,callback,metadata,logout,logout/callback}` + `/api/me`), `sessions.py`
+  (session-id i HMAC-signerad cookie `bbb_session`; data i Redis — utan `REDIS_HOST`
+  minnesstore, endast lokalt med `WEB_CONCURRENCY=1`; satt-men-onåbar Redis = vägrad
+  start), `claims.py` (ADFS/Onegate-dubbelmappning, grupper → roll `admin`/`user`),
+	  `redirects.py` (RelayState/origin-validering), `saml.py` (`SAML_STRICT=true` i drift,
+	  signerad assertion krävs som standard; toleransläge används endast mot test-IdP; IdP beskrivs av
+  `SAML_ENTRY_SSO`/`SAML_IDP_ENTITY_ID`/`SAML_IDP_PUBLIC_CERT`). Utloggning: avatar-menyn
+  i headern (`components/UserMenu` + server-wrapper `UserBadge`, initial-avatar i
+  `ui/Avatar` — shadcn-mönstret i eget token-lager, INTE shadcn/Radix som beroende)
+  → `/api/auth/saml/logout` som rensar sessionen lokalt och, om `SAML_IDP_LOGOUT_URL`
+  är satt, även IdP-sessionen (test-IdP:ns `/logout?RelayState=` — den kan inte parsa
+  riktiga SLO-requests). Frontend-middleware validerar
+  sessionen mot `/api/me`; `isAdmin()` läser rollen därifrån; login-sidan visar
+  SAML-knapp och `?failMessage=<KOD>`-fel. Env-namnen följer draken (se `.env.example`)
+  så OpenShift-secrets kan återanvändas. `IMPORT_TOKEN`-spåret är oförändrat och skilt
+  från användarauth i båda lägena. Tester i `backend/tests/`. Plan: `docs/SAML_SSO_PLAN.md`.
+  WSO2-tokentjänsten (OAuth2 client credentials, Redis-cachad) ligger vilande i
+  `app/services/gateway_token.py`.
 
 ## Faser (bygg en i taget, commit + verifiering per fas)
 
@@ -149,5 +187,5 @@ ikon-knappar, `prefers-reduced-motion`, kontrast ≥4.5:1. Verifiera med axe/Lig
 
 ## Konventioner
 
-- Hemligheter aldrig i repo — bara i Dokploy. Se `.env.example` för nycklar.
+- Hemligheter aldrig i repo — de ägs av driftmiljön. Se `.env.example` för nycklar.
 - Interna tjänster (backend, db) får inga publika portar.

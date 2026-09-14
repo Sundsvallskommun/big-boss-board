@@ -11,7 +11,7 @@ export default function Error({ reset }: { error: Error & { digest?: string }; r
     <main
       id="huvudinnehall"
       tabIndex={-1}
-      className="mx-auto max-w-[640px] px-24 py-40 outline-none"
+      className="mx-auto max-w-[640px] px-24 py-40 outline-hidden"
     >
       <h1 className="font-header text-h3 font-bold tracking-tight">Sidan kunde inte visas</h1>
       <p className="mt-8 text-base leading-relaxed text-dark-secondary">

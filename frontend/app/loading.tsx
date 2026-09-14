@@ -6,7 +6,7 @@ export default function Loading() {
     <main
       id="huvudinnehall"
       tabIndex={-1}
-      className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-40 outline-none md:px-32"
+      className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-40 outline-hidden md:px-32"
       aria-busy="true"
     >
       <div role="status" className="flex items-center gap-12 text-dark-secondary">

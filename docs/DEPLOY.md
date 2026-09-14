@@ -1,5 +1,9 @@
 # Deploy — `bbb.sundsvall.dev` via Dokploy
 
+Denna checklista beskriver Compose/Dokploy-körvägen. Kommunens OpenShift-flöde
+beskrivs i [OPENSHIFT_PROD_PLAN.md](OPENSHIFT_PROD_PLAN.md).
+Produktuppdateringens gemensamma införandekrav finns [nedan](#införa-nyckeltalsuppdateringen).
+
 Operativ checklista för att driftsätta stacken. Teknisk översikt finns i
 [`ARCHITECTURE.md`](ARCHITECTURE.md); bakgrund/motivering i [`BYGGPLAN.md`](BYGGPLAN.md) §9–§12.
 
@@ -71,3 +75,33 @@ som saknar källa, och riktiga **anonymiserade aggregat** för HME (per förvalt
 segment-suppression vid n<5). Inga personuppgifter eller känsliga uppgifter — gäller även
 testdata. Råfiler och HME-aggregat versionshanteras aldrig; aggregatet levereras via
 `HME_DATA_DIR` (se steg 5).
+
+
+## Införa nyckeltalsuppdateringen
+
+Gäller både kommunens OpenShift-flöde och Compose, utan byte av SAML, sessioner eller
+runtime-konfiguration. Next 16 använder fortsatt Webpack och befintlig middleware.
+Tailwind 4 behöver Safari 16.4+, Chrome 111+ eller Firefox 128+; stäm av klientmiljön.
+
+1. Verifiera produktionsbygge och riktig SAML-inloggning/utloggning samt behörigheter
+   i testmiljön. Granska nya diagram och dialogflöden med tangentbord och smal skärm.
+2. Ta databassnapshot och prova migrationen på en PostgreSQL-kopia. Sex migrationer
+   från `a0d5e6f7b109` till `a6d1e2f3a746` lägger till frågornas ursprung, rubrik och
+   organisation, rapporters återstående aktiviteter och organisationsgruppering samt
+   gör mätvärde/status nullable. SQL-generering ensam verifierar inte migreringen.
+3. Kör migrationer och seed via den befintliga deployvägen. Seed uppdaterar frågor
+   och organisationsmaster, men skriver inte över befintliga statusrapporter.
+4. Importera aktuellt R12-underlag och HME med delindex via webb eller CLI.
+   Kontrollera datadefinition och kostnadsschablon med respektive dataägare. Äldre
+   sjukfrånvarouttag används inte som R12. Import av ekonomimånader bevarar historiken
+   via webb/CLI; `/ekonomi-serie` ersätter uttryckligen serien.
+5. Kontrollera importresultatets överhoppade enheter, senaste period, diagram och
+   prognosstatus. Verifiera att manuella bedömningar och aktiviteter finns kvar.
+
+**Återställning:** kodversion och databassnapshot behöver återställas tillsammans
+om importer har körts. En schema-downgrade återställer inte tidigare mätmetod eller
+seedade frågetexter. Nullable-migrationens downgrade avvisas när nullvärden finns;
+förvandla inte saknat underlag till ett påhittat värde för att tvinga igenom den.
+
+Genomförd validering och kvarstående granskningspunkter dokumenteras i aktuell PR,
+inte i en separat arbetslogg i repot.

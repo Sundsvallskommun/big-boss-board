@@ -24,6 +24,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -53,6 +54,11 @@ class Organisation(Base):
     # Masterdata-organisationsid (kommunens katalog). Kanonisk nyckel som alla dataset
     # kopplar mot. Nullable: enheter utanför masterdatan (t.ex. bolag) saknar kod.
     kod: Mapped[str | None] = mapped_column(String(16), unique=True, index=True, nullable=True)
+    # Är verksamheten en förvaltning, eller en av koncernens övriga verksamheter
+    # (Stadsbacken, Medelpads Räddningstjänstförbund)? Styr grupperingen på startsidan.
+    # Skilt från `dialogbaserad` i mastern, som handlar om huruvida mätdata finns:
+    # en verksamhet kan få data utan att för den skull bli en förvaltning.
+    ar_forvaltning: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
 
     dialogues: Mapped[list[Dialogue]] = relationship(back_populates="organisation")
 
@@ -124,7 +130,19 @@ class Question(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kpi_area_id: Mapped[int] = mapped_column(ForeignKey("kpi_area.id"))
+    # None = allmän fråga som gäller alla verksamheter. Ett värde = frågan visas bara för
+    # den verksamheten, och ersätter då nyckeltalets allmänna frågor. Används för
+    # verksamheter utan mätdata, där en fråga om "nuläget mot prognos" inte går att svara på.
+    organisation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organisation.id"), nullable=True, index=True
+    )
+    # Kort etikett över frågan ("Uppdraget", "Risker och avvikelser"). Säger vad frågan
+    # handlar om utan att vara en del av den. None för frågor som klarar sig utan.
+    rubrik: Mapped[str | None] = mapped_column(String(120), nullable=True)
     text: Mapped[str] = mapped_column(Text)
+    # Påståendet ur medarbetarenkäten som frågan är härledd ur. Frågan är vad chefen ska
+    # prata om, påståendet är vad medarbetarna svarat på — de visas med olika tyngd.
+    bygger_pa: Mapped[str | None] = mapped_column(Text, nullable=True)
     ordning: Mapped[int] = mapped_column(Integer, default=0)
 
     kpi_area: Mapped[KpiArea] = relationship(back_populates="questions")
@@ -160,12 +178,12 @@ class Measurement(Base):
     dialogue_id: Mapped[int] = mapped_column(ForeignKey("dialogue.id"))
     kpi_area_id: Mapped[int] = mapped_column(ForeignKey("kpi_area.id"))
     value_text: Mapped[str] = mapped_column(String(64))
-    value_num: Mapped[float] = mapped_column(Float)
+    value_num: Mapped[float | None] = mapped_column(Float, nullable=True)
     unit: Mapped[str] = mapped_column(String(32), default="")
     target_text: Mapped[str] = mapped_column(String(64))
     target_num: Mapped[float] = mapped_column(Float)
     bar_max: Mapped[float] = mapped_column(Float, default=100)
-    status: Mapped[Status] = mapped_column(Enum(Status, name="status"))
+    status: Mapped[Status | None] = mapped_column(Enum(Status, name="status"), nullable=True)
     # Trend är null när jämförelseperiod saknas (t.ex. HME med endast ett mätår).
     trend_dir: Mapped[TrendDir | None] = mapped_column(Enum(TrendDir, name="trend_dir"), nullable=True)
     trend_good: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
@@ -301,6 +319,8 @@ class Statusrapport(Base):
     text: Mapped[str] = mapped_column(Text)
     # Valfria punkter (en post per rad).
     punkter: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # Valfria återstående aktiviteter — egen sektion i kortet, samma format som punkter.
+    aterstaende: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     ordning: Mapped[int] = mapped_column(Integer, default=0)
     publicerad: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true", index=True

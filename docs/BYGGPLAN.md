@@ -1,5 +1,10 @@
 # Byggplan — Dialogstöd för chefsuppföljning
 
+> Historisk byggplan. Aktuella funktioner och datakontrakt beskrivs i
+> [ARCHITECTURE.md](ARCHITECTURE.md), projektregler i [AGENTS.md](../AGENTS.md)
+> och införandekrav i [DEPLOY.md](DEPLOY.md#införa-nyckeltalsuppdateringen).
+> Äldre beskrivningar av bibliotek, nyckeltal och drift nedan är inte instruktioner för dagens kod.
+
 Arbetsnamn (internt, ej i UI): **Big Boss Board (bbb)**. Publik domän: `bbb.sundsvall.dev`.
 Den här planen beskriver hur prototypen (`uppfoljningsdialog.html`) byggdes om till en skalbar
 fullstack-app med Python-backend, PostgreSQL och en frontend i Sundsvalls visuella språk (eget
@@ -9,8 +14,8 @@ token-lager) — driftsatt som Docker-stack via Dokploy.
 
 ## Status & nuläge
 
-Appen är **byggd och i drift** på `bbb.sundsvall.dev` (faserna 0–5 klara). Den här filen är den
-ursprungliga byggplanen + en levande roadmap. **För aktuell teknisk sanning, se
+Grundversionens faser 0–5 är genomförda. Den här filen bevarar byggplanen och
+den dåvarande roadmapen; den anger inte aktuell driftstatus. **För aktuell teknisk sanning, se
 [`ARCHITECTURE.md`](ARCHITECTURE.md), [`DEPLOY.md`](DEPLOY.md) och [`../README.md`](../README.md)** —
 §1–§14 nedan är den ursprungliga planen (som byggd, med avvikelserna nedan); §16– är roadmap.
 

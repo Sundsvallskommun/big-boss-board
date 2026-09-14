@@ -1,163 +1,98 @@
 "use server";
 
 import { isAdmin } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
 
-export type ImportRad = {
-  namn: string;
-  value: string;
-  status: string;
-  atgard: string;
-};
-
+export type ImportRad = { namn: string; value: string; status: string; atgard: string };
 export type ImportState = {
   ok?: boolean;
+  incomplete?: boolean;
   kind?: "hme" | "ekonomi" | "sjukfranvaro";
   message?: string;
   rader?: ImportRad[];
 };
 
 type JsonObject = Record<string, unknown>;
-
 function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+const text = (v: unknown): string => typeof v === "string" ? v : "–";
 
-function asText(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : value == null ? fallback : String(value);
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-/** Officiella HME-rapporten (`dimensioner.Enhet/Förvaltning`) → normaliserad payload.
- *  Accepterar även en redan normaliserad payload (innehåller `forvaltningar`). */
-function hmeToPayload(obj: JsonObject): { forvaltningar: unknown[] } & JsonObject {
-  if (Array.isArray(obj.forvaltningar)) {
-    return obj as { forvaltningar: unknown[] } & JsonObject;
-  }
-  const dims = isObject(obj.dimensioner) ? obj.dimensioner : {};
-  const forv = asArray(dims["Enhet"] ?? dims["Förvaltning"]);
-  return {
-    kpi: "hme",
-    enhet: "index",
-    mal: 75,
-    kalla: "HME-mätning (officiell rapport)",
-    forvaltningar: forv.filter(isObject).map((f) => ({
-      namn: asText(f.grupp),
-      matningar: Object.fromEntries(
-        Object.entries(isObject(f.matningar) ? f.matningar : {}).map(([k, v]) => [String(k), v]),
-      ),
-      antal_svar: typeof f.antal_svar_2025 === "number" ? f.antal_svar_2025 : null,
-    })),
-  };
-}
-
-async function postBody(path: string, body: string, contentType: string): Promise<Response | null> {
-  const token = process.env.IMPORT_TOKEN;
-  if (!token) return null;
-  const backend = process.env.BACKEND_INTERNAL_URL || "http://backend:8000";
-  try {
-    return await fetch(`${backend}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": contentType, Authorization: `Bearer ${token}` },
-      body,
-      cache: "no-store",
-    });
-  } catch {
-    return null;
-  }
-}
-
-function ekonomiRader(enheter: unknown[]): ImportRad[] {
-  return enheter.filter(isObject).map((e) => ({
-    namn: asText(e.namn),
-    value: asText(e.value, "–"),
-    status: asText(e.status),
-    atgard: asText(e.atgard),
-  }));
-}
-
-/** Tar emot HME (JSON), ekonomi (JSON) eller ekonomi (CSV) och postar till rätt endpoint. */
+/** UI:t väljer endpoint; normalisering, dagsuttag och mätmetod ägs av backend. */
 export async function importData(_prev: ImportState, formData: FormData): Promise<ImportState> {
-  if (!(await isAdmin())) {
-    return { ok: false, message: "Behörighet saknas." };
+  if (!(await isAdmin())) return { ok: false, message: "Behörighet saknas." };
+  const token = process.env.IMPORT_TOKEN;
+  if (!token) return { ok: false, message: "Import är inte aktiverad (IMPORT_TOKEN saknas)." };
+  const files = formData.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
+  if (!files.length) return { ok: false, message: "Välj en datafil." };
+  if (files.length > 100 || files.reduce((sum, f) => sum + f.size, 0) > 15_000_000) {
+    return { ok: false, message: "Välj högst 100 filer och sammanlagt 15 MB." };
   }
-
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, message: "Välj en datafil (JSON eller CSV)." };
-  }
-  if (!process.env.IMPORT_TOKEN) {
-    return { ok: false, message: "Import är inte aktiverad (IMPORT_TOKEN saknas)." };
-  }
-
-  const text = await file.text();
-
-  // Qlik CSV-export: rå CSV postas och normaliseras server-side. Personal (SK.P.*) →
-  // sjukfrånvaro, RR (SK.EK.*) → ekonomi.
-  const isCsv = file.name.toLowerCase().endsWith(".csv") || /^﻿?Period,Enhet,M/.test(text);
-  if (isCsv) {
-    const personal = /SK\.P\./.test(text);
-    const path = personal ? "/api/import/sjukfranvaro-csv" : "/api/import/ekonomi-csv";
-    const etikett = personal ? "Sjukfrånvaro" : "Ekonomi";
-    const res = await postBody(path, text, "text/csv");
-    if (!res) return { ok: false, message: "Kunde inte nå tjänsten. Försök igen." };
-    if (!res.ok) return { ok: false, message: `Import misslyckades (HTTP ${res.status}).` };
-    const r = (await res.json()) as JsonObject;
-    return {
-      ok: true,
-      kind: personal ? "sjukfranvaro" : "ekonomi",
-      message: `${etikett}-import (CSV) klar: ${r.skapade} skapade, ${r.uppdaterade} uppdaterade, ${r.hoppade_over} hoppade över.`,
-      rader: ekonomiRader(asArray(r.enheter)),
-    };
-  }
-
-  let data: unknown;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    return { ok: false, message: "Filen är varken giltig JSON eller en igenkänd CSV." };
-  }
-  if (!isObject(data)) {
-    return { ok: false, message: "JSON-filen måste innehålla ett objekt." };
-  }
-
-  // Ekonomi JSON (rå rapport med poster/dataset).
-  if (Array.isArray(data.poster) || data.dataset) {
-    if (!Array.isArray(data.poster) || data.poster.length === 0) {
-      return { ok: false, message: "Hittar inga poster i ekonomifilen." };
+  const contents = await Promise.all(files.map(async (f) => ({ namn: f.name, text: await f.text() })));
+  const csv = contents.map((f) => /^\uFEFF?Period[,\t]/.test(f.text));
+  let path: string;
+  let body: unknown;
+  let kind: "hme" | "ekonomi" | "sjukfranvaro";
+  if (csv.every(Boolean)) {
+    const personal = contents.map((f) => /SK\.P\./.test(f.text));
+    if (personal.some(Boolean) && !personal.every(Boolean)) {
+      return { ok: false, message: "Ladda upp ekonomi och sjukfrånvaro var för sig." };
     }
-    const res = await postBody("/api/import/ekonomi", JSON.stringify(data), "application/json");
-    if (!res) return { ok: false, message: "Kunde inte nå tjänsten. Försök igen." };
-    if (!res.ok) return { ok: false, message: `Import misslyckades (HTTP ${res.status}).` };
-    const r = (await res.json()) as JsonObject;
+    kind = personal.every(Boolean) ? "sjukfranvaro" : "ekonomi";
+    path = `/api/import/${kind}-filer`;
+    body = { filer: contents };
+  } else {
+    if (csv.some(Boolean)) return { ok: false, message: "Ladda upp CSV/TXT och JSON var för sig." };
+    let reports: JsonObject[];
+    try {
+      const parsed: unknown[] = contents.map((f) => JSON.parse(f.text.replace(/^\uFEFF/, "")));
+      if (!parsed.every(isObject)) throw new Error("object");
+      reports = parsed;
+    } catch {
+      return { ok: false, message: "Filerna måste innehålla giltiga JSON-objekt eller Qlik-exporter." };
+    }
+    const first = reports[0];
+    if (reports.length === 1 && Array.isArray(first.poster)) {
+      kind = "ekonomi"; path = "/api/import/ekonomi"; body = first;
+    } else if (reports.length === 1 && Array.isArray(first.forvaltningar)) {
+      kind = "hme"; path = "/api/import/hme"; body = first;
+    } else {
+      const totals = reports.filter((r) => isObject(r.dimensioner));
+      const perspectives = reports.filter((r) => isObject(r.perspektiv) && !isObject(r.dimensioner));
+      if (totals.length !== 1 || perspectives.length > 1 || totals.length + perspectives.length !== reports.length) {
+        return { ok: false, message: "Välj en HME-totalindexrapport och högst en delindexrapport." };
+      }
+      kind = "hme"; path = "/api/import/hme-rapport";
+      body = { rapport: totals[0], delindex: perspectives[0] ?? null };
+    }
+  }
+  try {
+    const backend = process.env.BACKEND_INTERNAL_URL || "http://backend:8000";
+    const res = await fetch(`${backend}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body), cache: "no-store", signal: AbortSignal.timeout(30_000),
+    });
+    const result: unknown = await res.json();
+    if (!res.ok) {
+      const detail = isObject(result) && typeof result.detail === "string" ? ` ${result.detail}` : "";
+      return { ok: false, message: `Import misslyckades (HTTP ${res.status}).${detail}` };
+    }
+    if (!isObject(result)) return { ok: false, message: "Oväntat svar från tjänsten." };
+    const rows = kind === "hme" ? result.forvaltningar : result.enheter;
+    const labels = { hme: "HME", ekonomi: "Ekonomi", sjukfranvaro: "Sjukfrånvaro" };
+    revalidatePath("/", "layout");
     return {
-      ok: true,
-      kind: "ekonomi",
-      message: `Ekonomi-import klar: ${r.skapade} skapade, ${r.uppdaterade} uppdaterade, ${r.hoppade_over} hoppade över.`,
-      rader: ekonomiRader(asArray(r.enheter)),
+      ok: true, kind, incomplete: Number(result.hoppade_over ?? 0) > 0,
+      message: `${labels[kind]} importerad: ${result.skapade} skapade, ${result.uppdaterade} uppdaterade, ${result.hoppade_over ?? 0} hoppade över.`,
+      rader: Array.isArray(rows) ? rows.filter(isObject).map((r) => ({
+        namn: text(r.namn), value: text(r.value), status: text(r.status), atgard: text(r.atgard),
+      })) : [],
     };
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    return { ok: false, message: name === "TimeoutError" || name === "AbortError"
+      ? "Tjänsten svarade inte inom 30 sekunder. Importen kan ha gått igenom. Kontrollera värdena innan du försöker igen."
+      : "Kunde inte läsa svaret från tjänsten. Kontrollera värdena innan du försöker igen." };
   }
-
-  // HME (JSON).
-  const payload = hmeToPayload(data);
-  if (!payload.forvaltningar.length) {
-    return { ok: false, message: "Hittar inga förvaltningar i filen." };
-  }
-  const res = await postBody("/api/import/hme", JSON.stringify(payload), "application/json");
-  if (!res) return { ok: false, message: "Kunde inte nå tjänsten. Försök igen." };
-  if (!res.ok) return { ok: false, message: `Import misslyckades (HTTP ${res.status}).` };
-  const r = (await res.json()) as JsonObject;
-  return {
-    ok: true,
-    kind: "hme",
-    message: `HME-import klar: ${r.skapade} skapade, ${r.uppdaterade} uppdaterade (${asArray(r.forvaltningar).length} förvaltningar).`,
-    rader: asArray(r.forvaltningar).filter(isObject).map((f) => ({
-      namn: asText(f.namn),
-      value: asText(f.value),
-      status: asText(f.status),
-      atgard: asText(f.atgard),
-    })),
-  };
 }

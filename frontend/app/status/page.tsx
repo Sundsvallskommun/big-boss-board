@@ -233,7 +233,24 @@ function OvergripandeKort({ q }: { q: StatusFraga }) {
   );
 }
 
-/** Statusrapport: daterat kort med rubrik, text och valfria punkter. Blå accent. */
+/** Punktlista i ett rapportkort — blå prick per rad. */
+function Punktlista({ punkter }: { punkter: string[] }) {
+  return (
+    <ul className="mt-12 flex flex-col gap-6">
+      {punkter.map((p, i) => (
+        <li key={i} className="flex gap-8 text-small leading-relaxed text-dark-secondary">
+          <span
+            className="mt-[7px] h-[5px] w-[5px] shrink-0 rounded-full bg-vattjom-surface-primary"
+            aria-hidden="true"
+          />
+          {p}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Statusrapport: daterat kort med rubrik, text, punkter och återstående aktiviteter. */
 function StatusrapportKort({ r, senaste }: { r: Statusrapport; senaste: boolean }) {
   return (
     <li className="overflow-hidden rounded-12 border border-hairline border-l-[6px] border-l-vattjom-surface-primary bg-background-content">
@@ -253,21 +270,12 @@ function StatusrapportKort({ r, senaste }: { r: Statusrapport; senaste: boolean 
           {r.rubrik}
         </h3>
         <p className="mt-8 text-small leading-relaxed text-dark-secondary">{r.text}</p>
-        {r.punkter && r.punkter.length > 0 && (
-          <ul className="mt-12 flex flex-col gap-6">
-            {r.punkter.map((p, i) => (
-              <li
-                key={i}
-                className="flex gap-8 text-small leading-relaxed text-dark-secondary"
-              >
-                <span
-                  className="mt-[7px] h-[5px] w-[5px] shrink-0 rounded-full bg-vattjom-surface-primary"
-                  aria-hidden="true"
-                />
-                {p}
-              </li>
-            ))}
-          </ul>
+        {r.punkter && r.punkter.length > 0 && <Punktlista punkter={r.punkter} />}
+        {r.aterstaende && r.aterstaende.length > 0 && (
+          <div className="mt-20 border-t border-hairline pt-16">
+            <h4 className="eyebrow text-vattjom-text-primary">Återstående aktiviteter</h4>
+            <Punktlista punkter={r.aterstaende} />
+          </div>
         )}
       </div>
     </li>
@@ -338,7 +346,7 @@ export default async function StatusPage() {
       <main
         id="huvudinnehall"
         tabIndex={-1}
-        className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-32 outline-none md:px-32 md:pt-40"
+        className="mx-auto max-w-[1180px] px-24 pb-[96px] pt-32 outline-hidden md:px-32 md:pt-40"
       >
         {/* ===== Rubrik ===== */}
         <div>
@@ -353,7 +361,7 @@ export default async function StatusPage() {
           </p>
           <Link
             href="/status/skicka-in"
-            className="mt-16 inline-flex items-center gap-8 rounded-12 bg-vattjom-surface-primary px-16 py-10 text-base font-semibold leading-none text-white transition hover:bg-vattjom-surface-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="mt-16 inline-flex items-center gap-8 rounded-12 bg-vattjom-surface-primary px-16 py-10 text-base font-semibold leading-none text-white transition hover:bg-vattjom-surface-primary-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <MessageSquarePlus size={16} aria-hidden="true" />
             Lämna en fråga eller synpunkt

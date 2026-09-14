@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import csv
 import io
+import re
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Dialogue, KpiArea, Measurement, Organisation, Status, TrendDir
-from app.schemas import EkonomiEnhet, EkonomiImport
+from app.models import Dialogue, KpiArea, Measurement, Organisation
+from app.services.ekonomi import bedom_ekonomi, korrigering_for
+from app.schemas import EkonomiEnhet, EkonomiImport, EkonomiSeriePunkt, ExportFil, MeasurementOut
 
 # Resultaträkningens mått (RR.005 = Verksamhetens nettokostnad är kortets huvudvärde).
 NETTOKOSTNAD = "SK.EK.RR.005"
@@ -55,24 +58,10 @@ ENHET_NAMN = {
     "31": "Individ och arbetsmarknad",
 }
 
-# Tröskelvärden för färg (nettokostnad mot ackumulerad budget, lägre är bättre).
-EK_BUDGET = 100.0   # på/under budget
-EK_GUL_TAK = 102.0  # svagt över
-
-
-def ekonomi_status(pct_av_budget: float) -> Status:
-    """Färgnivå för nettokostnad mot budget: ≤100 % grön, ≤102 % gul, annars röd."""
-    if pct_av_budget <= EK_BUDGET:
-        return Status.good
-    if pct_av_budget <= EK_GUL_TAK:
-        return Status.warn
-    return Status.alert
-
-
-def _num(value: float) -> str:
-    """mnkr med svensk decimal (en decimal), heltal utan decimal."""
-    return str(int(value)) if float(value).is_integer() else f"{value:.1f}".replace(".", ",")
-
+# Förvaltningsnivån — den enda nivå appen visar. Kommun total (13) har ingen dialog och
+# ingår därför inte. Exporten innehåller även sektion och enhet; de filtreras bort vid
+# parsningen (se csv_to_payload).
+FORVALTNING_KODER = frozenset(ENHET_NAMN) - {"13"}
 
 def report_to_payload(report: dict) -> dict:
     """Rå ekonomirapport (`poster` i long-format) → normaliserad EkonomiImport-payload.
@@ -115,33 +104,56 @@ def report_to_payload(report: dict) -> dict:
     }
 
 
+def las_rader(text: str) -> csv.DictReader:
+    """DictReader över Qlik-exporten, oavsett om den är komma- eller tabbseparerad.
+
+    Källan levereras i två skepnader: kommaseparerad `.csv` och tabbseparerad `.txt`
+    (den senare är formatet den officiella uppföljningen använder). Avgränsaren läses
+    av rubrikraden — `csv.Sniffer` gissar fel på filer där fältvärden innehåller punkt
+    och bindestreck. Hanterar BOM och CRLF.
+    """
+    rubrik = text.lstrip("﻿").split("\n", 1)[0]
+    delimiter = "\t" if "\t" in rubrik else ","
+    return csv.DictReader(io.StringIO(text.lstrip("\ufeff")), delimiter=delimiter)
+
+
 def csv_to_payload(text: str, kalla: str = "Ekonomisk uppföljning (Qlik-export, CSV)") -> dict:
     """CSV-exporten (Period,Enhet,Mått,Kolumn,Mätvärde) → normaliserad EkonomiImport-payload.
 
-    CSV:n bär bara koder (inte namn/typ) — mått-/enhetsnamn slås upp ur MATT_NAMN/ENHET_NAMN,
+    Exporten bär bara koder (inte namn/typ) — mått-/enhetsnamn slås upp ur MATT_NAMN/ENHET_NAMN,
     och huvudmått vs nettokostnad-per-område avgörs av kodens form (4 vs 5 delar). Hanterar
-    BOM och CRLF. Kommun total (13) hoppas (ingen dialog).
+    BOM, CRLF och både komma- och tabbseparerad export.
+
+    Endast förvaltningsnivån (FORVALTNING_KODER) tas med. Den officiella exporten
+    innehåller hela organisationen — förvaltning, sektion och enhet, ~780 enheter — och
+    utan filtret hamnar varje sektion i payloaden som en påhittad "förvaltning" som
+    upserten sedan hoppar över med `ingen_org_for_kod`. Kommun total (13) hoppas också
+    (ingen dialog).
     """
-    reader = csv.DictReader(io.StringIO(text))
-    if reader.fieldnames is None or "Enhet" not in reader.fieldnames or "Mått" not in reader.fieldnames:
+    reader = las_rader(text)
+    if not {"Period", "Enhet", "Mått", "Kolumn", "Mätvärde"}.issubset(reader.fieldnames or []):
         raise ValueError("CSV saknar förväntade kolumner (Period, Enhet, Mått, Kolumn, Mätvärde).")
 
     enheter: dict[str, dict] = {}
     period = ""
     for row in reader:
         kod = (row.get("Enhet") or "").strip()
-        if not kod or kod == "13":
+        if kod not in FORVALTNING_KODER:
             continue
         falt = KOLUMN_FALT.get((row.get("Kolumn") or "").strip())
         if not falt:
             continue
-        period = period or (row.get("Period") or "").strip()
+        rad_period = (row.get("Period") or "").strip()
+        date.fromisoformat(rad_period)
+        if period and rad_period != period:
+            raise ValueError("Ekonomifilen innehåller flera rapportperioder. Använd en fil per period.")
+        period = rad_period
         matt_kod = (row.get("Mått") or "").strip()
         ravarde = (row.get("Mätvärde") or "").strip()
         try:
             varde = float(ravarde) if ravarde else None
-        except ValueError:
-            varde = None
+        except ValueError as exc:
+            raise ValueError(f"Ogiltigt mätvärde för {kod}, {rad_period}: {ravarde!r}.") from exc
 
         e = enheter.setdefault(
             kod,
@@ -161,6 +173,31 @@ def csv_to_payload(text: str, kalla: str = "Ekonomisk uppföljning (Qlik-export,
             m[falt] = varde
 
     return {"kpi": "ekonomi", "period": period, "kalla": kalla, "enheter": list(enheter.values())}
+
+
+def valj_ekonomifiler(filer: list[ExportFil]) -> list[str]:
+    """Senaste ordinarie uttag dag 1–9 månaden efter perioden, annars senaste tillgängliga.
+
+    Filnamnet används bara för uttagsdatum. Perioden läses alltid ur filinnehållet.
+    Samma urval används av webb och CLI via /ekonomi-filer.
+    """
+    valda: dict[str, tuple[tuple[bool, str, str], str]] = {}
+    for fil in filer:
+        payload = csv_to_payload(fil.text)
+        period = payload["period"]
+        if not period:
+            raise ValueError(f"{fil.namn}: ingen rapportperiod på förvaltningsnivå.")
+        datum = re.findall(r"\d{4}-\d{2}-\d{2}", fil.namn)
+        uttag = date.fromisoformat(datum[-1]) if datum else None
+        stangning = date.fromisoformat(period)
+        ordinarie = bool(
+            uttag and 1 <= uttag.day <= 9
+            and uttag.year * 12 + uttag.month == stangning.year * 12 + stangning.month + 1
+        )
+        prioritet = (ordinarie, uttag.isoformat() if uttag else "", fil.namn)
+        if period not in valda or prioritet > valda[period][0]:
+            valda[period] = (prioritet, fil.text)
+    return [valda[p][1] for p in sorted(valda)]
 
 
 def csvs_to_serie_payload(
@@ -198,54 +235,71 @@ def csvs_to_serie_payload(
                 }
             )
 
-    latest = per_period[-1]
+    senaste_per_kod = {}
+    for p in per_period:
+        for e in p["enheter"]:
+            e["period"] = p["period"]
+            senaste_per_kod[e["kod"]] = e
+    latest = {**per_period[-1], "enheter": list(senaste_per_kod.values())}
     for e in latest["enheter"]:
         e["serie"] = serie_by_kod.get(e["kod"], [])
     return latest
 
 
-def _measurement_fields(enhet: EkonomiEnhet, period: str, kalla: str) -> dict:
-    """Bygg mätvärdesfält: nettokostnad mot budget + resultaträkning/områden i details."""
+def _serie_med_period(befintlig: list[dict], enhet: EkonomiEnhet, period: str) -> list[dict]:
+    """Uppsertera den här periodens nettokostnad i en redan importerad månadsserie.
+
+    Används vid **enkelperiod-import** (en CSV via GUI/`/ekonomi-csv`), där payloaden
+    saknar serie. Utan detta skulle en enskild uppladdning nolla hela månadsserien.
+    Samma period igen → punkten ersätts (korrigerat dagsuttag vinner).
+    """
     netto = enhet.matt.get(NETTOKOSTNAD)
-    if netto is None or not netto.budget_ack:
-        raise ValueError(f"{enhet.namn!r} saknar nettokostnad/budget — kan inte beräkna utfall mot budget.")
+    if netto is None or not period:
+        return list(befintlig)
+    per_period = {str(p.get("period")): p for p in befintlig if p.get("period")}
+    per_period[period] = {
+        "period": period,
+        "budget_helar": netto.budget_helar,
+        "budget_ack": netto.budget_ack,
+        "utfall": netto.utfall,
+        "utfall_fg": netto.utfall_fg,
+        "prognos": netto.prognos,
+        "korrigerad": netto.korrigerad,
+        "korrigering_orsak": netto.korrigering_orsak,
+    }
+    return [per_period[p] for p in sorted(per_period)]
 
-    utfall = netto.utfall or 0.0
-    budget_ack = netto.budget_ack
-    kostnad = abs(utfall)
-    budget = abs(budget_ack)
-    pct = round(kostnad / budget * 100, 1)
-    status = ekonomi_status(pct)
-    # Headline: avvikelse mot ackumulerad budget i mnkr, med tecken enligt kommunal
-    # konvention — minus = över budget (spenderat mer än budget), plus = under budget.
-    avvikelse = round(budget - kostnad, 1)
-    if avvikelse > 0:
-        value_text = f"+{_num(avvikelse)} mnkr"
-    elif avvikelse < 0:
-        value_text = f"−{_num(abs(avvikelse))} mnkr"
-    else:
-        value_text = "±0 mnkr"
 
-    # Trend: nettokostnad i år mot fg år (ack, jämförbar period). Högre kostnad = sämre.
-    trend_dir: TrendDir | None = None
-    trend_good: bool | None = None
-    trend_text = "Inget jämförelseår"
-    if netto.utfall_fg:
-        diff = round(abs(utfall) - abs(netto.utfall_fg), 1)
-        if diff > 0:
-            trend_dir, trend_good = TrendDir.up, False
-            trend_text = f"+{_num(diff)} mnkr vs fg år"
-        elif diff < 0:
-            trend_dir, trend_good = TrendDir.down, True
-            trend_text = f"−{_num(abs(diff))} mnkr vs fg år"
-        else:
-            trend_text = "Oförändrat vs fg år"
+def korrigerat_underlag(enhet: EkonomiEnhet, period: str) -> EkonomiEnhet:
+    """En dokumenterad rättning följer både huvudvärdet och månadsserien, i alla importvägar."""
+    enhet = enhet.model_copy(deep=True)
+    netto = enhet.matt.get(NETTOKOSTNAD)
+    if netto is not None:
+        korr = korrigering_for(enhet.kod, period, netto.budget_helar, netto.prognos)
+        if korr:
+            netto.prognos = korr.prognos
+            netto.korrigerad, netto.korrigering_orsak = True, korr.orsak
+    for punkt in enhet.serie:
+        korr = korrigering_for(enhet.kod, punkt.period, punkt.budget_helar, punkt.prognos)
+        if korr:
+            punkt.prognos = korr.prognos
+            punkt.korrigerad, punkt.korrigering_orsak = True, korr.orsak
+    return enhet
 
-    interp = {
-        Status.good: f"Nettokostnaden ligger inom budget (avvikelse {value_text} mot ackumulerad budget). Fortsätt följa kostnadsutvecklingen.",
-        Status.warn: f"Nettokostnaden ligger något över budget (avvikelse {value_text}). Bevaka utvecklingen.",
-        Status.alert: f"Nettokostnaden överskrider budget (avvikelse {value_text}). Vidta åtgärder och följ upp tätare.",
-    }[status]
+
+def _measurement_fields(
+    enhet: EkonomiEnhet,
+    period: str,
+    kalla: str,
+    befintlig_serie: list[dict] | None = None,
+    *, bevara_historik: bool = False,
+) -> dict:
+    """Bygg mätvärdesfält: nettokostnad mot budget + resultaträkning/områden i details."""
+    enhet = korrigerat_underlag(enhet, period)
+    netto = enhet.matt.get(NETTOKOSTNAD)
+    if netto is None:
+        raise ValueError(f"{enhet.namn!r} saknar nettokostnad.")
+    bedomning = bedom_ekonomi(netto.budget_helar, netto.prognos)
 
     resultatrakning = [
         {
@@ -256,6 +310,8 @@ def _measurement_fields(enhet: EkonomiEnhet, period: str, kalla: str) -> dict:
             "utfall": m.utfall,
             "utfall_fg": m.utfall_fg,
             "prognos": m.prognos,
+            "korrigerad": m.korrigerad,
+            "korrigering_orsak": m.korrigering_orsak,
         }
         for kod, m in sorted(enhet.matt.items())
     ]
@@ -264,20 +320,28 @@ def _measurement_fields(enhet: EkonomiEnhet, period: str, kalla: str) -> dict:
         for o in enhet.omrade
     ]
 
+    # Serieimport (flera perioder) är auktoritativ och ersätter serien. Enkelperiod-import
+    # har tom serie i payloaden — då behålls den befintliga och periodens punkt uppserteras.
+    serie = [p.model_dump() for p in enhet.serie]
+    if serie and bevara_historik:
+        per_period = {p["period"]: p for p in befintlig_serie or []}
+        per_period.update({p["period"]: p for p in serie})
+        serie = [per_period[p] for p in sorted(per_period)]
+    if not serie:
+        serie = _serie_med_period(befintlig_serie or [], enhet, period)
+
     return {
-        "value_text": value_text,
-        # Mätaren visar ackumulerat utfall mot ack. budget (mållinje) i mnkr —
-        # stapel förbi mållinjen = över budget. Färgen styrs av samma tröskel som förr.
-        "value_num": kostnad,
+        "value_text": bedomning.text,
+        "value_num": bedomning.diff,
         "unit": "mnkr",
-        "target_text": f"{_num(budget)} mnkr",
-        "target_num": budget,
-        "bar_max": round(max(kostnad, budget) * 1.15, 1),
-        "status": status,
-        "trend_dir": trend_dir,
-        "trend_good": trend_good,
-        "trend_text": trend_text,
-        "interpretation": interp,
+        "target_text": "Budget i balans",
+        "target_num": 0,
+        "bar_max": 1,  # Ekonomi visar ingen mätare.
+        "status": bedomning.status,
+        "trend_dir": None,
+        "trend_good": None,
+        "trend_text": "",
+        "interpretation": bedomning.tolkning,
         "details": {
             "typ": "ekonomi",
             "enhet": "mnkr",
@@ -286,12 +350,14 @@ def _measurement_fields(enhet: EkonomiEnhet, period: str, kalla: str) -> dict:
             "resultatrakning": resultatrakning,
             "nettokostnad_per_omrade": omraden,
             # Månadsserie av nettokostnad (RR.005) över året. Tom → grafen visar bara headline.
-            "serie": [p.model_dump() for p in enhet.serie],
+            "serie": serie,
         },
     }
 
 
-async def import_ekonomi(session: AsyncSession, payload: EkonomiImport) -> dict:
+async def import_ekonomi(
+    session: AsyncSession, payload: EkonomiImport, *, bevara_historik: bool = False,
+) -> dict:
     """Upserta ekonomi per förvaltning (matchar Organisation på masterdata-kod)."""
     ekonomi_area = (
         await session.execute(select(KpiArea).filter_by(key="ekonomi"))
@@ -303,6 +369,7 @@ async def import_ekonomi(session: AsyncSession, payload: EkonomiImport) -> dict:
     rader: list[dict] = []
 
     for enhet in payload.enheter:
+        period = enhet.period or payload.period
         org = (
             await session.execute(select(Organisation).filter_by(kod=enhet.kod))
         ).scalar_one_or_none()
@@ -319,18 +386,34 @@ async def import_ekonomi(session: AsyncSession, payload: EkonomiImport) -> dict:
             hoppade_over += 1
             continue
 
-        try:
-            fields = _measurement_fields(enhet, payload.period, payload.kalla)
-        except ValueError:
-            rader.append({"namn": enhet.namn, "kod": enhet.kod, "atgard": "ofullstandig"})
-            hoppade_over += 1
-            continue
-
         m = (
             await session.execute(
                 select(Measurement).filter_by(dialogue_id=dialogue.id, kpi_area_id=ekonomi_area.id)
             )
         ).scalar_one_or_none()
+        # Befintlig månadsserie plockas fram före uppdateringen — enkelperiod-import
+        # ska bygga vidare på den, inte skriva över den med tomt.
+        befintlig_serie = list((m.details or {}).get("serie") or []) if m is not None else []
+        # Äldre enkelperiodimporter lagrade bara resultaträkningen, ingen serie.
+        # Bevara även den senaste punkten när en historisk period fylls på första gången.
+        if m is not None and m.details and m.details.get("period"):
+            aktuell_period = m.details["period"]
+            netto = next((r for r in m.details.get("resultatrakning", [])
+                          if r.get("matt_kod") == NETTOKOSTNAD), None)
+            if netto and not any(p.get("period") == aktuell_period for p in befintlig_serie):
+                befintlig_serie.append(EkonomiSeriePunkt(period=aktuell_period, **netto).model_dump())
+
+        try:
+            fields = _measurement_fields(
+                enhet, period, payload.kalla, befintlig_serie, bevara_historik=bevara_historik,
+            )
+            if m is not None and (not enhet.serie or bevara_historik) and (m.details or {}).get("period", "") > period:
+                fields = {"details": {**m.details, "serie": fields["details"]["serie"]}}
+        except ValueError as exc:
+            rader.append({"namn": enhet.namn, "kod": enhet.kod, "atgard": f"Ofullständigt underlag: {exc}"})
+            hoppade_over += 1
+            continue
+
         if m is None:
             session.add(Measurement(dialogue_id=dialogue.id, kpi_area_id=ekonomi_area.id, **fields))
             skapade += 1
@@ -341,16 +424,17 @@ async def import_ekonomi(session: AsyncSession, payload: EkonomiImport) -> dict:
             uppdaterade += 1
             atgard = "uppdaterad"
 
+        resultat = MeasurementOut.model_validate(m) if m is not None else MeasurementOut(**fields)
         rader.append(
             {
                 "namn": enhet.namn,
                 "kod": enhet.kod,
-                "value": fields["value_text"],
-                "status": fields["status"].value,
+                "value": resultat.value_text,
+                "status": resultat.status.value if resultat.status else None,
                 "atgard": atgard,
             }
         )
-        print(f"[ekonomi] {enhet.namn} ({enhet.kod}): {fields['value_text']} [{atgard}]")
+        print(f"[ekonomi] {enhet.namn} ({enhet.kod}): [{atgard}]")
 
     await session.commit()
     print(

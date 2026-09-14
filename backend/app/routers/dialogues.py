@@ -8,8 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db import get_session
-from app.models import Activity, AreaStatus, Dialogue, KpiArea, Measurement, SupportFunction
-from app.schemas import DialogueArea, DialogueDetail, DialogueSummary
+from app.models import (
+    Activity,
+    AreaStatus,
+    Dialogue,
+    KpiArea,
+    Measurement,
+    Question,
+    SupportFunction,
+)
+from app.schemas import DialogueArea, DialogueDetail, DialogueSummary, KpiAreaOut, QuestionOut
 
 router = APIRouter(prefix="/api/dialogues", tags=["dialogues"])
 
@@ -98,9 +106,24 @@ async def get_dialogue(
         )
     ).scalars():
         historik_by_area.setdefault(s.kpi_area_id, []).append(s)
+    # Frågeställningar: verksamhetens egna går före nyckeltalets allmänna. Finns inga egna
+    # används de allmänna, så ett nyckeltal aldrig blir utan samtalsstöd. Filtreras här i
+    # stället för i frågan — relationen är redan laddad och listorna är någon handfull rader.
+    org_id = dialogue.organisation_id
+
+    def _fragor(area: KpiArea) -> list[Question]:
+        egna = [q for q in area.questions if q.organisation_id == org_id]
+        return sorted(egna or [q for q in area.questions if q.organisation_id is None],
+                      key=lambda q: q.ordning)
+
+    def _area_ut(area: KpiArea) -> KpiAreaOut:
+        ut = KpiAreaOut.model_validate(area)
+        ut.questions = [QuestionOut.model_validate(q) for q in _fragor(area)]
+        return ut
+
     areas = [
         DialogueArea(
-            area=area,
+            area=_area_ut(area),
             measurement=meas_by_area.get(area.id),
             status_historik=historik_by_area.get(area.id, []),
             activities=activities_by_area.get(area.id, []),
