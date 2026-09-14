@@ -1,5 +1,13 @@
 import type { AreaStatus, Status } from "@/lib/api";
 
+/** Samma gränser som backendens hme_status. Delkort och graf delar denna regel. */
+export const HME_WARNING_MARGIN = 5;
+export function hmeStatus(value: number, target: number): Status {
+  if (value >= target) return "good";
+  if (value >= target - HME_WARNING_MARGIN) return "warn";
+  return "alert";
+}
+
 /** KPI-statusskala mappad mot designsystemets semantiska tokens (designbeslut, BYGGPLAN §6):
  *  good→success, warn→warning, alert→error. Ingen egen hex — endast SK-tokens. */
 export interface StatusTokens {

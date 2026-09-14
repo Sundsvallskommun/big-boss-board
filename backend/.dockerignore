@@ -10,3 +10,5 @@ venv/
 .env.*
 !.env.example
 .DS_Store
+tests/
+uv.lock
