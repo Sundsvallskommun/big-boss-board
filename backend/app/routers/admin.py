@@ -9,9 +9,10 @@ mätvärden per nyckeltal, rensa obsolet nyckeltal. Inga personuppgifter — end
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import require_import_token
+from app.auth.import_token import ImportTokenRoute
 from app.db import get_session
 from app.models import StatusFraga, Submission
 from app.schemas import (
@@ -39,7 +40,8 @@ from app.services.submissions import list_submissions, update_submission
 router = APIRouter(
     prefix="/api/admin",
     tags=["admin"],
-    dependencies=[Depends(require_import_token)],
+    route_class=ImportTokenRoute,
+    dependencies=[Depends(HTTPBearer())],  # Dokumenterar Bearer i OpenAPI; auth sker före body.
 )
 
 

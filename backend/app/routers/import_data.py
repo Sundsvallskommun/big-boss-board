@@ -6,9 +6,10 @@ Nås publikt via frontend-proxyn (`/api/*`) men kräver dedikerat import-token.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import require_import_token
+from app.auth.import_token import ImportTokenRoute
 from app.db import get_session
 from app.schemas import (
     EkonomiCsvSerie,
@@ -33,10 +34,13 @@ from app.services.hme_import import import_hme, report_to_payload as hme_report_
 from app.services.sjukfranvaro_import import csv_to_payload as sjuk_csv_to_payload
 from app.services.sjukfranvaro_import import import_sjukfranvaro, filer_to_payload as sjuk_filer_to_payload
 
-router = APIRouter(prefix="/api/import", tags=["import"])
+router = APIRouter(
+    prefix="/api/import", tags=["import"], route_class=ImportTokenRoute,
+    dependencies=[Depends(HTTPBearer())],  # OpenAPI; tokenen kontrolleras redan före body.
+)
 
 
-@router.post("/hme", response_model=ImportResultat, dependencies=[Depends(require_import_token)])
+@router.post("/hme", response_model=ImportResultat)
 async def import_hme_endpoint(
     payload: HmeImport,
     session: AsyncSession = Depends(get_session),
@@ -45,7 +49,7 @@ async def import_hme_endpoint(
     return await import_hme(session, payload)
 
 
-@router.post("/ekonomi", response_model=EkonomiResultat, dependencies=[Depends(require_import_token)])
+@router.post("/ekonomi", response_model=EkonomiResultat)
 async def import_ekonomi_endpoint(
     rapport: EkonomiRapport,
     session: AsyncSession = Depends(get_session),
@@ -58,7 +62,7 @@ async def import_ekonomi_endpoint(
     return await import_ekonomi(session, payload)
 
 
-@router.post("/ekonomi-csv", response_model=EkonomiResultat, dependencies=[Depends(require_import_token)])
+@router.post("/ekonomi-csv", response_model=EkonomiResultat)
 async def import_ekonomi_csv_endpoint(
     request: Request,
     session: AsyncSession = Depends(get_session),
@@ -72,7 +76,7 @@ async def import_ekonomi_csv_endpoint(
     return await import_ekonomi(session, payload)
 
 
-@router.post("/ekonomi-serie", response_model=EkonomiResultat, dependencies=[Depends(require_import_token)])
+@router.post("/ekonomi-serie", response_model=EkonomiResultat)
 async def import_ekonomi_serie_endpoint(
     body: EkonomiCsvSerie,
     session: AsyncSession = Depends(get_session),
@@ -89,7 +93,7 @@ async def import_ekonomi_serie_endpoint(
     return await import_ekonomi(session, payload)
 
 
-@router.post("/sjukfranvaro-csv", response_model=SjukResultat, dependencies=[Depends(require_import_token)])
+@router.post("/sjukfranvaro-csv", response_model=SjukResultat)
 async def import_sjukfranvaro_csv_endpoint(
     request: Request,
     session: AsyncSession = Depends(get_session),
@@ -103,7 +107,7 @@ async def import_sjukfranvaro_csv_endpoint(
     return await import_sjukfranvaro(session, payload)
 
 
-@router.post("/ekonomi-filer", response_model=EkonomiResultat, dependencies=[Depends(require_import_token)])
+@router.post("/ekonomi-filer", response_model=EkonomiResultat)
 async def import_ekonomi_filer_endpoint(
     body: ExportFiler,
     session: AsyncSession = Depends(get_session),
@@ -116,7 +120,7 @@ async def import_ekonomi_filer_endpoint(
     return await import_ekonomi(session, payload, bevara_historik=True)
 
 
-@router.post("/hme-rapport", response_model=ImportResultat, dependencies=[Depends(require_import_token)])
+@router.post("/hme-rapport", response_model=ImportResultat)
 async def import_hme_rapport_endpoint(body: HmeRapportImport, session: AsyncSession = Depends(get_session)) -> dict:
     """Totalindex och valfri separat delindexrapport normaliseras av HME-importens ägare."""
     try:
@@ -128,7 +132,7 @@ async def import_hme_rapport_endpoint(body: HmeRapportImport, session: AsyncSess
     return await import_hme(session, payload)
 
 
-@router.post("/sjukfranvaro-filer", response_model=SjukResultat, dependencies=[Depends(require_import_token)])
+@router.post("/sjukfranvaro-filer", response_model=SjukResultat)
 async def import_sjukfranvaro_filer_endpoint(body: ExportFiler, session: AsyncSession = Depends(get_session)) -> dict:
     try:
         payload = SjukImport(**sjuk_filer_to_payload(body.filer))
