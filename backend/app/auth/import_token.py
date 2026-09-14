@@ -1,17 +1,15 @@
-"""Behörighet för maskin-till-maskin-endpoints (dataimport).
+"""Import-token för maskin-till-maskin-anrop (skript, CI, curl).
 
-Skilt från användarnas ACCESS_CODE (som gatar UI:t). Import-endpointen kräver ett
-dedikerat hemligt token i Authorization-headern. Är inget token konfigurerat är
-endpointen helt avstängd (503) — den får aldrig stå öppen.
+Skilt från användarnas inloggning. Tokenen är en av två vägar in till import- och
+adminroutrarna — se `admin_access.py` för helheten (token eller admin-session).
+Är inget token konfigurerat är tokenvägen avstängd (503) — den får aldrig stå öppen.
 """
 
 from __future__ import annotations
 
 import secrets
-from collections.abc import Awaitable, Callable
 
-from fastapi import HTTPException, Request, Response, status
-from fastapi.routing import APIRoute
+from fastapi import HTTPException, status
 
 from app.config import get_settings
 
@@ -33,21 +31,3 @@ def require_import_token(authorization: str | None) -> None:
             detail="Ogiltig eller saknad import-token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-
-class ImportTokenRoute(APIRoute):
-    """Auth för hela import-/adminroutern, innan FastAPI läser JSON eller formulär.
-
-    En vanlig Depends körs efter JSON-parsning. Route-gränsen gör att även framtida
-    endpoints i dessa routrar avvisar obehöriga kroppar utan att läsa dem.
-    SAML och publika endpoints använder FastAPI:s vanliga route.
-    """
-
-    def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]:
-        handler = super().get_route_handler()
-
-        async def authenticated(request: Request) -> Response:
-            require_import_token(request.headers.get("authorization"))
-            return await handler(request)
-
-        return authenticated

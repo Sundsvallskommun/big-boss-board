@@ -147,7 +147,7 @@ Alla certifikat, privata nycklar och session secrets ska ligga i OpenShift Secre
    e-post, admin-badge) och "Logga ut". Utloggning rensar lokala sessionen och, via
    `SAML_IDP_LOGOUT_URL`, IdP-sessionen (test-IdP:n hanterar inte SAML SLO-requests —
    dess `/logout?RelayState=`-route används i stället; SLO-koden togs bort).
-7. Behåll import-token separat. `IMPORT_TOKEN` är maskin-till-maskin och ska inte ersättas
+7. Behåll import-token separat för maskin-till-maskin. `IMPORT_TOKEN` ska inte ersättas
    av SAML. (Oförändrat — middleware släpper igenom `/api/import` + `/api/admin` i båda lägena.)
 8. ~~Lägg till tester~~ — byggt (`backend/tests/`): saknad/giltig/manipulerad session, fel
    grupp, admin-grupp, logout, RelayState-validering, claim-mappning. Callback testas med
@@ -158,7 +158,8 @@ Alla certifikat, privata nycklar och session secrets ska ligga i OpenShift Secre
 - Inga riktiga IdP-certifikat eller privata nycklar i repo.
 - Ingen personuppgiftsloggning av fullständiga SAML-profiler.
 - Ingen Draken-specifik rollmodell ska kopieras. `bbb` behöver egna roller: vanlig användare och admin räcker initialt.
-- Import-endpoints ska fortsätta skyddas med `IMPORT_TOKEN`.
+- Import-endpoints skyddas med `IMPORT_TOKEN` **eller** inloggad admin-session
+  (`auth/admin_access.py`) — tokenen finns kvar för skript/automation.
 
 ## Acceptance Criteria
 

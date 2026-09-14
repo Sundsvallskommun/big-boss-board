@@ -95,7 +95,7 @@ publicerar manuellt.
 - **Publik create:** `POST /api/submissions` (ingen token; gatad av middleware via proxyn).
   Server action `app/status/skicka-in/actions.ts` → backend. Honeypot-fält mot bottar,
   maxlängd 4000 tecken. Endast öppen/publik info (dataregeln gäller — inga personuppgifter).
-- **Triage (token-skyddad, samma `IMPORT_TOKEN`):** `GET /api/admin/submissions[?status=ny]`
+- **Triage (admin-behörighet, se nedan):** `GET /api/admin/submissions[?status=ny]`
   och `PATCH /api/admin/submissions/{id}` (status: `ny`/`granskad`/`publicerad`/`arkiverad`
   + intern `notering`). CLI: `IMPORT_TOKEN=… python3 scripts/read_inbox.py --url <bas-url>`.
 - Logik i `app/services/submissions.py`; modell i `models.py`; migration
@@ -112,7 +112,7 @@ Modeller i `models.py`, migration `7a2b3c4d5e06_status_content.py`, logik i
 - **Publikt läs:** `GET /api/status-cards` → `{fragor, rapporter}` (endast `publicerad=True`).
   `frontend/app/status/page.tsx` (server-komponent, `force-dynamic`) hämtar via
   `lib/api.ts listStatusContent()`.
-- **Token-skyddat skriv** (samma `IMPORT_TOKEN`, i `routers/admin.py`):
+- **Admin-skyddat skriv** (samma behörighet som importen, i `routers/admin.py`):
   `POST/PATCH/DELETE /api/admin/status-cards` och `POST/PATCH /api/admin/status-rapporter`,
   samt `GET /api/admin/status-cards` (inkl. opublicerade utkast). Server sätter `nummer`
   (publikt "#N", max+1, återanvänds aldrig). Anges `submission_id` vid skapande markeras
@@ -179,10 +179,27 @@ Två lägen, valt med `AUTH_MODE` (frontend-middleware och backend läser samma 
   riktiga SLO-requests). Frontend-middleware validerar
   sessionen mot `/api/me`; `isAdmin()` läser rollen därifrån; login-sidan visar
   SAML-knapp och `?failMessage=<KOD>`-fel. Env-namnen följer draken (se `.env.example`)
-  så OpenShift-secrets kan återanvändas. `IMPORT_TOKEN`-spåret är oförändrat och skilt
-  från användarauth i båda lägena. Tester i `backend/tests/`. Plan: `docs/SAML_SSO_PLAN.md`.
+  så OpenShift-secrets kan återanvändas. Tester i `backend/tests/`. Plan: `docs/SAML_SSO_PLAN.md`.
   WSO2-tokentjänsten (OAuth2 client credentials, Redis-cachad) ligger vilande i
   `app/services/gateway_token.py`.
+
+## Admin-behörighet: `/api/import/*` och `/api/admin/*`
+
+Båda routrarna gatas av `backend/app/auth/admin_access.py` (`AdminAccessRoute`, körs
+**före** kroppen läses) och accepterar **en av två** vägar:
+
+- **Import-token** — `Authorization: Bearer <IMPORT_TOKEN>` för skript/automation
+  (`scripts/*.py`, curl, CI). Finns headern avgör den ensam. Tom `IMPORT_TOKEN` ger 503
+  på tokenvägen. Skilt från användarauth i båda lägena.
+- **Inloggad admin-session** — kakan `bbb_session` med rollen `admin`
+  (`SAML_ADMIN_GROUPS`). Bara i saml-läget, där backend äger sessionen. `user` får 403.
+  Gör att `/api/docs` (importgränssnittet — ingen importvy finns) och inkorgen fungerar
+  för en inloggad admin **utan** att frontend håller tokenen. CSRF: SameSite=Lax + JSON-kroppar,
+  och ändrande anrop med `Sec-Fetch-Site` utanför `same-origin`/`none` avvisas.
+
+Frontend väljer väg i `lib/admin-api.ts adminAuthHeaders()`: saml → vidarebefordra
+sessionskakan; access_code → `IMPORT_TOKEN` (backend har ingen session där). Middleware
+släpper igenom `/api/import`/`/api/admin` orörda så att backend avgör.
 
 ## Faser (bygg en i taget, commit + verifiering per fas)
 
