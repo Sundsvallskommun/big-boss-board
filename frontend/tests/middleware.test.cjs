@@ -1,19 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { createRequire } = require('node:module');
-const ts = require('typescript');
 const { NextRequest } = require('next/server');
-
-// Kör kommunens oförändrade middleware med det installerade Next-biblioteket.
-const filename = path.resolve(__dirname, '../middleware.ts');
-const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const loaded = { exports: {} };
-new Function('require', 'exports', 'module', compiled)(createRequire(filename), loaded.exports, loaded);
-const { middleware } = loaded.exports;
+const { load } = require('./load-module.cjs');
+const { middleware } = load('middleware.ts');
 
 test('municipal SAML and access-code gates keep their existing behavior under Next 16', async () => {
   const names = ['AUTH_MODE', 'ACCESS_CODE', 'ADMIN_ACCESSCODE', 'ALLOW_OPEN_ACCESS'];
