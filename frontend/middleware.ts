@@ -48,7 +48,8 @@ async function samlGate(req: NextRequest) {
   if (pathname.startsWith("/api/auth")) return NextResponse.next();
   if (pathname.startsWith("/api/health") || pathname.startsWith("/api/ready"))
     return NextResponse.next();
-  // Import/admin är maskin-till-maskin med egen token-auth (IMPORT_TOKEN) i backend.
+  // Import/admin gatas av backend (import-token eller admin-session) — släpp igenom
+  // så att både CLI/automation och den inloggade webbläsaren (/api/docs) når dem.
   if (pathname.startsWith("/api/import") || pathname.startsWith("/api/admin"))
     return NextResponse.next();
 
@@ -83,9 +84,8 @@ async function accessCodeGate(req: NextRequest) {
 
   const { pathname } = req.nextUrl;
   if (pathname.startsWith("/login")) return NextResponse.next();
-  // Import- och admin-endpointen är maskin-till-maskin och har egen token-auth
-  // (IMPORT_TOKEN) i backend — de ska inte gatas av UI-access-koden, så att
-  // CLI/automation kommer åt dem.
+  // Import- och admin-endpointen gatas av backend (import-token) — de ska inte
+  // gatas av UI-access-koden, så att CLI/automation kommer åt dem.
   if (pathname.startsWith("/api/import") || pathname.startsWith("/api/admin"))
     return NextResponse.next();
 

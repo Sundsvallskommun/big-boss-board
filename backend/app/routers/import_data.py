@@ -1,15 +1,16 @@
-"""Autentiserad dataimport (maskin-till-maskin).
+"""Autentiserad dataimport.
 
-Nås publikt via frontend-proxyn (`/api/*`) men kräver dedikerat import-token.
+Nås publikt via frontend-proxyn (`/api/*`). Kräver import-token (skript/automation)
+eller inloggad admin-session (`/api/docs` i webbläsaren) — se `auth/admin_access.py`.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import HTTPBearer
+from fastapi.security import APIKeyCookie, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.import_token import ImportTokenRoute
+from app.auth.admin_access import AdminAccessRoute
 from app.db import get_session
 from app.schemas import (
     EkonomiCsvSerie,
@@ -35,8 +36,12 @@ from app.services.sjukfranvaro_import import csv_to_payload as sjuk_csv_to_paylo
 from app.services.sjukfranvaro_import import import_sjukfranvaro, filer_to_payload as sjuk_filer_to_payload
 
 router = APIRouter(
-    prefix="/api/import", tags=["import"], route_class=ImportTokenRoute,
-    dependencies=[Depends(HTTPBearer())],  # OpenAPI; tokenen kontrolleras redan före body.
+    prefix="/api/import", tags=["import"], route_class=AdminAccessRoute,
+    # Endast OpenAPI (token ELLER session) — behörigheten avgörs av AdminAccessRoute före body.
+    dependencies=[
+        Depends(HTTPBearer(auto_error=False)),
+        Depends(APIKeyCookie(name="bbb_session", scheme_name="AdminSession", auto_error=False)),
+    ],
 )
 
 

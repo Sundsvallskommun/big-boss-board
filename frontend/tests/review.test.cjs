@@ -26,3 +26,53 @@ test('HME perspective cards label different latest years explicitly', () => {
   assert.match(html, /2027 · \+2 sedan 2025/);
   assert.match(html, /2025 · \+2 sedan 2023/);
 });
+
+test('admin inbox forwards the SAML session instead of a token in saml mode', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousToken = process.env.IMPORT_TOKEN;
+  const { listSubmissionsAdmin } = load('lib/admin-api.ts', {
+    '@/lib/auth': { isSamlMode: () => true, SESSION_COOKIE: 'bbb_session' },
+    'next/headers': { cookies: async () => ({ get: (name) => (name === 'bbb_session' ? { value: 'sid.sig' } : undefined) }) },
+  });
+  delete process.env.IMPORT_TOKEN; // Frontend behöver ingen token i saml-läget.
+  try {
+    let headers;
+    globalThis.fetch = async (url, init) => {
+      headers = init.headers;
+      assert.ok(url.endsWith('/api/admin/submissions'));
+      return Response.json([{ id: 1, text: 'x', status: 'ny', notering: null, skapad_at: '', uppdaterad_at: null }]);
+    };
+    const rows = await listSubmissionsAdmin();
+    assert.equal(rows.length, 1);
+    assert.equal(headers.cookie, 'bbb_session=sid.sig');
+    assert.equal(headers.Authorization, undefined);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) delete process.env.IMPORT_TOKEN;
+    else process.env.IMPORT_TOKEN = previousToken;
+  }
+});
+
+test('admin inbox uses IMPORT_TOKEN in access_code mode and stays empty without it', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousToken = process.env.IMPORT_TOKEN;
+  const { listSubmissionsAdmin } = load('lib/admin-api.ts', {
+    '@/lib/auth': { isSamlMode: () => false, SESSION_COOKIE: 'bbb_session' },
+  });
+  try {
+    delete process.env.IMPORT_TOKEN;
+    globalThis.fetch = async () => { throw new Error('ska inte anropas utan token'); };
+    assert.deepEqual(await listSubmissionsAdmin(), []);
+
+    process.env.IMPORT_TOKEN = 'test';
+    let headers;
+    globalThis.fetch = async (_url, init) => { headers = init.headers; return Response.json([]); };
+    await listSubmissionsAdmin();
+    assert.equal(headers.Authorization, 'Bearer test');
+    assert.equal(headers.cookie, undefined);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) delete process.env.IMPORT_TOKEN;
+    else process.env.IMPORT_TOKEN = previousToken;
+  }
+});

@@ -38,8 +38,9 @@ Operativ checklista för att driftsätta stacken. Teknisk översikt finns i
      Sätt samma värde på alla repliker. Kommunens SAML-läge använder fortsatt `SECRET_KEY`
      i backend och behöver inte denna nya variabel.
    - `BACKEND_INTERNAL_URL=http://backend:8000` (default räcker normalt).
-   - `IMPORT_TOKEN` — hemlig nyckel för HME-importen (se steg 5). Tom = endpoint avstängd.
-     Sätts på **både** backend (endpointen) och frontend (admin-inkorgens serverhämtning).
+   - `IMPORT_TOKEN` — maskinnyckel för importen (se steg 5). Tom = tokenvägen avstängd.
+     Sätts på backend. Frontend behöver den **bara i access_code-läget** (admin-inkorgens
+     serverhämtning) — i saml-läget vidarebefordras admin-sessionen och backend avgör.
 4. **Persistent volym:** säkerställ att `db-data` är en bestående volym.
 5. **Mätdata (utanför git).** Data importeras uttryckligen via API eller CLI:
    - **Import-endpoint/CLI (för automation):** sätt `IMPORT_TOKEN` och kör efter deploy
