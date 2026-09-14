@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
-import { DevBanner } from "@/components/DevBanner";
 
 export const metadata: Metadata = {
   // Internt arbetsnamn "Big Boss Board" visas aldrig i UI.
@@ -34,7 +33,6 @@ export default function RootLayout({
           Hoppa till innehållet
         </a>
         <Providers>
-          <DevBanner />
           {children}
         </Providers>
       </body>
