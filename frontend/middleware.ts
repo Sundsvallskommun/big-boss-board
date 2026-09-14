@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ACCESS_COOKIE, accessSessionConfigError, verifyAccessSession } from "./lib/access-session";
 
 /** Gatar tjänsten server-side i två lägen (AUTH_MODE):
  *
@@ -8,7 +9,6 @@ import { NextRequest, NextResponse } from "next/server";
  *  - "saml": backend äger sessionen (SAML mot kommunens IdP). Middleware validerar
  *    sessionskakan mot backendens /api/me på varje förfrågan.
  */
-const ACCESS_COOKIE = "bbb_access";
 const SESSION_COOKIE = "bbb_session";
 const BACKEND = process.env.BACKEND_INTERNAL_URL || "http://backend:8000";
 const AUTH_MODES = new Set(["access_code", "saml"]);
@@ -58,6 +58,7 @@ async function samlGate(req: NextRequest) {
       const res = await fetch(`${BACKEND}/api/me`, {
         headers: { cookie: `${SESSION_COOKIE}=${value}` },
         cache: "no-store",
+        signal: AbortSignal.timeout(5000),
       });
       if (res.ok) return NextResponse.next();
     } catch {
@@ -76,7 +77,7 @@ async function samlGate(req: NextRequest) {
   return NextResponse.redirect(url);
 }
 
-function accessCodeGate(req: NextRequest) {
+async function accessCodeGate(req: NextRequest) {
   const code = process.env.ACCESS_CODE;
   const admin = process.env.ADMIN_ACCESSCODE;
 
@@ -92,9 +93,9 @@ function accessCodeGate(req: NextRequest) {
     return allowOpenAccess() ? NextResponse.next() : authConfigError(req);
   }
 
+  if (accessSessionConfigError()) return authConfigError(req);
   const value = req.cookies.get(ACCESS_COOKIE)?.value;
-  const giltig = (!!code && value === code) || (!!admin && value === admin);
-  if (giltig) return NextResponse.next();
+  if (await verifyAccessSession(value)) return NextResponse.next();
 
   if (pathname.startsWith("/api")) {
     return NextResponse.json({ detail: "Behörighet krävs." }, { status: 401 });

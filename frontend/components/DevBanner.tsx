@@ -13,6 +13,7 @@ export function DevBanner() {
       <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-center gap-x-12 gap-y-8 px-24 py-10 text-center md:px-32">
         <p className="text-small font-medium text-dark-primary">
           Tjänsten är under utveckling — innehåll och funktioner kan komma att ändras.
+          {" "}Använd endast öppen och publik information. Skriv inga personuppgifter.
         </p>
         <Link
           href="/status"

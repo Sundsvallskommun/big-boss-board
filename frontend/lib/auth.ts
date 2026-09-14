@@ -1,7 +1,5 @@
 import { cookies } from "next/headers";
-
-/** Namn på access-kakan (access_code-läget: sätts vid inloggning, valideras i middleware). */
-export const ACCESS_COOKIE = "bbb_access";
+import { ACCESS_COOKIE, verifyAccessSession } from "./access-session";
 
 /** Namn på sessionskakan (saml-läget: sätts av backend vid SAML-callback). */
 export const SESSION_COOKIE = "bbb_session";
@@ -39,6 +37,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const res = await fetch(`${BACKEND}/api/me`, {
       headers: { cookie: `${SESSION_COOKIE}=${value}` },
       cache: "no-store",
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return null;
     return (await res.json()) as SessionUser;
@@ -55,8 +54,7 @@ export async function isAdmin(): Promise<boolean> {
   if (isSamlMode()) {
     return (await getSessionUser())?.role === "admin";
   }
-  const admin = process.env.ADMIN_ACCESSCODE;
-  if (!admin) return false;
+  if (authMode() !== "access_code") return false;
   const value = (await cookies()).get(ACCESS_COOKIE)?.value;
-  return value === admin;
+  return (await verifyAccessSession(value)) === "admin";
 }
