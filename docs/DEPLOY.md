@@ -178,10 +178,20 @@ migration startas av importjobbet. Jobbet behöver inte databasinloggning.
 
 ### Datakontrakt och filurval
 
-Ange en UNC-sökväg till en bestämd undermapp per rapporttyp. Ingen rekursiv
-skanning görs. Alla synliga CSV/TXT-filer i den mappen skickas som ett underlag;
-andra ändelser ignoreras. Mappen måste därför avgränsas till rätt exporttyp.
-Originalfilnamn bevaras. Period, KPI-mått, organisation (`Enhet` →
+Ange en UNC-sökväg till en bestämd undermapp per rapporttyp. Sökvägarna får vara
+samma om rapporterna ligger tillsammans. Ingen rekursiv skanning görs. SMB-jobbet
+väljer endast sin rapporttyp enligt följande bekräftade filnamnsmönster:
+
+| Rapporttyp | Filnamn (datumdelen varierar) |
+| --- | --- |
+| Ekonomi | `kpidata_RR_förvaltning_YYYY-MM-DD.csv` |
+| Sjukfrånvaro | `kpidata_Personal_förvaltning_YYYY-MM-DD.csv` |
+
+Även ändelsen `.txt` stöds. Stora/små bokstäver och sammansatta/uppdelade
+Unicode-tecken matchas likvärdigt. Originalfilnamnet skickas oförändrat till API:t.
+Filer av andra typer, andra organisationsnivåer och tillfälliga filer ignoreras.
+Alla matchande filer skickas tillsammans inom storleksgränserna; datumdelen
+begränsar inte vilka uttag som hämtas. Period, KPI-mått, organisation (`Enhet` →
 `Organisation.kod`) och historik hanteras av befintligt import-API.
 
 Personalexporter med kolumnerna `Period,Enhet,Mått,Kolumn,Mätvärde` kan innehålla
@@ -194,7 +204,7 @@ Första versionen skickar samma avgränsade underlag vid varje körning. Backend
 upsert och urvalsregler gör omkörning säker även efter ett förlorat HTTP-svar.
 Ingen separat databas eller fil med "senast importerad" skapas. Vid växande arkiv
 behöver källmappen avgränsas; jobbet väljer inte godtyckligt de senaste N filerna.
-En fil över gränsen, tom mapp eller misslyckad hämtning stoppar hela underlaget
+En matchande fil över gränsen, ingen matchande rapport eller misslyckad hämtning stoppar hela underlaget
 före API-anrop. En ändrad fil upptäcks genom storlek, filidentitet och ändringstid
 före/efter läsning. SMB-handtaget tillåter inte samtidig skrivning/radering.
 
@@ -219,6 +229,8 @@ Jobbet läser miljön direkt och laddar ingen `.env` eller backendens
 applikationsinställningar. Lokal manuell filimport är fortsatt möjlig genom
 `scripts/import_ekonomi_serie.py` och `scripts/import_sjukfranvaro.py` med
 standardbiblioteket; samma storleksgränser gäller, men ingen minimiålder.
+Den manuella CLI-vägen läser CSV/TXT-filerna i den uttryckligt angivna lokala
+mappen utan SMB-jobbets filnamnsmönster, så befintliga manuella rapportnamn fungerar.
 
 SMB-klienten använder NTLM med obligatorisk signering och SMB3-kryptering.
 Ingen montering eller privilegierad pod krävs. Kerberos-only, särskilda DFS-upplägg
@@ -294,7 +306,7 @@ import eller riktad dataåterställning; att backa image återställer inte data
 ### Ytterligare datatyper
 
 Lägg först validering och persistens i rätt backendägare med ett uttryckligt
-API-kontrakt. Utöka därefter jobbets tillåtna rapporttyper och transportmappning,
+API-kontrakt. Utöka därefter jobbets tillåtna rapporttyper, filnamnsmönster och transportmappning,
 med kontrakttest som visar rätt organisationskoppling och säker omkörning. Lägg
 ett eget CronJob med egen sökväg och tid i appens manifestrepo. Samma transport
 kan återanvändas när kontraktet är namngivna CSV/TXT-filer; ett annat format

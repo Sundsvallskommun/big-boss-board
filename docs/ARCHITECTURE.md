@@ -165,7 +165,9 @@ Nyckeln kopplas till rätt förvaltning via masterdata-koden (`organisation.kod`
 körs som separata CronJobs med backendens image. `app/report_import.py` äger den
 gemensamma filtransporten för jobben och de två manuella filimportskripten;
 `app/smb_import.py` äger SMB-anslutning och körning. Inga importregler dubbleras i
-jobbet. Ekonomi-CSV måste innehålla nettokostnadsmåttet för att inte fel rapporttyp
+jobbet. Filurvalet skiljer `kpidata_RR_förvaltning_YYYY-MM-DD.csv` från
+`kpidata_Personal_förvaltning_YYYY-MM-DD.csv` även i en gemensam mapp;
+originalfilnamnen bevaras. Ekonomi-CSV måste innehålla nettokostnadsmåttet för att inte fel rapporttyp
 ska behandlas som ekonomidata. Drift, gränser och aktivering finns i
 [DEPLOY.md](DEPLOY.md#schemalagd-rapportimport-från-smb).
 

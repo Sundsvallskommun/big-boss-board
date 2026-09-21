@@ -12,6 +12,7 @@ import urllib.request
 import urllib.response
 from email.message import Message
 from pathlib import Path
+from unicodedata import normalize
 
 import pytest
 import smbclient
@@ -165,26 +166,26 @@ def smb_directory(tmp_path, monkeypatch):
 
 
 def test_smb_reader_matches_local_transport(smb_directory):
-    report_file(smb_directory)
+    report_file(smb_directory, "kpidata_RR_förvaltning_2026-09-07.csv")
     source = SMBSource(r"\\server\share\reports", "test-account", "test-password")
-    assert read_smb_reports(source, Limits()) == read_local_reports(smb_directory, Limits())
+    assert read_smb_reports(source, Limits(), kind="ekonomi") == read_local_reports(smb_directory, Limits())
     assert "test-password" not in repr(source)
 
 
 def test_smb_read_failure_discards_batch_and_redacts_detail(smb_directory, monkeypatch):
-    report_file(smb_directory)
+    report_file(smb_directory, "kpidata_RR_förvaltning_2026-09-07.csv")
 
     def fail(*args, **kwargs):
         raise OSError("private path and credentials")
 
     monkeypatch.setattr(smbclient, "open_file", fail)
     with pytest.raises(ImportFailure, match="SMB-filläsning") as error:
-        read_smb_reports(SMBSource(r"\\server\share\reports", "test", "secret"), Limits())
+        read_smb_reports(SMBSource(r"\\server\share\reports", "test", "secret"), Limits(), kind="ekonomi")
     assert "private" not in str(error.value)
 
 
 def test_smb_dry_run_never_calls_api(smb_directory, monkeypatch, http_boundary, capsys):
-    report_file(smb_directory)
+    report_file(smb_directory, "kpidata_RR_förvaltning_2026-09-07.csv")
     monkeypatch.setenv("SMB_DIRECTORY", r"\\server\share\reports")
     monkeypatch.setenv("SMB_USERNAME", "test")
     monkeypatch.setenv("SMB_PASSWORD", "secret")
@@ -205,7 +206,7 @@ def test_smb_dry_run_never_calls_api(smb_directory, monkeypatch, http_boundary, 
 def test_job_imports_once_and_flags_skipped_or_unmapped_data(
     smb_directory, monkeypatch, http_boundary, capsys, counts,
 ):
-    report_file(smb_directory)
+    report_file(smb_directory, "kpidata_Personal_förvaltning_2026-09-14.csv")
     monkeypatch.setenv("SMB_DIRECTORY", r"\\server\share\reports")
     monkeypatch.setenv("SMB_USERNAME", "test")
     monkeypatch.setenv("SMB_PASSWORD", "secret")
@@ -222,6 +223,9 @@ def test_job_imports_once_and_flags_skipped_or_unmapped_data(
         main()
         assert '"status": "importerad"' in capsys.readouterr().out
     assert len(http_boundary.requests) == 1
+    assert json.loads(http_boundary.requests[0].data)["filer"][0]["namn"] == (
+        "kpidata_Personal_förvaltning_2026-09-14.csv"
+    )
 
 
 def test_smb_authentication_error_is_safe_and_does_not_read_files(monkeypatch):
@@ -232,8 +236,58 @@ def test_smb_authentication_error_is_safe_and_does_not_read_files(monkeypatch):
 
     monkeypatch.setattr(smbclient, "register_session", refuse)
     with pytest.raises(ImportFailure, match="SMB-anslutning") as error:
-        read_smb_reports(SMBSource(r"\\server\share\reports", "test", "secret"), Limits())
+        read_smb_reports(SMBSource(r"\\server\share\reports", "test", "secret"), Limits(), kind="ekonomi")
     assert "private" not in str(error.value)
+
+
+@pytest.mark.parametrize("kind,prefix", [
+    ("ekonomi", "kpidata_RR_förvaltning"),
+    ("sjukfranvaro", "kpidata_Personal_förvaltning"),
+])
+def test_smb_selects_only_requested_report_type_from_mixed_folder(smb_directory, kind, prefix):
+    expected = []
+    for report_prefix in ("kpidata_RR_förvaltning", "kpidata_Personal_förvaltning"):
+        for day in ("2026-09-07", "2026-09-14"):
+            name = f"{report_prefix}_{day}.csv"
+            report_file(smb_directory, name)
+            if report_prefix == prefix:
+                expected.append(name)
+    for name in (
+        "other.csv", "kpidata_RR_enhet_2026-09-07.csv",
+        "kpidata_Personal_enhet_2026-09-14.csv", f"{prefix}_2026-09-14.csv.tmp",
+        f"{prefix}_2026-09-14_backup.csv", f"{prefix}_latest.csv",
+    ):
+        report_file(smb_directory, name)
+    reports = read_smb_reports(
+        SMBSource(r"\\server\share\reports", "test", "secret"),
+        Limits(max_files=2), kind=kind,
+    )
+    assert [report.name for report in reports] == expected
+
+
+@pytest.mark.parametrize("kind,prefix", [
+    ("ekonomi", "kpidata_RR_förvaltning"),
+    ("sjukfranvaro", "kpidata_Personal_förvaltning"),
+])
+@pytest.mark.parametrize("form", ["NFC", "NFD"])
+def test_smb_preserves_original_filename_across_unicode_forms(smb_directory, kind, prefix, form):
+    name = normalize(form, f"{prefix}_2026-09-14.CSV")
+    path = report_file(smb_directory, name)
+    reports = read_smb_reports(
+        SMBSource(r"\\server\share\reports", "test", "secret"), Limits(), kind=kind,
+    )
+    # Filesystems may themselves normalize Unicode; preserve the directory entry's form.
+    with os.scandir(smb_directory) as entries:
+        original_name = next(entries).name
+    assert reports == [ReportFile(original_name, path.read_text())]
+
+
+def test_smb_fails_when_only_other_report_type_is_present(smb_directory):
+    report_file(smb_directory, "kpidata_RR_förvaltning_2026-09-07.csv")
+    with pytest.raises(ImportFailure, match="Inga rapportfiler för sjukfranvaro"):
+        read_smb_reports(
+            SMBSource(r"\\server\share\reports", "test", "secret"), Limits(), kind="sjukfranvaro",
+        )
 
 
 @pytest.mark.parametrize("directory", ["", r"\\server\share", r"\\server\share\..\other", "/local/path"])

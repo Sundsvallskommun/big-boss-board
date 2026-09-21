@@ -6,16 +6,28 @@ import argparse
 import json
 import ntpath
 import os
+import re
 import stat
 import sys
 import time
 from contextlib import closing
 from dataclasses import dataclass, field
+from unicodedata import normalize
 
 from app.report_import import (
     FileVersion, ImportFailure, Limits, ReportFile, ReportKind, check_batch_size,
     check_name, decode_report, import_endpoint, print_result, send_reports,
 )
+
+
+REPORT_FILE_PATTERNS: dict[ReportKind, re.Pattern[str]] = {
+    "ekonomi": re.compile(
+        r"kpidata_RR_förvaltning_[0-9]{4}-[0-9]{2}-[0-9]{2}\.(?:csv|txt)", re.IGNORECASE,
+    ),
+    "sjukfranvaro": re.compile(
+        r"kpidata_Personal_förvaltning_[0-9]{4}-[0-9]{2}-[0-9]{2}\.(?:csv|txt)", re.IGNORECASE,
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -39,7 +51,7 @@ class SMBSource:
         return self.directory.split("\\")[2]
 
 
-def read_smb_reports(source: SMBSource, limits: Limits) -> list[ReportFile]:
+def read_smb_reports(source: SMBSource, limits: Limits, *, kind: ReportKind) -> list[ReportFile]:
     import smbclient
     from smbprotocol.exceptions import SMBException
     from spnego.exceptions import SpnegoError
@@ -47,6 +59,7 @@ def read_smb_reports(source: SMBSource, limits: Limits) -> list[ReportFile]:
     reports: list[ReportFile] = []
     total = 0
     now = time.time()
+    pattern = REPORT_FILE_PATTERNS[kind]
     stage = "anslutning"
     try:
         # NTLM with mandatory signing and SMB3 encryption. No implicit Kerberos fallback.
@@ -60,7 +73,9 @@ def read_smb_reports(source: SMBSource, limits: Limits) -> list[ReportFile]:
             for index, entry in enumerate(entries):
                 if index >= 1000:
                     raise ImportFailure("Mappen har för många poster. Använd en avgränsad rapportmapp.")
-                if not check_name(entry.name):
+                # Match spelling across macOS/Windows Unicode forms, but send the original name.
+                # The date only identifies the filename shape; the API owns period selection.
+                if not pattern.fullmatch(normalize("NFC", entry.name)) or not check_name(entry.name):
                     continue
                 path = ntpath.join(source.directory, entry.name)
                 info = smbclient.stat(path, follow_symlinks=False)
@@ -86,13 +101,15 @@ def read_smb_reports(source: SMBSource, limits: Limits) -> list[ReportFile]:
         except (OSError, SMBException):
             raise ImportFailure("SMB-anslutningen kunde inte stängas normalt.") from None
     if not reports:
-        raise ImportFailure("Inga CSV/TXT-rapporter hittades. Kontrollera sökvägen.")
+        raise ImportFailure(
+            f"Inga rapportfiler för {kind} hittades. Kontrollera sökväg och filnamnsmönster."
+        )
     return sorted(reports, key=lambda report: report.name)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Hämta rapporter från SMB och importera via API.")
-    parser.add_argument("--kind", required=True, choices=("ekonomi", "sjukfranvaro"))
+    parser.add_argument("--kind", required=True, choices=tuple(REPORT_FILE_PATTERNS))
     parser.add_argument("--dry-run", action="store_true", help="Läs filer utan att anropa import-API:t.")
     args = parser.parse_args()
     try:
@@ -114,7 +131,7 @@ def main() -> None:
             import_endpoint(url, kind)
             if not token.strip():
                 raise ImportFailure("Saknar IMPORT_TOKEN.")
-        reports = read_smb_reports(source, limits)
+        reports = read_smb_reports(source, limits, kind=kind)
         print(json.dumps({
             "status": "hämtad", "typ": kind, "filer": len(reports),
             "byte": sum(len(report.text.encode("utf-8")) for report in reports),
