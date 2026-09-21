@@ -248,9 +248,12 @@ sekunder och jobbets totala deadline 600 sekunder. Deadline i OpenShift begräns
 6. Med verifierad databasbackup: ta bort `--dry-run` via granskad MR, behåll
    `suspend: true`, synka och kör en kontrollerad produktionsimport. Stäm av
    senaste period, rätt förvaltningar, historik och resultatets `hoppade_over`.
-7. Bekräfta körningstid efter färdig export, larmmottagare och driftägare.
-   Aktivera först därefter med `suspend: false`. Föreslagna tider är 06:00 för
-   ekonomi och 06:20 för sjukfrånvaro i `Europe/Stockholm`.
+7. Bekräfta larmmottagare och driftägare och aktivera sedan med `suspend: false`.
+   Hämtning sker varje natt: 03:00 för ekonomi och 03:20 för sjukfrånvaro i
+   `Europe/Stockholm`, utanför timmen som hoppas över eller upprepas vid
+   sommartidsbyte. Exakt ankomsttid behöver inte vara känd. Filer som kommer
+   efter körningen tas med nästa natt; befintligt underlag kan köras om säkert.
+   Skydden mot pågående filskrivning gäller även vid nattlig hämtning.
 
 Exempel efter att rätt image och konfiguration har synkats (använd unikt jobbnamn):
 
