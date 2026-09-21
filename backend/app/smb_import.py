@@ -38,10 +38,10 @@ class SMBSource:
 
     def __post_init__(self) -> None:
         parts = self.directory.split("\\")
-        if (not self.directory.startswith("\\\\") or len(parts) < 5
+        if (not self.directory.startswith("\\\\") or len(parts) < 4
                 or any(not part or part in {".", ".."} for part in parts[2:])
                 or any(c in self.directory for c in "/\r\n\x00")):
-            raise ImportFailure("SMB_DIRECTORY måste vara en UNC-sökväg till en bestämd undermapp.")
+            raise ImportFailure("SMB_DIRECTORY måste vara en UNC-sökväg till en delning eller undermapp.")
         if (not self.username.strip() or not self.password
                 or self.username.startswith("REPLACE_") or self.password.startswith("REPLACE_")):
             raise ImportFailure("SMB_USERNAME och SMB_PASSWORD måste anges.")

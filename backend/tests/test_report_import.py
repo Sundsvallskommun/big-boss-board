@@ -165,9 +165,10 @@ def smb_directory(tmp_path, monkeypatch):
     return tmp_path
 
 
-def test_smb_reader_matches_local_transport(smb_directory):
+@pytest.mark.parametrize("directory", [r"\\saas066\Kommun", r"\\server\share\reports"])
+def test_smb_reader_matches_local_transport(smb_directory, directory):
     report_file(smb_directory, "kpidata_RR_förvaltning_2026-09-07.csv")
-    source = SMBSource(r"\\server\share\reports", "test-account", "test-password")
+    source = SMBSource(directory, "test-account", "test-password")
     assert read_smb_reports(source, Limits(), kind="ekonomi") == read_local_reports(smb_directory, Limits())
     assert "test-password" not in repr(source)
 
@@ -186,7 +187,7 @@ def test_smb_read_failure_discards_batch_and_redacts_detail(smb_directory, monke
 
 def test_smb_dry_run_never_calls_api(smb_directory, monkeypatch, http_boundary, capsys):
     report_file(smb_directory, "kpidata_RR_förvaltning_2026-09-07.csv")
-    monkeypatch.setenv("SMB_DIRECTORY", r"\\server\share\reports")
+    monkeypatch.setenv("SMB_DIRECTORY", r"\\saas066\Kommun")
     monkeypatch.setenv("SMB_USERNAME", "test")
     monkeypatch.setenv("SMB_PASSWORD", "secret")
     monkeypatch.delenv("IMPORT_API_URL", raising=False)
@@ -258,8 +259,11 @@ def test_smb_selects_only_requested_report_type_from_mixed_folder(smb_directory,
         f"{prefix}_2026-09-14_backup.csv", f"{prefix}_latest.csv",
     ):
         report_file(smb_directory, name)
+    nested = smb_directory / "archive"
+    nested.mkdir()
+    report_file(nested, f"{prefix}_2026-08-14.csv")
     reports = read_smb_reports(
-        SMBSource(r"\\server\share\reports", "test", "secret"),
+        SMBSource(r"\\saas066\Kommun", "test", "secret"),
         Limits(max_files=2), kind=kind,
     )
     assert [report.name for report in reports] == expected
@@ -290,7 +294,10 @@ def test_smb_fails_when_only_other_report_type_is_present(smb_directory):
         )
 
 
-@pytest.mark.parametrize("directory", ["", r"\\server\share", r"\\server\share\..\other", "/local/path"])
-def test_smb_requires_explicit_subdirectory(directory):
+@pytest.mark.parametrize("directory", [
+    "", r"\\server", r"\\server\\share", r"\\server\share\..\other",
+    r"\\server\share\.\other", "/local/path", "\\\\server\\share\\", "\\\\server\\share\n",
+])
+def test_smb_requires_explicit_share_without_empty_or_relative_components(directory):
     with pytest.raises(ImportFailure):
         SMBSource(directory, "test", "secret")

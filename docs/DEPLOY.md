@@ -178,9 +178,10 @@ migration startas av importjobbet. Jobbet behöver inte databasinloggning.
 
 ### Datakontrakt och filurval
 
-Ange en UNC-sökväg till en bestämd undermapp per rapporttyp. Sökvägarna får vara
-samma om rapporterna ligger tillsammans. Ingen rekursiv skanning görs. SMB-jobbet
-väljer endast sin rapporttyp enligt följande bekräftade filnamnsmönster:
+Båda rapporttyperna ligger direkt på `\\saas066\Kommun`. Manifestens två
+sökvägsinställningar pekar därför på samma delning. Även en uttrycklig undermapp
+stöds, men ingen rekursiv skanning görs. SMB-jobbet väljer endast sin rapporttyp
+enligt följande bekräftade filnamnsmönster:
 
 | Rapporttyp | Filnamn (datumdelen varierar) |
 | --- | --- |
@@ -204,6 +205,8 @@ Första versionen skickar samma avgränsade underlag vid varje körning. Backend
 upsert och urvalsregler gör omkörning säker även efter ett förlorat HTTP-svar.
 Ingen separat databas eller fil med "senast importerad" skapas. Vid växande arkiv
 behöver källmappen avgränsas; jobbet väljer inte godtyckligt de senaste N filerna.
+Skanningen begränsas till 1 000 katalogposter totalt, även sådana som inte matchar
+rapporttypen. Bekräfta mängden på den gemensamma delningen vid första provhämtningen.
 En matchande fil över gränsen, ingen matchande rapport eller misslyckad hämtning stoppar hela underlaget
 före API-anrop. En ändrad fil upptäcks genom storlek, filidentitet och ändringstid
 före/efter läsning. SMB-handtaget tillåter inte samtidig skrivning/radering.
@@ -216,7 +219,7 @@ annan ändelse. En pausad skrivning kan annars se ut som en färdig fil.
 
 | Variabel | Betydelse/default |
 | --- | --- |
-| `SMB_DIRECTORY` | Fullständig UNC-sökväg till rapporttypens undermapp, obligatorisk. |
+| `SMB_DIRECTORY` | Fullständig UNC-sökväg till delning eller undermapp, obligatorisk. Här `\\saas066\Kommun` för båda jobben. |
 | `SMB_USERNAME`, `SMB_PASSWORD` | Befintligt tjänstekonto med läsrätt. Inga värden skrivs till logg. |
 | `IMPORT_API_URL` | Intern backendbas, i manifestet `http://big-boss-board-backend:3000`. |
 | `IMPORT_TOKEN` | Befintlig API-token, via nyckeln `import-token` i backendens Secret. |
@@ -241,39 +244,63 @@ sekunder och jobbets totala deadline 600 sekunder. Deadline i OpenShift begräns
 
 ### Införande och provkörning
 
-1. Verifiera DNS, TCP 445, tjänstekontot och filernas publiceringssätt **från en
-   pod i rätt OpenShift-projekt**. Åtkomst från databasservern räcker inte.
-2. Bygg den nya backend-imagen via Tekton och få dess image-MR granskad och mergad.
+1. Bygg den nya backend-imagen via Tekton och få dess image-MR granskad och mergad.
    Synka manifest med båda jobbens `suspend: true` och argumentet `--dry-run` kvar.
    Jobben måste använda en SHA som innehåller den nya modulen innan de startas.
-3. Fyll i sökvägar i `report-import-config.yaml` och det befintliga tjänstekontot
-   i `report-import-smb.yaml` i GitLabs manifestrepo, enligt det valda
+2. Kontrollera den bekräftade sökvägen `\\saas066\Kommun` i
+   `report-import-config.yaml` och fyll i det befintliga tjänstekontot i
+   `report-import-smb.yaml` i GitLabs manifestrepo, enligt det valda
    Git-förvaltade driftupplägget. Apprepot innehåller inga kontouppgifter.
    Import-token refereras från backendens Secret och kopieras inte till SMB-secret.
-4. Starta ett manuellt jobb från det pausade CronJob-manifestet (med `--dry-run`
-   kvar). Det hämtar och kontrollerar filer men anropar inte API:t. Detta validerar
-   inte rapporternas verksamhetsinnehåll. Håll även manuella körningar åtskilda;
-   `Forbid` omfattar bara körningar som samma CronJob skapar automatiskt.
-5. Verifiera import och omkörning mot isolerad testdata/databas. `envs/test/bbb`
+3. Provhämta **från jobbet i rätt OpenShift-projekt**, med `--dry-run` kvar.
+   Utan rätt att skapa jobb manuellt: ändra ett CronJob till `suspend: false`
+   genom granskad GitLab-MR och Argo-sync. Låt det gå vid nästa schematid, eller
+   ange en tillfällig överenskommen provtid i samma MR. Läs jobbloggen och pausa
+   sedan schemat igen via GitLab/Argo; återställ eventuell tillfällig schematid.
+   Behörig driftpersonal kan i stället skapa ett manuellt jobb från det pausade
+   CronJob-manifestet enligt exemplet nedan. Ingen `pods/exec` behövs.
+   Körningen verifierar DNS, TCP 445, SMB-inloggning och filläsning, men anropar
+   inte API:t och validerar inte rapporternas verksamhetsinnehåll. Ge drift exakt
+   starttid och jobb-/podnamn för korrelation i nätverksloggen. Åtkomst från
+   databasservern räcker inte; utgående käll-IP behöver fastställas i klustret
+   eller nätverksloggen. Bekräfta även färdig publicering med exportägaren.
+4. Verifiera import och omkörning mot isolerad testdata/databas. `envs/test/bbb`
    i manifestrepot är fortfarande en strukturell kopia av produktion och får
    inte användas som en separat testmiljö utan egen konfiguration.
-6. Med verifierad databasbackup: ta bort `--dry-run` via granskad MR, behåll
-   `suspend: true`, synka och kör en kontrollerad produktionsimport. Stäm av
+5. Med verifierad databasbackup: ta bort `--dry-run` via granskad MR och kör en
+   kontrollerad produktionsimport, via samma övervakade GitOps-förfarande eller
+   ett manuellt jobb som drift startar. Pausa schemat efter körningen. Stäm av
    senaste period, rätt förvaltningar, historik och resultatets `hoppade_over`.
-7. Bekräfta larmmottagare och driftägare och aktivera sedan med `suspend: false`.
+6. Bekräfta larmmottagare och driftägare och aktivera sedan med `suspend: false`.
    Hämtning sker varje natt: 03:00 för ekonomi och 03:20 för sjukfrånvaro i
    `Europe/Stockholm`, utanför timmen som hoppas över eller upprepas vid
    sommartidsbyte. Exakt ankomsttid behöver inte vara känd. Filer som kommer
    efter körningen tas med nästa natt; befintligt underlag kan köras om säkert.
    Skydden mot pågående filskrivning gäller även vid nattlig hämtning.
 
-Exempel efter att rätt image och konfiguration har synkats (använd unikt jobbnamn):
+Vid återaktivering kan en missad körning inom de senaste 30 minuterna starta
+direkt, eftersom `startingDeadlineSeconds` är 1 800. Planera provtiden och pausa
+efter körningen; se [Kubernetes regler för paus och startfrist](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/#schedule-suspension).
+
+Läs körningar och loggar efter provet via GitOps (ersätt `<jobbnamn>` med namnet
+från listan):
+
+```sh
+oc -n web-big-boss-board get jobs --sort-by=.metadata.creationTimestamp
+oc -n web-big-boss-board logs --timestamps job/<jobbnamn>
+```
+
+Alternativ för driftpersonal som får skapa jobb, efter att rätt image och
+konfiguration har synkats (använd unikt jobbnamn och behåll `--dry-run`):
 
 ```sh
 oc -n web-big-boss-board create job import-sjukfranvaro-prov-001 --from=cronjob/big-boss-board-import-sjukfranvaro
 oc -n web-big-boss-board logs job/import-sjukfranvaro-prov-001
 oc -n web-big-boss-board get job import-sjukfranvaro-prov-001
 ```
+
+Håll manuella körningar åtskilda från varandra och från schemalagda körningar;
+`Forbid` omfattar bara körningar som samma CronJob skapar automatiskt.
 
 ### Drift, fel och återställning
 
