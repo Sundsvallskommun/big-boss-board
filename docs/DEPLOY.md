@@ -244,9 +244,16 @@ sekunder och jobbets totala deadline 600 sekunder. Deadline i OpenShift begräns
 
 ### Införande och provkörning
 
-1. Bygg den nya backend-imagen via Tekton och få dess image-MR granskad och mergad.
+1. Följ appens ordinarie PR-flöde: feature-branch → `develop` → `main`.
+   Tekton bygger från `develop` till manifestens `envs/test/bbb`; testets image-MR
+   mergas automatiskt men driftsätter ingen separat testmiljö i detta projekt.
+   När ändringen når `main` bygger Tekton produktionsimagen och skapar en
+   image-MR för `envs/prod/bbb` som kräver manuell granskning och merge.
    Synka manifest med båda jobbens `suspend: true` och argumentet `--dry-run` kvar.
    Jobben måste använda en SHA som innehåller den nya modulen innan de startas.
+   Manifeständringen med pausade jobb kan införas före image-uppdateringen;
+   inget jobb får startas med den äldre imagen. Ingen ändring av den gemensamma
+   Tekton-pipelinen behövs för rapportjobben.
 2. Kontrollera den bekräftade sökvägen `\\saas066\Kommun` i
    `report-import-config.yaml` och fyll i det befintliga tjänstekontot i
    `report-import-smb.yaml` i GitLabs manifestrepo, enligt det valda
