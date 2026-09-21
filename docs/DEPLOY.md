@@ -279,11 +279,11 @@ sekunder och jobbets totala deadline 600 sekunder. Deadline i OpenShift begräns
    ett manuellt jobb som drift startar. Pausa schemat efter körningen. Stäm av
    senaste period, rätt förvaltningar, historik och resultatets `hoppade_over`.
 6. Bekräfta larmmottagare och driftägare och aktivera sedan med `suspend: false`.
-   Hämtning sker varje natt: 03:00 för ekonomi och 03:20 för sjukfrånvaro i
+   Hämtning sker varje morgon: 07:00 för ekonomi och 07:20 för sjukfrånvaro i
    `Europe/Stockholm`, utanför timmen som hoppas över eller upprepas vid
    sommartidsbyte. Exakt ankomsttid behöver inte vara känd. Filer som kommer
-   efter körningen tas med nästa natt; befintligt underlag kan köras om säkert.
-   Skydden mot pågående filskrivning gäller även vid nattlig hämtning.
+   efter körningen tas med nästa morgon; befintligt underlag kan köras om säkert.
+   Skydden mot pågående filskrivning gäller även vid daglig hämtning.
 
 Vid återaktivering kan en missad körning inom de senaste 30 minuterna starta
 direkt, eftersom `startingDeadlineSeconds` är 1 800. Planera provtiden och pausa
