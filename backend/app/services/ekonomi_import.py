@@ -172,6 +172,8 @@ def csv_to_payload(text: str, kalla: str = "Ekonomisk uppföljning (Qlik-export,
             m = e["matt"].setdefault(matt_kod, {"namn": MATT_NAMN.get(matt_kod, matt_kod)})
             m[falt] = varde
 
+    if not any(NETTOKOSTNAD in enhet["matt"] for enhet in enheter.values()):
+        raise ValueError("Ekonomiexporten saknar nettokostnadsmåttet SK.EK.RR.005.")
     return {"kpi": "ekonomi", "period": period, "kalla": kalla, "enheter": list(enheter.values())}
 
 
