@@ -229,6 +229,42 @@ async def test_file_uploads_merge_history_and_keep_newest_headline(import_client
     assert len(m.details["serie"]) == 1
 
 
+@pytest.mark.parametrize("kind,text", [
+    ("ekonomi", personnel("2026-04-30", 7.2)),
+    ("sjukfranvaro", export()),
+    ("sjukfranvaro", "Period,Enhet,Mått,Kolumn,Mätvärde\n2026-04-30,23,SK.P.AM.001,K9,100"),
+])
+async def test_wrong_report_kind_never_writes_measurements(import_client, db, kind, text):
+    response = await import_client.post(f"/api/import/{kind}-filer", json={"filer": [
+        {"namn": "report_2026-05-09.csv", "text": text},
+    ]})
+    assert response.status_code == 400
+    assert not (await db.scalars(select(Measurement))).all()
+
+
+async def test_personnel_file_routes_months_to_organisation_and_sickness_area(import_client, db):
+    # Synthetic multi-period export in the same format as the supplied September file.
+    text = personnel("2026-07-31", 7.4) + "\n" + "\n".join(
+        personnel("2026-08-31", 7.2).splitlines()[1:]
+    )
+    for _ in range(2):
+        response = await import_client.post("/api/import/sjukfranvaro-filer", json={"filer": [
+            {"namn": "kpidata_Personal_forvaltning_2026-09-14.csv", "text": text},
+        ]})
+        assert response.status_code == 200
+    rows = (await db.execute(
+        select(Measurement, Organisation.kod, KpiArea.key)
+        .join(Dialogue, Measurement.dialogue_id == Dialogue.id)
+        .join(Organisation, Dialogue.organisation_id == Organisation.id)
+        .join(KpiArea, Measurement.kpi_area_id == KpiArea.id)
+    )).all()
+    assert len(rows) == 1
+    measurement, organisation_code, area = rows[0]
+    assert (organisation_code, area) == ("23", "sjukfranvaro")
+    assert measurement.details["matmetod"] == "rullande12"
+    assert [point["period"] for point in measurement.details["serie"]] == ["2026-07-31", "2026-08-31"]
+
+
 def test_multi_period_economy_retains_organisations_missing_from_last_file():
     from app.services.ekonomi_import import csvs_to_serie_payload
     from app.schemas import EkonomiImport

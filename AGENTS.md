@@ -151,6 +151,11 @@ Införande och återställning: [`docs/DEPLOY.md`](docs/DEPLOY.md#införa-nyckel
 - Frågor har valfri `rubrik` och `bygger_pa`; statusrapporter har valfri `aterstaende`.
 - Rådata versionshanteras aldrig. Undvik statiska rapportkopior och separata metadatafiler
   som dubblerar appens datakontrakt.
+- Schemalagd rapporthämtning: `app/smb_import.py` körs separat med backendens image;
+  `app/report_import.py` äger filtransporten även för ekonomi-/sjukfrånvaro-CLI.
+  Importtjänsterna fortsätter äga periodurval, organisationskoppling och upsert.
+  CronJobs och deras inställningar ägs av GitLabs manifestrepo, `envs/prod/bbb`.
+  Jobben införs pausade med `--dry-run`. Drift och gränser: `docs/DEPLOY.md`.
 
 ## Inloggning (AUTH_MODE: access_code | saml)
 
