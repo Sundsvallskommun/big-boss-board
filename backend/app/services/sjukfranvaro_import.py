@@ -164,6 +164,8 @@ def csv_to_payload(text: str, kalla: str = "Personaluppföljning (Qlik-export, C
                 "serie": serie,
             }
         )
+    if not enheter:
+        raise ValueError("Personalexporten saknar sjukfrånvaromåttet SK.P.SJ.001 med total i K20.")
     return {
         "kpi": "sjukfranvaro",
         "period": max(alla_perioder) if alla_perioder else "",

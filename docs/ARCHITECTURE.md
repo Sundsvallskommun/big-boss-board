@@ -161,6 +161,16 @@ IMPORT_TOKEN=… python3 scripts/import_sjukfranvaro.py --dir sjukfranvaro-indat
 Nyckeln kopplas till rätt förvaltning via masterdata-koden (`organisation.kod` ↔ CSV:ns
 `Enhet`). Backend äger normalisering och urval; skripten transporterar underlaget.
 
+**Schemalagd filhämtning:** `python -m app.smb_import --kind ekonomi|sjukfranvaro`
+körs som separata CronJobs med backendens image. `app/report_import.py` äger den
+gemensamma filtransporten för jobben och de två manuella filimportskripten;
+`app/smb_import.py` äger SMB-anslutning och körning. Inga importregler dubbleras i
+jobbet. Filurvalet skiljer `kpidata_RR_förvaltning_YYYY-MM-DD.csv` från
+`kpidata_Personal_förvaltning_YYYY-MM-DD.csv` direkt på `\\saas066\Kommun`;
+originalfilnamnen bevaras. Ekonomi-CSV måste innehålla nettokostnadsmåttet för att inte fel rapporttyp
+ska behandlas som ekonomidata. Drift, gränser och aktivering finns i
+[DEPLOY.md](DEPLOY.md#schemalagd-rapportimport-från-smb).
+
 - **Ekonomi:** prognos minus helårsbudget för nettokostnad `SK.EK.RR.005`, i mnkr.
   `services/ekonomi.py` äger bedömningen vid både import och läsning. Negativ diff är
   underskott. Noll eller saknad budget/prognos ger ingen bedömning. Filurvalet prioriterar

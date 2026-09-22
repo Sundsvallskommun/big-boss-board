@@ -23,6 +23,8 @@ dependencies = [
     "redis>=5.2",
     # WSO2-tokentjänsten (gateway_token).
     "httpx>=0.28",
+    # Daglig rapportimport via SMB3; ingen systemmontering eller root krävs.
+    "smbprotocol>=1.16,<2",
 ]
 
 [project.optional-dependencies]

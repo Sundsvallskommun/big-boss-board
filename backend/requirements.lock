@@ -17,8 +17,14 @@ certifi==2026.6.17
     # via
     #   httpcore
     #   httpx
+cffi==2.1.1
+    # via cryptography
 click==8.5.0
     # via uvicorn
+cryptography==50.0.1
+    # via
+    #   pyspnego
+    #   smbprotocol
 fastapi==0.141.1
     # via bbb-backend (pyproject.toml)
 greenlet==3.5.5
@@ -49,6 +55,8 @@ mako==1.4.1
     # via alembic
 markupsafe==3.0.3
     # via mako
+pycparser==3.0
+    # via cffi
 pydantic==2.13.5
     # via
     #   bbb-backend (pyproject.toml)
@@ -58,6 +66,8 @@ pydantic-core==2.46.5
     # via pydantic
 pydantic-settings==2.15.0
     # via bbb-backend (pyproject.toml)
+pyspnego==0.12.2
+    # via smbprotocol
 python-dotenv==1.2.3
     # via
     #   pydantic-settings
@@ -69,6 +79,8 @@ python3-saml==1.16.0
 pyyaml==6.0.3
     # via uvicorn
 redis==8.0.1
+    # via bbb-backend (pyproject.toml)
+smbprotocol==1.17.0
     # via bbb-backend (pyproject.toml)
 sqlalchemy==2.0.52
     # via
