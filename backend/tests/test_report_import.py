@@ -203,6 +203,10 @@ def test_smb_dry_run_never_calls_api(smb_directory, monkeypatch, http_boundary, 
     {"skapade": 0, "uppdaterade": 1, "hoppade_over": 0},
     {"skapade": 0, "uppdaterade": 1, "hoppade_over": 1},
     {"skapade": 0, "uppdaterade": 0, "hoppade_over": 0},
+    {"skapade": 0, "uppdaterade": 1, "hoppade_over": 0, "filer_importerade": 19,
+     "filer_for_kontroll": 2, "underlag_sparade": 2},
+    {"skapade": 0, "uppdaterade": 0, "hoppade_over": 0, "filer_importerade": 0,
+     "filer_for_kontroll": 2, "underlag_sparade": 0},
 ])
 def test_job_imports_once_and_flags_skipped_or_unmapped_data(
     smb_directory, monkeypatch, http_boundary, capsys, counts,
@@ -215,14 +219,18 @@ def test_job_imports_once_and_flags_skipped_or_unmapped_data(
     monkeypatch.setenv("IMPORT_API_URL", "http://api.example")
     monkeypatch.setattr(sys, "argv", ["smb-import", "--kind", "sjukfranvaro"])
     http_boundary.body = json.dumps(counts).encode()
-    if counts["hoppade_over"] or not counts["uppdaterade"]:
+    if counts["hoppade_over"] or (not counts["uppdaterade"] and not counts.get("filer_for_kontroll")):
         with pytest.raises(SystemExit) as error:
             main()
         assert error.value.code == 1
         assert '"status": "misslyckad"' in capsys.readouterr().err
     else:
         main()
-        assert '"status": "importerad"' in capsys.readouterr().out
+        output = capsys.readouterr().out
+        expected = "importerad"
+        if counts.get("filer_for_kontroll"):
+            expected = "importerad_med_varningar" if counts["filer_importerade"] else "underlag_sparat_for_kontroll"
+        assert f'"status": "{expected}"' in output
     assert len(http_boundary.requests) == 1
     assert json.loads(http_boundary.requests[0].data)["filer"][0]["namn"] == (
         "kpidata_Personal_förvaltning_2026-09-14.csv"

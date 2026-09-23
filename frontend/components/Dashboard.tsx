@@ -18,6 +18,7 @@ import { areaIcon } from "./icons";
 import { AREA_DIMENSIONS, STATUS, measurementTokens, kortStatus } from "./status";
 import { diffLegend, diffText } from "@/lib/ekonomi";
 import { DetailPanel } from "./DetailPanel";
+import { SjukUnderlagPanel } from "./SjukUnderlagPanel";
 import { QuestionPanel } from "./QuestionPanel";
 
 // Inga dolda nyckeltal längre. Verksamhet, Digital transformation och Kommunikativt
@@ -315,6 +316,7 @@ export function Dashboard({
 
         {/* ===== Dialogpanel ===== */}
         <div id="detail">
+          {current && <SjukUnderlagPanel item={current} />}
           {current &&
             (current.measurement ? (
               <DetailPanel
@@ -323,7 +325,6 @@ export function Dashboard({
                 index={selectedIndex}
                 total={areas.length}
                 activities={activities[current.area.key] ?? []}
-                organisationKod={dialogue.organisation.kod}
                 onAddActivity={(text) => addActivity(current.area.key, current.area.id, text)}
                 onMarkKlar={(activityId, notering) => markKlar(current.area.key, activityId, notering)}
               />

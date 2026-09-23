@@ -133,9 +133,8 @@ export interface SjukAldersgrupp {
   varde?: number | null;
 }
 
-/** Sjukfrånvaro en månadsstängning: total %, kvinnors %, mäns % — en punkt i R12-serien.
- *  Varje punkt är ett rullande 12-månadersvärde (samlat värde för de tolv månader som slutar
- *  på `period`), inte månadens eget utfall. */
+/** Rapporterade andelar per period. SjukfranvaroDetails anger R12-metoden;
+ *  samma värdeform används separat i kontrollunderlag med obekräftad metod. */
 export interface SjukPunkt {
   period: string;
   total?: number | null;
@@ -204,6 +203,27 @@ export interface DialogueArea {
   /** Historik av manuellt satta statusar (nyast först). Tom = ej satt ännu. */
   status_historik: AreaStatus[];
   activities: Activity[];
+  sjuk_kontroll?: SjukKontroll | null;
+}
+
+export interface SjukKontroll {
+  fler_finns: boolean;
+  underlag: {
+    id: number;
+    filnamn: string;
+    status: "matmetod_okand" | "ogiltigt_underlag";
+    skapad_at: string;
+    enhet: {
+      period: string;
+      total: number | null;
+      kvinnor: number | null;
+      man: number | null;
+      langtidsandel: number | null;
+      anstallda: number | null;
+      aldersgrupper: SjukAldersgrupp[];
+      serie: SjukPunkt[];
+    } | null;
+  }[];
 }
 
 export interface Organisation {

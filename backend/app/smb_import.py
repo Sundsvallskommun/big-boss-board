@@ -146,7 +146,7 @@ def main() -> None:
                     "Importen är delvis genomförd men enheter hoppades över. "
                     "Kontrollera organisationskoppling och underlag före omkörning."
                 )
-            if result["skapade"] + result["uppdaterade"] == 0:
+            if result["skapade"] + result["uppdaterade"] == 0 and not result.get("filer_for_kontroll"):
                 raise ImportFailure("API-anropet lyckades men inga mätvärden importerades.")
     except ImportFailure as exc:
         print(json.dumps({"status": "misslyckad", "fel": str(exc)}, ensure_ascii=False), file=sys.stderr)
