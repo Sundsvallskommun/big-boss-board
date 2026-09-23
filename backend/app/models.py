@@ -28,6 +28,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pydantic import JsonValue
 
 from app.db import Base
 
@@ -194,6 +195,23 @@ class Measurement(Base):
 
     dialogue: Mapped[Dialogue] = relationship(back_populates="measurements")
     kpi_area: Mapped[KpiArea] = relationship()
+
+
+class SjukUnderlag(Base):
+    """Bevarad fil som inte får påverka R12. Samma innehåll sparas bara en gång per namn."""
+
+    __tablename__ = "sjuk_underlag"
+    __table_args__ = (UniqueConstraint("filnamn", "sha256", name="uq_sjuk_underlag_fil"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    filnamn: Mapped[str] = mapped_column(String(255))
+    sha256: Mapped[str] = mapped_column(String(64))
+    innehall: Mapped[str] = mapped_column(Text, deferred=True)
+    status: Mapped[str] = mapped_column(String(32))
+    # Validerad förhandsvisning; originalet ovan bevarar även ej tolkade mått.
+    enheter: Mapped[list[dict[str, JsonValue]]] = mapped_column(JSONB)
+    aktuell: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    skapad_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Activity(Base):

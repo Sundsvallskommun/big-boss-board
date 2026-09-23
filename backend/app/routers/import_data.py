@@ -33,7 +33,7 @@ from app.services.ekonomi_import import (
 )
 from app.services.hme_import import import_hme, report_to_payload as hme_report_to_payload
 from app.services.sjukfranvaro_import import csv_to_payload as sjuk_csv_to_payload
-from app.services.sjukfranvaro_import import import_sjukfranvaro, filer_to_payload as sjuk_filer_to_payload
+from app.services.sjukfranvaro_import import import_sjukfranvaro, import_sjukfiler
 
 router = APIRouter(
     prefix="/api/import", tags=["import"], route_class=AdminAccessRoute,
@@ -139,8 +139,4 @@ async def import_hme_rapport_endpoint(body: HmeRapportImport, session: AsyncSess
 
 @router.post("/sjukfranvaro-filer", response_model=SjukResultat)
 async def import_sjukfranvaro_filer_endpoint(body: ExportFiler, session: AsyncSession = Depends(get_session)) -> dict:
-    try:
-        payload = SjukImport(**sjuk_filer_to_payload(body.filer))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return await import_sjukfranvaro(session, payload)
+    return await import_sjukfiler(session, body.filer)

@@ -141,8 +141,9 @@ Införande och återställning: [`docs/DEPLOY.md`](docs/DEPLOY.md#införa-nyckel
   uttag dag 1–9 månaden efter rapportperioden. API och CLI använder samma backendregel.
   Fil- och enkelperiodimport bevarar historik och huvudvärdet vid äldre uttag. Explicit serieimport
   ersätter serien. Dokumenterad aprilrättning ägs av `services/ekonomi.py`.
-- Sjukfrånvaro använder **R12**, kvartalstrend och uppskattad årskostnad. Backend avvisar
-  gammal/okänd personalexport. Äldre lagrade aggregat visas som "Inväntar R12".
+- Sjukfrånvaro använder **R12**, kvartalstrend och uppskattad årskostnad. Flerfilsimporten bevarar gammal/okänd eller
+  felaktig personalexport separat i `sjuk_underlag` utan att blockera giltiga R12-filer.
+  Kontrollunderlag påverkar aldrig R12-serien; saknade deluppgifter visas som ofullständiga. Äldre lagrade aggregat visas som "Inväntar R12".
   `/api/import/sjukfranvaro-filer` normaliserar flera filer och bevarar historik.
 - HME har totalindex + motivation, ledarskap och styrning. `/api/import/hme-rapport` tar
   totalindex och valfri separat delindexrapport; API och CLI delar normalisering.

@@ -175,11 +175,21 @@ def send_reports(
         if type(value) is not int or value < 0:
             raise ImportFailure("Import-API:s resultat saknar giltiga räknare.")
         counts[key] = value
+    for key in ("filer_importerade", "filer_for_kontroll", "underlag_sparade"):
+        if key not in result:
+            continue
+        value = result[key]
+        if type(value) is not int or value < 0:
+            raise ImportFailure("Import-API:s resultat saknar giltiga filräknare.")
+        counts[key] = value
     return counts
 
 
 def print_result(result: dict[str, int]) -> None:
-    print(json.dumps({"status": "importerad", **result}, ensure_ascii=False), flush=True)
+    status = "importerad"
+    if result.get("filer_for_kontroll"):
+        status = "importerad_med_varningar" if result.get("filer_importerade") else "underlag_sparat_for_kontroll"
+    print(json.dumps({"status": status, **result}, ensure_ascii=False), flush=True)
 
 
 def local_main(kind: ReportKind, default_dir: Path) -> None:

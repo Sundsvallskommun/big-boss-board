@@ -18,6 +18,7 @@ from app.models import (
     SupportFunction,
 )
 from app.schemas import DialogueArea, DialogueDetail, DialogueSummary, KpiAreaOut, QuestionOut
+from app.services.sjukfranvaro_import import sjuk_kontroll
 
 router = APIRouter(prefix="/api/dialogues", tags=["dialogues"])
 
@@ -121,12 +122,14 @@ async def get_dialogue(
         ut.questions = [QuestionOut.model_validate(q) for q in _fragor(area)]
         return ut
 
+    kontroll = await sjuk_kontroll(session, dialogue.organisation.kod)
     areas = [
         DialogueArea(
             area=_area_ut(area),
             measurement=meas_by_area.get(area.id),
             status_historik=historik_by_area.get(area.id, []),
             activities=activities_by_area.get(area.id, []),
+            sjuk_kontroll=kontroll if area.key == "sjukfranvaro" else None,
         )
         for area in all_areas
     ]

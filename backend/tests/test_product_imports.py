@@ -238,7 +238,10 @@ async def test_wrong_report_kind_never_writes_measurements(import_client, db, ki
     response = await import_client.post(f"/api/import/{kind}-filer", json={"filer": [
         {"namn": "report_2026-05-09.csv", "text": text},
     ]})
-    assert response.status_code == 400
+    assert response.status_code == (400 if kind == "ekonomi" else 200)
+    if kind == "sjukfranvaro":
+        assert response.json()["filer_for_kontroll"] == 1
+        assert response.json()["filer_importerade"] == 0
     assert not (await db.scalars(select(Measurement))).all()
 
 
