@@ -231,7 +231,6 @@ export function DetailPanel({
   index,
   total,
   activities,
-  organisationKod,
   onAddActivity,
   onMarkKlar,
 }: {
@@ -239,8 +238,6 @@ export function DetailPanel({
   index: number;
   total: number;
   activities: Activity[];
-  /** Masterdata-kod för förvaltningen — nyckel till referensdata (antal anställda). */
-  organisationKod?: string | null;
   onAddActivity: (text: string) => Promise<void>;
   onMarkKlar: (activityId: number, notering: string) => Promise<void>;
 }) {
@@ -267,8 +264,8 @@ export function DetailPanel({
   // Estimerad kostnad för sjukfrånvaron — översätter procenten till kronor så att
   // dialogen kan tala om vad frånvaron faktiskt kostar. null när underlag saknas.
   // Antalet tillsvidareanställda kommer med importen (SK.P.AM.001) och följer därmed
-  // perioden. Saknas det faller beräkningen tillbaka på reservtabellen i lib/sjukfranvaro.
-  const sjukKost = sjuk ? sjukKostnad(organisationKod, m.value_num, sjuk.anstallda) : null;
+  // perioden. Saknas antalet kan kostnaden inte beräknas.
+  const sjukKost = sjuk ? sjukKostnad(m.value_num, sjuk.anstallda) : null;
   // Perioden i löpande text ("juli 2026") — används där rutan ska säga vilket uttag
   // underlaget kommer ur.
   const sjukPeriodText = sjuk ? sjukManadLang(sjuk.period) : "";
@@ -636,9 +633,7 @@ export function DetailPanel({
                     </span>
                   </p>
                   <p className="mt-8 text-small text-dark-secondary">
-                    Personalunderlag: {sjukKost.franData
-                      ? sjukPeriodText || "samma uttag som sjukfrånvaron"
-                      : "30 april 2026 (reservunderlag; antal saknas i importen)"}.
+                    Personalunderlag: {sjukPeriodText || "samma uttag som sjukfrånvaron"}.
                   </p>
                   <p className="mt-8 text-small leading-snug text-dark-secondary">
                     {fmt(m.value_num)} % sjukfrånvaro rullande 12 månader bland{" "}

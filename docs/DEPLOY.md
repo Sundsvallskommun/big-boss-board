@@ -178,7 +178,7 @@ migration startas av importjobbet. Jobbet behöver inte databasinloggning.
 
 ### Datakontrakt och filurval
 
-Båda rapporttyperna ligger direkt på `\\saas066\Kommun`. Manifestens två
+Båda rapporttyperna ligger direkt på `\\saas066.personal.sundsvall.se\Kommun`. Manifestens två
 sökvägsinställningar pekar därför på samma delning. Även en uttrycklig undermapp
 stöds, men ingen rekursiv skanning görs. SMB-jobbet väljer endast sin rapporttyp
 enligt följande bekräftade filnamnsmönster:
@@ -219,7 +219,7 @@ annan ändelse. En pausad skrivning kan annars se ut som en färdig fil.
 
 | Variabel | Betydelse/default |
 | --- | --- |
-| `SMB_DIRECTORY` | Fullständig UNC-sökväg till delning eller undermapp, obligatorisk. Här `\\saas066\Kommun` för båda jobben. |
+| `SMB_DIRECTORY` | Fullständig UNC-sökväg till delning eller undermapp, obligatorisk. Här `\\saas066.personal.sundsvall.se\Kommun` för båda jobben. |
 | `SMB_USERNAME`, `SMB_PASSWORD` | Befintligt tjänstekonto med läsrätt. Inga värden skrivs till logg. |
 | `IMPORT_API_URL` | Intern backendbas, i manifestet `http://big-boss-board-backend:3000`. |
 | `IMPORT_TOKEN` | Befintlig API-token, via nyckeln `import-token` i backendens Secret. |
@@ -254,7 +254,7 @@ sekunder och jobbets totala deadline 600 sekunder. Deadline i OpenShift begräns
    Manifeständringen med pausade jobb kan införas före image-uppdateringen;
    inget jobb får startas med den äldre imagen. Ingen ändring av den gemensamma
    Tekton-pipelinen behövs för rapportjobben.
-2. Kontrollera den bekräftade sökvägen `\\saas066\Kommun` i
+2. Kontrollera den bekräftade sökvägen `\\saas066.personal.sundsvall.se\Kommun` i
    `report-import-config.yaml` och fyll i det befintliga tjänstekontot i
    `report-import-smb.yaml` i GitLabs manifestrepo, enligt det valda
    Git-förvaltade driftupplägget. Apprepot innehåller inga kontouppgifter.
@@ -345,3 +345,38 @@ med kontrakttest som visar rätt organisationskoppling och säker omkörning. L�
 ett eget CronJob med egen sökväg och tid i appens manifestrepo. Samma transport
 kan återanvändas när kontraktet är namngivna CSV/TXT-filer; ett annat format
 behöver en uttrycklig anpassning. Inga godtyckliga API-adresser väljs från filnamn.
+
+
+### Införa tolerant sjukfrånvaroimport (september 2026)
+
+1. Ta bort det tillfälliga manifestet `import-sjukfranvaro-check.yaml` och dess
+   resursrad i GitLab. Synka med prune för **just det avslutade kontrolljobbet**.
+   Dess pod-template är immutable; kvarvarande diagnostikmanifest kan annars
+   blockera synk när backendens image-tag uppdateras.
+2. Merga appändringen till `develop`, därefter till `main`. Låt Tekton bygga och
+   granska/merga produktionsimage-MR:n i GitLab. Båda CronJobs ska fortsatt ha
+   `suspend: true` under införandet.
+3. Verifiera aktuell databasbackup före Argo-sync. Vid backendstart lägger Alembic
+   till `sjuk_underlag` (revision `d7e2f3a4b857`). Inga befintliga tabeller töms
+   eller befintliga mätvärden ändras av migrationen.
+4. När backend är frisk med nya imagen, skapa **ett nytt** Job från sjukfrånvarons
+   CronJob, utan `--dry-run`. Gamla Jobs körs inte om av en sync.
+5. Läs loggen. `importerad_med_varningar` betyder att R12-filer importerats medan
+   `filer_for_kontroll` filer bevarats separat. Om enbart kontrollfiler hämtades
+   visas `underlag_sparat_for_kontroll`; inga nya R12-värden har då importerats.
+   Nät-, databas-, auth- och organisationskopplingsfel ska fortfarande följas upp.
+6. Kontrollera R12-period, förvaltningar och ”Underlag att kontrollera” i appen.
+   För provpaketet med 21 filer väntas 19 R12-filer och 2 kontrollfiler om de övriga
+   filerna även klarar full validering. Bekräfta utfallet från den riktiga körningen.
+7. Kör samma underlag igen: inga dubbla mätpunkter eller arkivposter ska skapas.
+   `underlag_sparade` ska då vara 0. Efter avstämning kan jobben aktiveras med
+   `suspend: false`: ekonomi 07:00 och sjukfrånvaro 07:20, Europe/Stockholm.
+
+Kontrollfilerna bevaras i databasen även när en fil senare rättas. Arkivet växer bara
+för nya filnamn/innehåll som behöver kontroll och ingår i databasbackupen. Det finns
+ingen automatisk gallring eller e-postavisering; följ jobblogg och appens varningar.
+
+Återgång: pausa CronJobs och återställ föregående image i GitLab/Argo. Behåll den nya
+tabellen så att originalen inte försvinner. Migrationens downgrade vägrar radera
+arkivet. Importerade giltiga R12-värden ligger kvar; återställ verifierad backup
+endast om även dessa databasändringar behöver rullas tillbaka.

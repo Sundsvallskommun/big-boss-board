@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:product": "node --experimental-transform-types --test --test-concurrency=1 tests/product.test.mjs",
+    "test:product": "node --experimental-transform-types --test --test-concurrency=1 tests/product.test.mjs tests/sjuk-underlag.test.cjs",
     "test:theme": "node --test --test-concurrency=1 tests/theme.test.mjs",
     "test:middleware": "node --test --test-concurrency=1 tests/middleware.test.cjs",
     "test:security": "node --test --test-concurrency=1 tests/access-auth.test.cjs tests/middleware.test.cjs",

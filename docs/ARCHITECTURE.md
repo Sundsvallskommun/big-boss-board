@@ -166,7 +166,7 @@ körs som separata CronJobs med backendens image. `app/report_import.py` äger d
 gemensamma filtransporten för jobben och de två manuella filimportskripten;
 `app/smb_import.py` äger SMB-anslutning och körning. Inga importregler dubbleras i
 jobbet. Filurvalet skiljer `kpidata_RR_förvaltning_YYYY-MM-DD.csv` från
-`kpidata_Personal_förvaltning_YYYY-MM-DD.csv` direkt på `\\saas066\Kommun`;
+`kpidata_Personal_förvaltning_YYYY-MM-DD.csv` direkt på `\\saas066.personal.sundsvall.se\Kommun`;
 originalfilnamnen bevaras. Ekonomi-CSV måste innehålla nettokostnadsmåttet för att inte fel rapporttyp
 ska behandlas som ekonomidata. Drift, gränser och aktivering finns i
 [DEPLOY.md](DEPLOY.md#schemalagd-rapportimport-från-smb).
@@ -184,15 +184,16 @@ ska behandlas som ekonomidata. Drift, gränser och aktivering finns i
   procentenheter på exakt tre månader. Gammalt aggregat blandas inte med R12 och visas
   neutralt tills nytt underlag importerats. CSV-formatets personalmått `SK.P.AM.` används
   som formatmarkör; kontrollera mot dataägaren att produktionsuttaget faktiskt avser R12.
-  Importerat personalantal används i kostnadsschablonen; saknat antal använder en daterad
-  reservtabell. Noll anställda ersätts aldrig med reservantal. Uppskattningen är
+  Importerat personalantal används i kostnadsschablonen; saknat antal ger ingen
+  kostnadsberäkning. Noll anställda är ett giltigt värde. Uppskattningen är
   antal × R12-procent × 3 000 kr per år, inte bokförd kostnad eller säker besparing.
 - **HME:** total och delperspektiv har egna årsserier. Import av enbart totalen bevarar
   befintliga perspektiv; en explicit tom perspektivkarta i `/hme` rensar dem. Årsangivelsen
   på varje perspektivkort visar om underlaget är äldre än totalens. Helt undertryckta
   enheter hoppas över och räknas i importresultatet.
 - **Importvalidering:** felaktiga datum, ogiltiga/icke-ändliga tal och andelar utanför
-  0–100 avvisas före skrivning. Filer kan skickas som CSV/TXT med BOM. Webbens och
+  0–100 får inte påverka mätvärden. Sjukfrånvarons flerfilsimport bevarar sådana
+  filer separat för kontroll; övriga importvägar avvisar dem före skrivning. Filer kan skickas som CSV/TXT med BOM. Webbens och
   flerfils-API:ts gräns är 100 filer och 15 MB totalt.
 - **Organisationer och frågor:** mastern skiljer förvaltning från bolag/förbund.
   `dialogbaserad` anger vilka nyckeltal som följs upp med egna frågor; dessa ersätter
@@ -351,3 +352,44 @@ node --test --test-concurrency=1 frontend/tests/review.test.cjs frontend/tests/m
 På utvecklings-Macen körs varje test, typkontroll, installation och bygge genom den
 globala resurssupervisorn enligt arbetsmiljöns instruktioner. Fullständiga byggen,
 serverstarter och webbläsartester körs endast efter uttrycklig begäran.
+
+
+### Sjukfrånvaro: ofullständiga och obekräftade underlag
+
+`services/sjukfranvaro_import.py` äger både normaliseringen och klassificeringen.
+`POST /api/import/sjukfranvaro-filer` behandlar varje fil separat:
+
+- R12-format: ett personalmått i **Mått-kolumnen** (`SK.P.AM.`) är fortfarande
+  formatindikatorn. Detta är ingen verifiering av Qliks beräkningsmetod; den behöver
+  bekräftas av dataägaren. Saknade deluppgifter lagras som null. Även ett saknat
+  totalvärde tillåts när andra sjukfrånvarouppgifter finns; då uteblir status och trend.
+- Tolkbart innehåll utan denna indikator: `matmetod_okand`. Normaliserade värden visas
+  separat under ”Underlag att kontrollera”, aldrig som R12 eller i dess beräkningar.
+- Felaktigt innehåll: `ogiltigt_underlag`. Originalet bevaras men inga värden används.
+  Andra giltiga filer i samma anrop kan fortfarande importeras.
+
+Tabellen `sjuk_underlag` äger kontrollfilerna: originaltext, filnamn, SHA-256,
+ankomsttid, klassificering och en validerad förhandsvisning. Filnamn normaliseras till
+NFC. Samma namn + innehåll sparas en gång; ändrat innehåll bevaras som en ny version.
+Senaste mottagna versionen är aktuell. En rättad R12-fil med samma namn släcker den
+äldre varningen utan att radera originalet. Filer som försvinner från källmappen
+raderas inte automatiskt ur arkivet. Upprepad hämtning av samma filer är idempotent.
+Detta är ett arkiv för kontrollunderlag, inte versionshistorik för alla R12-mätvärden.
+
+Arkiv och R12-uppdatering skrivs i samma transaktion. Endast förväntade format- och
+värdefel klassificeras; databas- och programfel ska fortfarande stoppa importen.
+`skapade`, `uppdaterade` och `hoppade_over` avser förvaltningar. `filer_importerade`
+avser filer som skickats till R12-importen, `filer_for_kontroll` filer som bevarats
+separat och `underlag_sparade` nya arkivposter (0 vid oförändrad omkörning).
+Även ett paket med enbart kontrollfiler returnerar HTTP 200, med 0 R12-filer.
+
+Dialogens `sjuk_kontroll` visar högst 50 aktuella kontrollfiler för förvaltningen,
+med `fler_finns` vid fler träffar. Originaltext och andra förvaltningars värden ingår
+inte i läs-API:t. Otolkbara filer saknar säker organisationskoppling och visas som
+filvarningar i sjukfrånvarovyn för alla förvaltningar. Originaltext laddas bara vid
+uttrycklig databasgranskning; åtkomst och backup följer databasens befintliga skydd.
+Ingen rådata versionshanteras i Git. Varningarna innebär inte ett automatiskt
+beslut om vilken äldre mätmetod som använts.
+
+Den direkta JSON-importen och enfils-CSV-importen behåller kravet på R12. CLI och
+CronJob använder flerfilsimporten och får därför samma toleranta beteende.

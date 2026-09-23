@@ -1,3 +1,5 @@
+import type { SjukfranvaroDetails } from "./api";
+
 /** Estimerad kostnad för sjukfrånvaro per förvaltning.
  *
  *  Nyckeltalet är definierat för kommunen som helhet: vid målnivå (6,0 %) kostar
@@ -33,31 +35,9 @@ export const KR_PER_ANSTALLD_PE_AR = KR_PER_ANSTALLD_PE_MANAD * 12;
 /** Målnivån för sjukfrånvaro i procent — samma tröskel som statusfärgen använder. */
 export const SJUK_MAL = 6.0;
 
-/** Reservtabell: tillsvidareanställda per förvaltning per 2026-04-30. Summa 7 437.
- *  Nyckeln är masterdata-koden (BYGGPLAN §18), aldrig namn eller slug.
- *
- *  Används bara när importen inte har med antalet. Personalexporten levererar sedan
- *  2026-08 `SK.P.AM.001` (tillsvidareanställda) per period, och då räknas kostnaden på
- *  den siffran i stället — den följer med i tiden, till skillnad från den här tabellen.
- *  Saknas båda visas ingen kostnad, hellre det än ett tal räknat på fel underlag. */
-export const ANSTALLDA: Record<string, number> = {
-  "23": 2800, // Vård och omsorg
-  "24": 2560, // Barn och utbildning
-  "25": 42, // Miljö
-  "26": 125, // Stadsbyggnad
-  "27": 23, // Lantmäteri
-  "28": 917, // Kommunstyrelse
-  "29": 16, // Överförmyndare
-  "30": 266, // Kultur och fritid
-  "31": 688, // Individ och arbetsmarknad
-};
-
 export interface SjukKostnad {
   /** Antal tillsvidareanställda som beräkningen bygger på. */
   anstallda: number;
-  /** Kom antalet ur importen (true) eller ur reservtabellen ovan (false)? Styr om rutan
-   *  får skriva ut vilken period underlaget gäller. */
-  franData: boolean;
   /** Uppskattad årskostnad vid aktuell R12-nivå, kr. */
   kostnad: number;
   /** Vad samma förvaltning skulle kosta på ett år vid målnivån 6,0 %, kr. */
@@ -66,26 +46,23 @@ export interface SjukKostnad {
   merkostnad: number;
 }
 
-/** Räkna fram kostnaden för en förvaltning. null när underlag saknas — okänd
- *  masterdata-kod eller ingen sjukfrånvaroprocent för perioden.
+/** Räkna fram kostnaden för en förvaltning. null när personalantal eller
+ *  sjukfrånvaroprocent saknas för perioden.
  *
  *  `anstalldaFranData` är antalet ur importen (SK.P.AM.001). Finns det används det;
- *  annars faller beräkningen tillbaka på reservtabellen.
+ *  annars kan kostnaden inte beräknas.
  *
  *  Årsmodellen använder R12-nivån och ett personalantal, inte bokförda kostnader. */
 export function sjukKostnad(
-  kod: string | null | undefined,
   procent: number | null | undefined,
   anstalldaFranData?: number | null,
 ): SjukKostnad | null {
   if (procent == null || !Number.isFinite(procent) || procent < 0 || procent > 100) return null;
-  if (anstalldaFranData != null && (!Number.isInteger(anstalldaFranData) || anstalldaFranData < 0)) return null;
-  const franData = anstalldaFranData != null;
-  const anstallda = franData ? anstalldaFranData! : kod ? ANSTALLDA[kod] : 0;
-  if (!franData && !anstallda) return null;
+  if (anstalldaFranData == null || !Number.isInteger(anstalldaFranData) || anstalldaFranData < 0) return null;
+  const anstallda = anstalldaFranData;
   const kostnad = anstallda * procent * KR_PER_ANSTALLD_PE_AR;
   const vidMal = anstallda * SJUK_MAL * KR_PER_ANSTALLD_PE_AR;
-  return { anstallda, franData, kostnad, vidMal, merkostnad: kostnad - vidMal };
+  return { anstallda, kostnad, vidMal, merkostnad: kostnad - vidMal };
 }
 
 /** Kronor → "5,4 mnkr" · "963 tkr" · "400 kr" — dialogen ska kunna läsas högt.
@@ -107,4 +84,20 @@ export function krText(kr: number): string {
 export function krDiffText(kr: number): string {
   if (Math.round(kr / 1000) === 0) return "±0";
   return (kr > 0 ? "+" : "−") + krText(Math.abs(kr));
+}
+
+/** Saknade aktuella deluppgifter; noll är ett värde, aldrig en lucka. */
+export function sjukSaknadeUppgifter(details: SjukfranvaroDetails, total: number | null | undefined): string[] {
+  const saknas: string[] = [];
+  if (total == null) saknas.push("total sjukfrånvaro");
+  if (details.kvinnor == null) saknas.push("sjukfrånvaro för kvinnor");
+  if (details.man == null) saknas.push("sjukfrånvaro för män");
+  if (details.langtidsandel == null) saknas.push("långtidsandel");
+  if (details.anstallda == null) saknas.push("antal anställda");
+  for (const grupp of ["29 år eller yngre", "30–49 år", "50 år eller äldre"]) {
+    if (details.aldersgrupper?.find((a) => a.grupp === grupp)?.varde == null) {
+      saknas.push(`åldersgrupp ${grupp}`);
+    }
+  }
+  return saknas;
 }

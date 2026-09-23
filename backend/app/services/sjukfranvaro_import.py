@@ -23,13 +23,18 @@ import csv
 import io
 import re
 from datetime import date
+from hashlib import sha256
 from math import isfinite
+from unicodedata import normalize
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Dialogue, KpiArea, Measurement, Organisation, Status, TrendDir
-from app.schemas import SjukEnhet, SjukImport, ExportFil
+from app.models import Dialogue, KpiArea, Measurement, Organisation, Status, TrendDir, SjukUnderlag
+from app.schemas import (
+    SjukData, SjukEnhet, SjukImport, ExportFil, SjukKontrollOut, SjukUnderlagOut,
+)
 from app.services.ekonomi_import import ENHET_NAMN, las_rader
 from app.services.hme_import import (
     SJUK_GUL_TAK,
@@ -96,8 +101,18 @@ def csv_to_payload(text: str, kalla: str = "Personaluppföljning (Qlik-export, C
     Flera månadsstängningar i samma CSV blir en R12-serie per förvaltning. Skicka in hela
     årets uttag på en gång — enkelperiod-import fyller bara på en punkt i befintlig serie.
     """
-    if not re.search(r"SK\.P\.AM\.", text):
+    if not _har_personalmatt(text):
         raise SjukExportMetodError("Gammal eller okänd personalexport. Använd ett R12-uttag med personalmått (SK.P.AM.).")
+    return {**_csv_data(text), "kpi": "sjukfranvaro", "kalla": kalla, "matmetod": MATMETOD}
+
+
+def _har_personalmatt(text: str) -> bool:
+    # Kontrollera måttkolumnen, inte en godtycklig sträng någonstans i filen.
+    return any((row.get("Mått") or "").strip().startswith("SK.P.AM.") for row in las_rader(text))
+
+
+def _csv_data(text: str) -> dict:
+    """Gemensam parsning för R12 och separat, ej metodbestämt underlag."""
     reader = las_rader(text)
     if not {"Period", "Enhet", "Mått", "Kolumn", "Mätvärde"}.issubset(reader.fieldnames or []):
         raise ValueError("CSV saknar förväntade kolumner (Period, Enhet, Mått, Kolumn, Mätvärde).")
@@ -121,13 +136,21 @@ def csv_to_payload(text: str, kalla: str = "Personaluppföljning (Qlik-export, C
             raise ValueError(f"Ogiltigt mätvärde för {kod}, {period}: {ravarde!r}.") from exc
         if varde is not None and not isfinite(varde):
             raise ValueError("Mätvärden måste vara ändliga tal.")
+        if varde is not None and matt in (TOTAL, LANGTID, *ALDER) and kol in {"K20", "K12", "K13"}:
+            if not 0 <= varde <= 100:
+                raise ValueError("Sjukfrånvaroandelar måste ligga mellan 0 och 100.")
+        if varde is not None and matt == ANSTALLDA and kol == "K9":
+            if varde < 0 or not varde.is_integer():
+                raise ValueError("Antal anställda måste vara ett icke-negativt heltal.")
         raw.setdefault(kod, {}).setdefault(period, {}).setdefault(matt, {})[kol] = varde
 
     enheter = []
     for kod, perioder in raw.items():
         # Personalantal kan finnas för en nyare månad än sjukfrånvaron. Det får
         # varken dölja sista sjukmätningen eller skapa en tom punkt efter den.
-        sorterade = sorted(p for p, matt in perioder.items() if matt.get(TOTAL, {}).get("K20") is not None)
+        sorterade = sorted(
+            p for p, matt in perioder.items() if any(m in matt for m in (TOTAL, LANGTID, *ALDER))
+        )
         if not sorterade:
             continue
         serie = [
@@ -142,11 +165,8 @@ def csv_to_payload(text: str, kalla: str = "Personaluppföljning (Qlik-export, C
         senaste = sorterade[-1]
         lm = perioder[senaste]
         sj001 = lm.get(TOTAL, {})
-        # Antalet tillsvidareanställda finns bara i den nyare exporten. Saknas det får
-        # kostnadsrutan falla tillbaka på sin egen tabell hellre än att gissa.
+        # Ett saknat antal är null och får inte ersättas med ett uppskattat antal.
         antal = lm.get(ANSTALLDA, {}).get("K9")
-        if antal is not None and (antal < 0 or not antal.is_integer()):
-            raise ValueError("Antal anställda måste vara ett icke-negativt heltal.")
         enheter.append(
             {
                 "kod": kod,
@@ -165,12 +185,9 @@ def csv_to_payload(text: str, kalla: str = "Personaluppföljning (Qlik-export, C
             }
         )
     if not enheter:
-        raise ValueError("Personalexporten saknar sjukfrånvaromåttet SK.P.SJ.001 med total i K20.")
+        raise ValueError("Personalexporten saknar sjukfrånvaromått (SK.P.SJ.001–005).")
     return {
-        "kpi": "sjukfranvaro",
         "period": max(alla_perioder) if alla_perioder else "",
-        "kalla": kalla,
-        "matmetod": MATMETOD,
         "enheter": enheter,
     }
 
@@ -183,7 +200,7 @@ def filer_to_payload(filer: list[ExportFil]) -> dict:
 
     rader: dict[tuple[str, str, str, str], dict[str, str]] = {}
     for fil in sorted(filer, key=uttagsordning):
-        csv_to_payload(fil.text)  # Validera varje fil innan något skrivs till databasen.
+        SjukImport.model_validate(csv_to_payload(fil.text))
         for rad in las_rader(fil.text):
             key = tuple(rad.get(k, "") for k in ("Period", "Enhet", "Mått", "Kolumn"))
             rader[key] = rad
@@ -192,6 +209,92 @@ def filer_to_payload(filer: list[ExportFil]) -> dict:
     writer.writeheader()
     writer.writerows(rader.values())
     return csv_to_payload(body.getvalue())
+
+
+async def import_sjukfiler(session: AsyncSession, filer: list[ExportFil]) -> dict:
+    """Importera användbart R12 och bevara övriga filer, atomiskt i samma transaktion.
+
+    Endast förväntade datafel blir kontrollunderlag. Databasfel/programfel ska fortsatt
+    avbryta jobbet. Oförändrade original dedupliceras; rättade filer släcker varningen.
+    """
+    giltiga: list[ExportFil] = []
+    kontroll: list[tuple[ExportFil, str, SjukData | None]] = []
+    for fil in filer:
+        try:
+            data = SjukData.model_validate(_csv_data(fil.text))
+            if _har_personalmatt(fil.text):
+                giltiga.append(fil)
+            else:
+                kontroll.append((fil, "matmetod_okand", data))
+        except (ValueError, csv.Error):
+            kontroll.append((fil, "ogiltigt_underlag", None))
+
+    # Sammanvägningen valideras också innan arkiv eller mätvärden ändras.
+    payload = SjukImport.model_validate(filer_to_payload(giltiga)) if giltiga else None
+    sparade = 0
+    for fil in giltiga:
+        await session.execute(update(SjukUnderlag).where(
+            SjukUnderlag.filnamn == normalize("NFC", fil.namn),
+        ).values(aktuell=False))
+    for fil, status, data in kontroll:
+        namn = normalize("NFC", fil.namn)
+        digest = sha256(fil.text.encode("utf-8")).hexdigest()
+        await session.execute(update(SjukUnderlag).where(
+            SjukUnderlag.filnamn == namn, SjukUnderlag.sha256 != digest,
+        ).values(aktuell=False))
+        query = select(SjukUnderlag).where(
+            SjukUnderlag.filnamn == namn, SjukUnderlag.sha256 == digest,
+        )
+        stored = await session.scalar(query)
+        if stored is None:
+            try:
+                async with session.begin_nested():
+                    stored = SjukUnderlag(
+                        filnamn=namn, sha256=digest, innehall=fil.text, status=status,
+                        enheter=[e.model_dump(mode="json") for e in data.enheter] if data else [],
+                    )
+                    session.add(stored)
+                    await session.flush()
+                sparade += 1
+            except IntegrityError:
+                # Samma fil kan skickas samtidigt av manuell import och CronJob.
+                stored = await session.scalar(query)
+                if stored is None:
+                    raise
+        stored.aktuell = True
+    result = (
+        await import_sjukfranvaro(session, payload, commit=False) if payload else
+        {"skapade": 0, "uppdaterade": 0, "hoppade_over": 0, "enheter": []}
+    )
+    await session.commit()
+    return {**result, "filer_importerade": len(giltiga),
+            "filer_for_kontroll": len(kontroll), "underlag_sparade": sparade}
+
+
+async def sjuk_kontroll(session: AsyncSession, kod: str | None) -> SjukKontrollOut:
+    """Begränsad vy av aktuella kontrollfiler, utan originaltext eller andra enheters värden."""
+    result = SjukKontrollOut()
+    # JSON-förhandsvisningen är liten jämfört med originaltexten (deferred i modellen).
+    # Strömma posterna så att arkivets storlek inte avgör minnets storlek.
+    rows = await session.stream_scalars(
+        select(SjukUnderlag).where(SjukUnderlag.aktuell.is_(True))
+        .order_by(SjukUnderlag.id.desc()).execution_options(yield_per=50)
+    )
+    try:
+        async for row in rows:
+            enhet = next((SjukEnhet.model_validate(e) for e in row.enheter if e.get("kod") == kod), None)
+            if row.enheter and enhet is None:
+                continue
+            if len(result.underlag) == 50:
+                result.fler_finns = True
+                break
+            result.underlag.append(SjukUnderlagOut(
+                id=row.id, filnamn=row.filnamn, status=row.status,
+                skapad_at=row.skapad_at, enhet=enhet,
+            ))
+    finally:
+        await rows.close()
+    return result
 
 
 def _serie_med_perioder(befintlig: dict | None, enhet: SjukEnhet) -> list[dict]:
@@ -291,17 +394,19 @@ def _measurement_fields(
         anstallda = enhet.anstallda
         aldersgrupper = [{"grupp": a.grupp, "varde": a.varde} for a in enhet.aldersgrupper]
 
-    if total is None:
-        raise ValueError(f"{enhet.namn!r} saknar total sjukfrånvaro (SK.P.SJ.001 / K20).")
-    trend_dir, trend_good, trend_text, kvartalsokning = _trend(serie, total)
-    status = sjukfranvaro_status(total, kvartalsokning)
+    trend_dir, trend_good, trend_text, kvartalsokning = (
+        _trend(serie, total) if total is not None else (None, None, "", None)
+    )
+    status = sjukfranvaro_status(total, kvartalsokning) if total is not None else None
 
-    vt = f"{_pct(total)} %"
+    vt = f"{_pct(total)} %" if total is not None else "Saknar totalvärde"
     r12 = f"{vt} rullande 12 månader"
     # Röd nivå kan komma av två olika saker. Sätts den av kvartalsökningen medan nivån i
     # sig är godtagbar vore "sjukfrånvaron är hög" fel besked — det är takten som larmar.
     larmar_pa_okning = kvartalsokning is not None and kvartalsokning > SJUK_KVARTAL_LARM
-    if status is Status.alert and larmar_pa_okning and total <= SJUK_GUL_TAK:
+    if total is None:
+        interp = "Ofullständigt underlag: total sjukfrånvaro saknas. Ingen status eller trend kan beräknas."
+    elif status is Status.alert and larmar_pa_okning and total <= SJUK_GUL_TAK:
         interp = (
             f"Sjukfrånvaron ({r12}) har stigit {_pct(kvartalsokning)} procentenheter på ett "
             "kvartal (röd nivå – agera). Nivån i sig är inte kritisk, men takten är det — "
@@ -345,7 +450,7 @@ def _measurement_fields(
     }
 
 
-async def import_sjukfranvaro(session: AsyncSession, payload: SjukImport) -> dict:
+async def import_sjukfranvaro(session: AsyncSession, payload: SjukImport, *, commit: bool = True) -> dict:
     """Upserta sjukfrånvaro per förvaltning (matchar Organisation på masterdata-kod)."""
     area = (
         await session.execute(select(KpiArea).filter_by(key="sjukfranvaro"))
@@ -378,12 +483,7 @@ async def import_sjukfranvaro(session: AsyncSession, payload: SjukImport) -> dic
             )
         ).scalar_one_or_none()
         befintlig = m.details if m is not None and isinstance(m.details, dict) else None
-        try:
-            fields = _measurement_fields(enhet, payload.period, payload.kalla, befintlig)
-        except ValueError:
-            rader.append({"namn": enhet.namn, "kod": enhet.kod, "atgard": "saknar_total"})
-            hoppade_over += 1
-            continue
+        fields = _measurement_fields(enhet, payload.period, payload.kalla, befintlig)
 
         if m is None:
             session.add(Measurement(dialogue_id=dialogue.id, kpi_area_id=area.id, **fields))
@@ -400,7 +500,7 @@ async def import_sjukfranvaro(session: AsyncSession, payload: SjukImport) -> dic
                 "namn": enhet.namn,
                 "kod": enhet.kod,
                 "value": fields["value_text"],
-                "status": fields["status"].value,
+                "status": fields["status"].value if fields["status"] else None,
                 "atgard": atgard,
             }
         )
@@ -418,7 +518,8 @@ async def import_sjukfranvaro(session: AsyncSession, payload: SjukImport) -> dic
             )
         )
 
-    await session.commit()
+    if commit:
+        await session.commit()
     print(
         f"[sjukfranvaro] klart: {skapade} skapade, {uppdaterade} uppdaterade, "
         f"{hoppade_over} hoppade över."

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Annotated, Literal
+from unicodedata import normalize
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, FiniteFloat, JsonValue, model_validator
 
@@ -420,6 +421,8 @@ class ExportFiler(BaseModel):
     def total_storlek(self):
         if sum(len(f.text.encode("utf-8")) for f in self.filer) > 15_000_000:
             raise ValueError("Filerna får sammanlagt vara högst 15 MB.")
+        if len({normalize("NFC", f.namn) for f in self.filer}) != len(self.filer):
+            raise ValueError("Varje filnamn får bara förekomma en gång i ett filpaket.")
         return self
 
 
@@ -484,12 +487,7 @@ class SjukAldersgrupp(BaseModel):
 
 
 class SjukPunkt(BaseModel):
-    """Sjukfrånvaro en månadsstängning: total %, kvinnors %, mäns % — en punkt i R12-serien.
-
-    Varje punkt är ett **rullande 12-månadersvärde**: snittet för de tolv månader som
-    slutar med `period`. Punkterna rör sig därför långsamt — en ny månad byter ut en
-    tolftedel av underlaget.
-    """
+    """Rapporterade andelar per period. Omgivande import/underlag anger mätmetoden."""
 
     period: Rapportperiod
     total: Procent | None = None
@@ -498,7 +496,7 @@ class SjukPunkt(BaseModel):
 
 
 class SjukEnhet(BaseModel):
-    """En förvaltnings sjukfrånvaro: senaste månadens R12-värden + månadsserie."""
+    """En förvaltnings rapporterade sjukfrånvaro: senaste perioden + månadsserie."""
 
     kod: str
     namn: str
@@ -513,7 +511,14 @@ class SjukEnhet(BaseModel):
     serie: list[SjukPunkt] = []
 
 
-class SjukImport(BaseModel):
+class SjukData(BaseModel):
+    """Tolkade värden, utan att tillskriva exporten en mätmetod."""
+
+    period: Rapportperiod
+    enheter: list[SjukEnhet]
+
+
+class SjukImport(SjukData):
     """Normaliserad importpayload för sjukfrånvaro (per förvaltning).
 
     `matmetod` märker hur värdena är aggregerade. Personalexporten levererar sedan
@@ -523,10 +528,8 @@ class SjukImport(BaseModel):
     """
 
     kpi: str = "sjukfranvaro"
-    period: Rapportperiod
     kalla: str = ""
     matmetod: Literal["rullande12"]
-    enheter: list[SjukEnhet]
 
 
 class SjukRad(BaseModel):
@@ -542,6 +545,22 @@ class SjukResultat(BaseModel):
     uppdaterade: int
     hoppade_over: int
     enheter: list[SjukRad]
+    filer_importerade: int = 0
+    filer_for_kontroll: int = 0
+    underlag_sparade: int = 0
+
+
+class SjukUnderlagOut(BaseModel):
+    id: int
+    filnamn: str
+    status: Literal["matmetod_okand", "ogiltigt_underlag"]
+    skapad_at: datetime
+    enhet: SjukEnhet | None = None
+
+
+class SjukKontrollOut(BaseModel):
+    underlag: list[SjukUnderlagOut] = []
+    fler_finns: bool = False
 
 
 class AreaStatusOut(ORMModel):
@@ -576,6 +595,7 @@ class DialogueArea(BaseModel):
     # Historik av manuellt satta statusar (BYGGPLAN §16), nyast först. Tom = ej satt.
     status_historik: list[AreaStatusOut] = []
     activities: list[ActivityOut] = []
+    sjuk_kontroll: SjukKontrollOut | None = None
 
 
 class PersonOut(ORMModel):
