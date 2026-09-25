@@ -1,4 +1,4 @@
-"""HTTP-kontrakt för redigering och återöppning av aktiviteter."""
+"""HTTP-kontrakt för redigering, återöppning och borttagning av aktiviteter."""
 
 from datetime import datetime, timezone
 
@@ -12,10 +12,17 @@ from app.routers.activities import router
 
 class MemorySession:
     def __init__(self, activity: Activity):
-        self.activity = activity
+        self.activity: Activity | None = activity
 
-    async def get(self, model: type[Activity], activity_id: int) -> Activity | None:
-        return self.activity if model is Activity and activity_id == self.activity.id else None
+    async def get(
+        self, model: type[Activity], activity_id: int, *, with_for_update: bool = False
+    ) -> Activity | None:
+        if model is Activity and self.activity is not None and activity_id == self.activity.id:
+            return self.activity
+        return None
+
+    async def delete(self, activity: Activity) -> None:
+        self.activity = None
 
     async def commit(self) -> None:
         pass
@@ -92,3 +99,15 @@ def test_missing_or_invalid_activity_is_rejected():
         assert client.patch("/api/activities/7", json={"text": "x" * 4001}).status_code == 422
         assert client.patch("/api/activities/7", json={"klar_notering": "x" * 1001}).status_code == 422
     assert activity.text == "Följ upp"
+
+
+def test_only_completed_activity_can_be_deleted():
+    client, activity = client_with_activity(klar=False)
+    with client:
+        assert client.delete("/api/activities/7").status_code == 409
+        assert client.patch("/api/activities/7", json={"klar": True}).status_code == 200
+        deleted = client.delete("/api/activities/7")
+        missing = client.delete("/api/activities/7")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"id": activity.id}
+    assert missing.status_code == 404

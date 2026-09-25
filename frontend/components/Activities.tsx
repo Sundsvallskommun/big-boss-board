@@ -20,14 +20,16 @@ function ActivityRow({
   activity,
   onMarkKlar,
   onEdit,
+  onDelete,
 }: {
   activity: Activity;
   onMarkKlar: (activityId: number, notering: string) => Promise<void>;
   onEdit: (activityId: number, patch: ActivityPatch) => Promise<void>;
+  onDelete: (activityId: number) => Promise<void>;
 }) {
   const fieldId = useId();
-  // "visa" = normalläge, "klar" = klarrapporteringsformuläret, "andra" = redigera texten.
-  const [mode, setMode] = useState<"visa" | "klar" | "andra">("visa");
+  // En åtgärd kan bara tas bort när den är klarmarkerad och användaren bekräftat det.
+  const [mode, setMode] = useState<"visa" | "klar" | "andra" | "ta_bort">("visa");
   const [notering, setNotering] = useState("");
   const [utkast, setUtkast] = useState(activity.text);
   const [klarUtkast, setKlarUtkast] = useState(activity.klar_notering ?? "");
@@ -85,6 +87,18 @@ function ActivityRow({
       setMode("visa");
     } catch {
       setFel("Kunde inte ångra klarmarkeringen. Försök igen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function taBort() {
+    setBusy(true);
+    setFel("");
+    try {
+      await onDelete(activity.id);
+    } catch {
+      setFel("Kunde inte ta bort aktiviteten. Ladda om och kontrollera innan du försöker igen.");
     } finally {
       setBusy(false);
     }
@@ -230,6 +244,36 @@ function ActivityRow({
             </div>
           )}
 
+          {mode === "ta_bort" && activity.klar && (
+            <div className="mt-12 rounded-10 border border-error-text bg-error-background-200 p-12">
+              <p id={`${fieldId}-delete-warning`} className="text-small text-error-text">
+                Ta bort aktiviteten och dess klarrapport permanent?
+              </p>
+              <div className="mt-10 flex flex-wrap gap-8">
+                <Button
+                  variant="ghost"
+                  aria-describedby={`${fieldId}-delete-warning`}
+                  autoFocus
+                  loading={busy}
+                  disabled={busy}
+                  onClick={taBort}
+                >
+                  Ja, ta bort
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => {
+                    setFel("");
+                    setMode("visa");
+                  }}
+                >
+                  Avbryt
+                </Button>
+              </div>
+            </div>
+          )}
+
           {fel && (
             <p role="alert" className="mt-10 text-small text-error-text">
               {fel}
@@ -257,6 +301,15 @@ function ActivityRow({
                 Klarmarkera
               </button>
             )}
+            {activity.klar && (
+              <button
+                type="button"
+                onClick={() => { setFel(""); setMode("ta_bort"); }}
+                className="inline-flex shrink-0 items-center rounded-full border border-error-text px-10 py-3 text-[12px] font-semibold text-error-text transition hover:bg-error-background-200 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                Ta bort
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -270,11 +323,13 @@ export function ActivitiesSection({
   onAddActivity,
   onMarkKlar,
   onEditActivity,
+  onDeleteActivity,
 }: {
   activities: Activity[];
   onAddActivity: (text: string) => Promise<void>;
   onMarkKlar: (activityId: number, notering: string) => Promise<void>;
   onEditActivity: (activityId: number, patch: ActivityPatch) => Promise<void>;
+  onDeleteActivity: (activityId: number) => Promise<void>;
 }) {
   const fieldId = useId();
   const klara = activities.filter((a) => a.klar).length;
@@ -342,6 +397,7 @@ export function ActivitiesSection({
                   activity={a}
                   onMarkKlar={onMarkKlar}
                   onEdit={onEditActivity}
+                  onDelete={onDeleteActivity}
                 />
               ))}
           </ul>
