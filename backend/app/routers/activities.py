@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models import Activity, AreaStatus, Dialogue, KpiArea
-from app.schemas import ActivityCreate, ActivityKlar, ActivityOut, AreaStatusIn, AreaStatusOut
+from app.schemas import ActivityCreate, ActivityKlar, ActivityOut, ActivityUpdate, AreaStatusIn, AreaStatusOut
 
 router = APIRouter(tags=["activities"])
 
@@ -92,6 +92,40 @@ async def mark_activity_klar(
     activity.klar = True
     activity.klar_notering = body.notering.strip()
     activity.klar_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(activity)
+    return activity
+
+
+@router.patch("/api/activities/{activity_id}", response_model=ActivityOut)
+async def update_activity(
+    activity_id: int,
+    body: ActivityUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> Activity:
+    """Redigera text eller klarrapport; återöppning rensar avslutets uppgifter."""
+    activity = await session.get(Activity, activity_id)
+    if activity is None:
+        raise HTTPException(status_code=404, detail="Aktiviteten hittades inte.")
+
+    if body.text is not None:
+        text = body.text.strip()
+        if not text:
+            raise HTTPException(status_code=422, detail="Aktiviteten saknar text.")
+        activity.text = text
+
+    if body.klar is not None:
+        if not body.klar:
+            activity.klar = False
+            activity.klar_notering = None
+            activity.klar_at = None
+        elif not activity.klar:
+            activity.klar = True
+            activity.klar_at = datetime.now(timezone.utc)
+
+    if body.klar_notering is not None and activity.klar:
+        activity.klar_notering = body.klar_notering.strip() or None
+
     await session.commit()
     await session.refresh(activity)
     return activity

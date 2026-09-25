@@ -1,18 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
 import { BrandLockup } from "@/components/BrandLockup";
 import { UserMenu } from "@/components/UserMenu";
-import { TrendingUp, TrendingDown, ChevronLeft, MessagesSquare } from "lucide-react";
+import { TrendingUp, TrendingDown, ChevronLeft, MessagesSquare, ArrowUp } from "lucide-react";
 import {
   type DialogueDetail,
   type Activity,
+  type ActivityPatch,
   type AreaStatus,
   type Status,
   addAreaStatus,
   createActivity,
   markActivityKlar,
+  updateActivity,
 } from "@/lib/api";
 import { areaIcon } from "./icons";
 import { AREA_DIMENSIONS, STATUS, measurementTokens, kortStatus } from "./status";
@@ -20,10 +22,46 @@ import { diffLegend, diffText } from "@/lib/ekonomi";
 import { DetailPanel } from "./DetailPanel";
 import { SjukUnderlagPanel } from "./SjukUnderlagPanel";
 import { QuestionPanel } from "./QuestionPanel";
+import { ActivitiesSection } from "./Activities";
 
 // Inga dolda nyckeltal längre. Verksamhet, Digital transformation och Kommunikativt
 // ledarskap visas som dialogfråge-kort utan mätdata, med manuellt satt status (§16–17).
 const DOLDA_OMRADEN = new Set<string>();
+
+function TillKortenKnapp({ stripRef }: { stripRef: RefObject<HTMLDivElement | null> }) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setVisible(!entry.isIntersecting && entry.boundingClientRect.bottom <= 0),
+    );
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [stripRef]);
+
+  function visaKorten() {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
+    document.getElementById("huvudinnehall")?.focus({ preventScroll: true });
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={visaKorten}
+      aria-hidden={!visible}
+      tabIndex={visible ? 0 : -1}
+      className={`fixed bottom-24 right-24 z-40 inline-flex items-center gap-8 rounded-full bg-vattjom-surface-primary px-16 py-12 text-small font-semibold text-white shadow-lg transition hover:bg-vattjom-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none ${
+        visible ? "opacity-100" : "pointer-events-none translate-y-8 opacity-0"
+      }`}
+    >
+      <ArrowUp size={16} strokeWidth={2.4} aria-hidden="true" />
+      Visa korten
+    </button>
+  );
+}
 
 export function Dashboard({
   dialogue,
@@ -50,6 +88,7 @@ export function Dashboard({
     areas.findIndex((a) => a.area.key === selected),
   );
   const current = areas[selectedIndex];
+  const stripRef = useRef<HTMLDivElement>(null);
 
   function scrollToDetail() {
     document.getElementById("detail")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -62,6 +101,14 @@ export function Dashboard({
 
   async function markKlar(key: string, activityId: number, notering: string) {
     const updated = await markActivityKlar(activityId, notering);
+    setActivities((prev) => ({
+      ...prev,
+      [key]: (prev[key] ?? []).map((a) => (a.id === activityId ? updated : a)),
+    }));
+  }
+
+  async function editActivity(key: string, activityId: number, patch: ActivityPatch) {
+    const updated = await updateActivity(activityId, patch);
     setActivities((prev) => ({
       ...prev,
       [key]: (prev[key] ?? []).map((a) => (a.id === activityId ? updated : a)),
@@ -147,7 +194,7 @@ export function Dashboard({
 
         {/* Responsiv KPI-strip: 2 kort på mobil, 3 på mellanstora, alla 6 på en rad på
             breda skärmar (xl) — där breddas även containern så korten får rum. */}
-        <div className="mb-32 grid grid-cols-2 gap-12 md:grid-cols-3 md:gap-16 xl:grid-cols-6">
+        <div ref={stripRef} className="mb-32 grid grid-cols-2 gap-12 md:grid-cols-3 md:gap-16 xl:grid-cols-6">
           {areas.map((item) => {
             const { area, measurement: m } = item;
             const AreaIcon = areaIcon(area.ikon);
@@ -325,8 +372,6 @@ export function Dashboard({
                 index={selectedIndex}
                 total={areas.length}
                 activities={activities[current.area.key] ?? []}
-                onAddActivity={(text) => addActivity(current.area.key, current.area.id, text)}
-                onMarkKlar={(activityId, notering) => markKlar(current.area.key, activityId, notering)}
               />
             ) : (
               <QuestionPanel
@@ -341,7 +386,17 @@ export function Dashboard({
                 }
               />
             ))}
+          {current && (
+            <ActivitiesSection
+              key={current.area.key}
+              activities={activities[current.area.key] ?? []}
+              onAddActivity={(text) => addActivity(current.area.key, current.area.id, text)}
+              onMarkKlar={(activityId, notering) => markKlar(current.area.key, activityId, notering)}
+              onEditActivity={(activityId, patch) => editActivity(current.area.key, activityId, patch)}
+            />
+          )}
         </div>
+        <TillKortenKnapp stripRef={stripRef} />
       </main>
     </>
   );

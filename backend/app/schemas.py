@@ -127,6 +127,14 @@ class ActivityKlar(BaseModel):
     notering: str = Field(default="", max_length=1000)
 
 
+class ActivityUpdate(BaseModel):
+    """Ändra angivna fält; klar=False återöppnar aktiviteten."""
+
+    text: str | None = Field(default=None, max_length=4000)
+    klar: bool | None = None
+    klar_notering: str | None = Field(default=None, max_length=1000)
+
+
 # ---- Inkorg: inkomna synpunkter/frågor/aktiviteter (intake) --------------
 
 

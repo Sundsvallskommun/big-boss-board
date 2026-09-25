@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { Button, FormControl, FormLabel, Input, Textarea } from "@/components/ui";
 import {
   TrendingUp,
   TrendingDown,
@@ -11,8 +10,6 @@ import {
   TriangleAlert,
   BarChart3,
   ListChecks,
-  Plus,
-  CheckCircle2,
   ChevronDown,
   Gauge,
   Target,
@@ -63,8 +60,6 @@ const SjukfranvaroChart = dynamic(
   { ssr: false, loading: () => <ChartPlaceholder height={360} /> },
 );
 
-type Feedback = { kind: "ok" | "err"; msg: string } | null;
-
 /** Svensk ordningsändelse för datum i intervallet vi bryr oss om (1:a, 2:a, annars N:e). */
 function ordningsdag(day: number): string {
   return day === 1 || day === 2 ? `${day}:a` : `${day}:e`;
@@ -85,13 +80,6 @@ function ekonomiOfullstandig(now: Date): { ofullstandig: boolean; dag: string; k
 
 const MANADER = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
 
-/** ISO-datum → "24 jun" (deterministiskt, ingen locale → ingen hydrerings-krock). */
-function kortDatum(iso: string | null): string {
-  const m = iso ? /^(\d{4})-(\d{2})-(\d{2})/.exec(iso) : null;
-  return m ? `${Number(m[3])} ${MANADER[Number(m[2]) - 1]}` : "";
-}
-
-/** En aktivitet i listan: checklist-markör + text + Klar-rapportering med kort notering. */
 /** Månadsstängning → "jul" eller "jul 26" för sjukfrånvarons R12-axel.
  *
  *  Tolv rullande månader spänner alltid över ett årsskifte, så året måste framgå någonstans
@@ -122,124 +110,16 @@ function ekonomiManadEtikett(period?: string): string {
   return `${namn.charAt(0).toUpperCase()}${namn.slice(1)} ${mm[1]}`;
 }
 
-function ActivityRow({
-  activity,
-  onMarkKlar,
-}: {
-  activity: Activity;
-  onMarkKlar: (activityId: number, notering: string) => Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [notering, setNotering] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function spara() {
-    setBusy(true);
-    setError(null);
-    try {
-      await onMarkKlar(activity.id, notering);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Kunde inte klarrapportera aktiviteten.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <li
-      className={`rounded-12 border p-16 ${
-        activity.klar
-          ? "border-success-background-300 bg-success-background-200"
-          : "border-hairline bg-background-content"
-      }`}
-    >
-      <div className="flex items-start gap-12">
-        {/* Checklist-markör: tom ring (ej klar) / grön bock (klar) */}
-        <span className="mt-1 shrink-0" aria-hidden="true">
-          {activity.klar ? (
-            <CheckCircle2 size={18} className="text-status-good" />
-          ) : (
-            <span className="block h-[18px] w-[18px] rounded-full border-2 border-hairline" />
-          )}
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <p className={`text-small leading-snug ${activity.klar ? "text-dark-secondary line-through" : ""}`}>
-            {activity.text}
-          </p>
-
-          {activity.klar && (
-            <div className="mt-10 rounded-[10px] bg-success-background-300 px-12 py-10">
-              <div className="eyebrow-sm text-success-text">
-                Klarrapport{kortDatum(activity.klar_at) && ` · ${kortDatum(activity.klar_at)}`}
-              </div>
-              <p className="mt-2 text-small leading-snug text-dark-primary">
-                {activity.klar_notering || "—"}
-              </p>
-            </div>
-          )}
-
-          {open && !activity.klar && (
-            <div className="mt-12">
-              <FormControl className="w-full">
-                <FormLabel>Notering om klarrapporteringen</FormLabel>
-                <Input
-                  value={notering}
-                  onChange={(e) => setNotering(e.target.value)}
-                  maxLength={1000}
-                  placeholder="Kort notering om vad som gjorts…"
-                />
-              </FormControl>
-              {error && <p role="alert" className="mt-8 text-small text-error-text">{error}</p>}
-              <div className="mt-10 flex flex-wrap gap-8">
-                <Button
-                  color="vattjom"
-                  variant="primary"
-                  loading={busy}
-                  disabled={busy}
-                  onClick={spara}
-                  leftIcon={<CheckCircle2 size={16} aria-hidden="true" />}
-                >
-                  Spara klarrapport
-                </Button>
-                <Button color="vattjom" variant="ghost" disabled={busy} onClick={() => setOpen(false)}>
-                  Avbryt
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {!activity.klar && !open && (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="inline-flex shrink-0 items-center gap-4 rounded-full border border-vattjom-surface-primary px-10 py-3 text-[12px] font-semibold text-vattjom-text-primary transition hover:bg-vattjom-background-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            <CheckCircle2 size={13} aria-hidden="true" />
-            Klarmarkera
-          </button>
-        )}
-      </div>
-    </li>
-  );
-}
-
 export function DetailPanel({
   item,
   index,
   total,
   activities,
-  onAddActivity,
-  onMarkKlar,
 }: {
   item: DialogueArea;
   index: number;
   total: number;
   activities: Activity[];
-  onAddActivity: (text: string) => Promise<void>;
-  onMarkKlar: (activityId: number, notering: string) => Promise<void>;
 }) {
   const { area } = item;
   // DetailPanel renderas bara för nyckeltal MED mätdata (Dashboard väljer QuestionPanel
@@ -310,27 +190,6 @@ export function DetailPanel({
 
   function scrollToAktiviteter() {
     document.getElementById("aktiviteter")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  // Lägg-till-aktivitet (höger kolumn).
-  const [nyText, setNyText] = useState("");
-  const [addBusy, setAddBusy] = useState(false);
-  const [feedback, setFeedback] = useState<Feedback>(null);
-
-  async function laggTill() {
-    const text = nyText.trim();
-    if (!text) return;
-    setAddBusy(true);
-    setFeedback(null);
-    try {
-      await onAddActivity(text);
-      setNyText("");
-      setFeedback({ kind: "ok", msg: "Aktivitet tillagd." });
-    } catch (e) {
-      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Något gick fel." });
-    } finally {
-      setAddBusy(false);
-    }
   }
 
   return (
@@ -765,96 +624,6 @@ export function DetailPanel({
 
       </section>
 
-      {/* Egen sektion: aktiviteter — frikopplad från översikten med mellanrum */}
-      <section
-        id="aktiviteter"
-        className="reveal mt-16 scroll-mt-[88px] overflow-hidden rounded-12 border border-hairline bg-background-content"
-      >
-      <div className="grid lg:grid-cols-2">
-        {/* Aktiviteter & åtgärder */}
-        <div className="border-hairline p-24 md:p-28 lg:border-r">
-          <div className="mb-4 flex items-center gap-10">
-            <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px] bg-vattjom-background-100 text-vattjom-text-primary">
-              <ListChecks size={18} strokeWidth={2} aria-hidden="true" />
-            </span>
-            <h3 className="font-header text-base font-bold tracking-tight">Aktiviteter &amp; åtgärder</h3>
-            {activities.length > 0 && (
-              <span className="ml-auto rounded-full bg-background-200 px-10 py-2 text-small font-semibold tabular-nums text-dark-secondary">
-                {klara}/{activities.length} klara
-              </span>
-            )}
-          </div>
-          <p className="mb-16 text-small text-dark-secondary">
-            Det ni bestämmer i samtalet. Klarrapportera med en kort notering när något är gjort.
-          </p>
-
-          {activities.length === 0 ? (
-            <div className="flex flex-col items-center gap-8 rounded-12 border border-dashed border-hairline bg-background-200 px-16 py-28 text-center">
-              <ListChecks size={22} className="text-dark-secondary" aria-hidden="true" />
-              <p className="max-w-[260px] text-small leading-snug text-dark-secondary">
-                Inga aktiviteter ännu. Lägg till en till höger så dyker den upp här.
-              </p>
-            </div>
-          ) : (
-            <ul className="flex flex-col gap-12">
-              {/* Aktiva överst, klarmarkerade under — i skapandeordning inom varje grupp. */}
-              {[...activities]
-                .sort((a, b) => Number(a.klar) - Number(b.klar) || a.id - b.id)
-                .map((a) => (
-                  <ActivityRow key={a.id} activity={a} onMarkKlar={onMarkKlar} />
-                ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Lägg till aktivitet */}
-        <div className="bg-background-200 p-24 md:p-28">
-          <div className="mb-4 flex items-center gap-10">
-            <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px] bg-background-content text-vattjom-text-primary">
-              <Plus size={18} strokeWidth={2.2} aria-hidden="true" />
-            </span>
-            <h3 className="font-header text-base font-bold tracking-tight">Lägg till aktivitet</h3>
-          </div>
-          <p className="mb-16 text-small text-dark-secondary">
-            Skriv en aktivitet eller åtgärd så hamnar den i listan till vänster.
-          </p>
-
-          <FormControl className="mb-12 w-full">
-            <FormLabel>Aktivitet</FormLabel>
-            <Textarea
-              className="w-full"
-              rows={3}
-              value={nyText}
-              onChange={(e) => setNyText(e.target.value)}
-              maxLength={4000}
-              placeholder="t.ex. Ta fram åtgärdsplan tillsammans med controller inför nästa avstämning."
-            />
-          </FormControl>
-
-          <Button
-            color="vattjom"
-            variant="primary"
-            className="w-full"
-            loading={addBusy}
-            disabled={addBusy || nyText.trim() === ""}
-            onClick={laggTill}
-            leftIcon={<Plus size={16} aria-hidden="true" />}
-          >
-            Lägg till aktivitet
-          </Button>
-
-          <p
-            role="status"
-            aria-live="polite"
-            className={`mt-12 min-h-[1.25rem] text-small ${
-              feedback?.kind === "err" ? "text-status-alert" : "text-vattjom-text-primary"
-            }`}
-          >
-            {feedback?.msg ?? ""}
-          </p>
-        </div>
-      </div>
-      </section>
     </>
   );
 }
