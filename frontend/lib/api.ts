@@ -185,6 +185,8 @@ export interface Activity {
   klar_at: string | null;
 }
 
+export type ActivityPatch = { text?: string; klar?: boolean; klar_notering?: string };
+
 /** En manuellt satt status + kommentar för ett område (BYGGPLAN §16), per förvaltning.
  *  Append-only historik — en post per gång status sattes. */
 export interface AreaStatus {
@@ -399,4 +401,13 @@ export async function markActivityKlar(activityId: number, notering: string): Pr
     body: JSON.stringify({ notering }),
   });
 
+}
+
+/** Ändra en aktivitet eller återöppna den utan att ersätta övriga fält. */
+export async function updateActivity(activityId: number, patch: ActivityPatch): Promise<Activity> {
+  return fetchJson(`/api/activities/${activityId}`, "Kunde inte spara ändringen", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
 }
