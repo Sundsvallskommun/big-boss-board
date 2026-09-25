@@ -15,6 +15,7 @@ import {
   createActivity,
   markActivityKlar,
   updateActivity,
+  deleteCompletedActivity,
 } from "@/lib/api";
 import { areaIcon } from "./icons";
 import { AREA_DIMENSIONS, STATUS, measurementTokens, kortStatus } from "./status";
@@ -112,6 +113,14 @@ export function Dashboard({
     setActivities((prev) => ({
       ...prev,
       [key]: (prev[key] ?? []).map((a) => (a.id === activityId ? updated : a)),
+    }));
+  }
+
+  async function deleteActivity(key: string, activityId: number) {
+    await deleteCompletedActivity(activityId);
+    setActivities((prev) => ({
+      ...prev,
+      [key]: (prev[key] ?? []).filter((a) => a.id !== activityId),
     }));
   }
 
@@ -393,6 +402,7 @@ export function Dashboard({
               onAddActivity={(text) => addActivity(current.area.key, current.area.id, text)}
               onMarkKlar={(activityId, notering) => markKlar(current.area.key, activityId, notering)}
               onEditActivity={(activityId, patch) => editActivity(current.area.key, activityId, patch)}
+              onDeleteActivity={(activityId) => deleteActivity(current.area.key, activityId)}
             />
           )}
         </div>

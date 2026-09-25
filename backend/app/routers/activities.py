@@ -13,7 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models import Activity, AreaStatus, Dialogue, KpiArea
-from app.schemas import ActivityCreate, ActivityKlar, ActivityOut, ActivityUpdate, AreaStatusIn, AreaStatusOut
+from app.schemas import (
+    ActivityCreate,
+    ActivityDeleted,
+    ActivityKlar,
+    ActivityOut,
+    ActivityUpdate,
+    AreaStatusIn,
+    AreaStatusOut,
+)
 
 router = APIRouter(tags=["activities"])
 
@@ -129,3 +137,20 @@ async def update_activity(
     await session.commit()
     await session.refresh(activity)
     return activity
+
+
+@router.delete("/api/activities/{activity_id}", response_model=ActivityDeleted)
+async def delete_completed_activity(
+    activity_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> ActivityDeleted:
+    """Ta bort en klarmarkerad aktivitet efter uttrycklig begäran."""
+    activity = await session.get(Activity, activity_id, with_for_update=True)
+    if activity is None:
+        raise HTTPException(status_code=404, detail="Aktiviteten hittades inte.")
+    if not activity.klar:
+        raise HTTPException(status_code=409, detail="Endast klarmarkerade aktiviteter kan tas bort.")
+
+    await session.delete(activity)
+    await session.commit()
+    return ActivityDeleted(id=activity_id)

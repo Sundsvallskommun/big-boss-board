@@ -411,3 +411,10 @@ export async function updateActivity(activityId: number, patch: ActivityPatch): 
     body: JSON.stringify(patch),
   });
 }
+
+/** Ta bort en klarmarkerad aktivitet. Backend avvisar öppna aktiviteter. */
+export async function deleteCompletedActivity(activityId: number): Promise<void> {
+  await fetchJson<{ id: number }>(`/api/activities/${activityId}`, "Kunde inte ta bort aktiviteten", {
+    method: "DELETE",
+  });
+}

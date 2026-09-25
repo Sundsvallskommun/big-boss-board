@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createActivity, getDialogue, updateActivity } from '../lib/api.ts';
+import { createActivity, deleteCompletedActivity, getDialogue, updateActivity } from '../lib/api.ts';
 import { sjukKostnad, krText, sjukSaknadeUppgifter } from '../lib/sjukfranvaro.ts';
 
 test('a missing write response is never retried and tells the user to verify', async () => {
@@ -25,6 +25,21 @@ test('editing an activity sends one PATCH with only the requested fields', async
   };
   try {
     assert.equal((await updateActivity(7, { klar: false })).klar, false);
+    assert.equal(calls, 1);
+  } finally { globalThis.fetch = original; }
+});
+
+test('deleting a completed activity sends one DELETE', async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async (url, init) => {
+    calls++;
+    assert.match(url, /\/api\/activities\/7$/);
+    assert.equal(init.method, 'DELETE');
+    return Response.json({ id: 7 });
+  };
+  try {
+    await deleteCompletedActivity(7);
     assert.equal(calls, 1);
   } finally { globalThis.fetch = original; }
 });
