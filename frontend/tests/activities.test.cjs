@@ -20,10 +20,12 @@ test('activity controls appear for open and completed activities', () => {
     onAddActivity: async () => {},
     onMarkKlar: async () => {},
     onEditActivity: async () => {},
+    onDeleteActivity: async () => {},
   }));
   assert.match(html, /Följ upp frågan/);
   assert.match(html, /Klarmarkera/);
   assert.equal((html.match(/>Ändra</g) || []).length, 2);
+  assert.equal((html.match(/>Ta bort</g) || []).length, 1);
   assert.match(html, /Gjort/);
   assert.match(html, /maxLength="4000"/);
 });

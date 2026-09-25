@@ -135,6 +135,10 @@ class ActivityUpdate(BaseModel):
     klar_notering: str | None = Field(default=None, max_length=1000)
 
 
+class ActivityDeleted(BaseModel):
+    id: int
+
+
 # ---- Inkorg: inkomna synpunkter/frågor/aktiviteter (intake) --------------
 
 
