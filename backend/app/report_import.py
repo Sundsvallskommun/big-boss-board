@@ -21,6 +21,7 @@ from typing import BinaryIO, Literal
 from urllib.parse import urlsplit
 
 ReportKind = Literal["ekonomi", "sjukfranvaro"]
+MAX_DIRECTORY_ENTRIES = 50_000
 
 
 class ImportFailure(Exception):
@@ -41,6 +42,14 @@ class Limits:
             raise ImportFailure("Storleksgränserna måste vara positiva och sammanlagt högst 15 MB.")
         if self.min_age_seconds < 0:
             raise ImportFailure("Filernas minimiålder får inte vara negativ.")
+
+    def check_directory_size(self, entry_count: int) -> None:
+        if entry_count > MAX_DIRECTORY_ENTRIES:
+            limit = f"{MAX_DIRECTORY_ENTRIES:,}".replace(",", " ")
+            raise ImportFailure(
+                f"Mappen innehåller fler än {limit} katalogposter, inklusive filer och mappar "
+                "som inte matchar rapporttypen. Avgränsa rapportmappen. Ingen import har skickats."
+            )
 
 
 @dataclass(frozen=True)
@@ -93,9 +102,8 @@ def read_local_reports(directory: Path, limits: Limits) -> list[ReportFile]:
     total = 0
     now = time.time()
     with os.scandir(directory) as entries:
-        for index, entry in enumerate(entries):
-            if index >= 1000:
-                raise ImportFailure("Mappen har för många poster. Använd en avgränsad rapportmapp.")
+        for entry_count, entry in enumerate(entries, start=1):
+            limits.check_directory_size(entry_count)
             if not check_name(entry.name):
                 continue
             info = entry.stat(follow_symlinks=False)

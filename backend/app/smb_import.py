@@ -70,9 +70,8 @@ def read_smb_reports(source: SMBSource, limits: Limits, *, kind: ReportKind) -> 
         )
         stage = "filläsning"
         with closing(smbclient.scandir(source.directory)) as entries:
-            for index, entry in enumerate(entries):
-                if index >= 1000:
-                    raise ImportFailure("Mappen har för många poster. Använd en avgränsad rapportmapp.")
+            for entry_count, entry in enumerate(entries, start=1):
+                limits.check_directory_size(entry_count)
                 # Match spelling across macOS/Windows Unicode forms, but send the original name.
                 # The date only identifies the filename shape; the API owns period selection.
                 if not pattern.fullmatch(normalize("NFC", entry.name)) or not check_name(entry.name):
