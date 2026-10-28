@@ -205,8 +205,14 @@ Första versionen skickar samma avgränsade underlag vid varje körning. Backend
 upsert och urvalsregler gör omkörning säker även efter ett förlorat HTTP-svar.
 Ingen separat databas eller fil med "senast importerad" skapas. Vid växande arkiv
 behöver källmappen avgränsas; jobbet väljer inte godtyckligt de senaste N filerna.
-Skanningen begränsas till 1 000 katalogposter totalt, även sådana som inte matchar
-rapporttypen. Bekräfta mängden på den gemensamma delningen vid första provhämtningen.
+SMB-hämtning och lokal filimport tillåter upp till 50 000 katalogposter totalt,
+även sådana som inte matchar rapporttypen. Gränsen ägs av `app/report_import.py`
+(`MAX_DIRECTORY_ENTRIES`) och kräver en ny backend-image för att ändras.
+Katalogen läses löpande; SMB-hämtningen öppnar bara matchande rapportfiler.
+Gränserna för rapportantal och byte gäller separat och är oförändrade.
+Vid fler än 50 000 poster avbryts hela underlaget före API-anrop; loggen anger
+gränsen och att även orelaterade poster räknas. Driftjobbets tidsgräns på 600
+sekunder gäller fortfarande. Bekräfta mängden och körtiden på delningen vid provhämtning.
 En matchande fil över gränsen, ingen matchande rapport eller misslyckad hämtning stoppar hela underlaget
 före API-anrop. En ändrad fil upptäcks genom storlek, filidentitet och ändringstid
 före/efter läsning. SMB-handtaget tillåter inte samtidig skrivning/radering.

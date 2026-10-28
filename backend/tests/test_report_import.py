@@ -10,7 +10,10 @@ import sys
 import time
 import urllib.request
 import urllib.response
+from collections.abc import Iterator
+from contextlib import closing
 from email.message import Message
+from itertools import repeat
 from pathlib import Path
 from unicodedata import normalize
 
@@ -171,6 +174,61 @@ def test_smb_reader_matches_local_transport(smb_directory, directory):
     source = SMBSource(directory, "test-account", "test-password")
     assert read_smb_reports(source, Limits(), kind="ekonomi") == read_local_reports(smb_directory, Limits())
     assert "test-password" not in repr(source)
+
+
+@pytest.mark.parametrize("transport", ["smb", "local"])
+@pytest.mark.parametrize("entry_count", [1_001, 50_000, 50_001])
+def test_directory_size_limit_preserves_complete_imports(
+    smb_directory: Path, monkeypatch: pytest.MonkeyPatch,
+    http_boundary: HTTPBoundary, capsys: pytest.CaptureFixture[str],
+    transport: str, entry_count: int,
+):
+    report_path = report_file(smb_directory, "kpidata_RR_förvaltning_2026-09-07.csv")
+    report_file(smb_directory, "unrelated.tmp")
+    with os.scandir(smb_directory) as entries:
+        report_entry, ignored_entry = sorted(entries, key=lambda entry: entry.name)
+
+    # Stream real directory entries without creating 50,000 files on disk.
+    # Success must find a report at the end; overflow must discard an already read report.
+    overflow = entry_count > 50_000
+
+    def scan() -> Iterator[os.DirEntry[str]]:
+        if overflow:
+            yield report_entry
+        yield from repeat(ignored_entry, entry_count - 1)
+        if not overflow:
+            yield report_entry
+
+    monkeypatch.setattr(smbclient, "scandir", lambda path: scan())
+    monkeypatch.setattr(os, "scandir", lambda path: closing(scan()))
+    monkeypatch.setenv("SMB_DIRECTORY", r"\\server\share\reports")
+    monkeypatch.setenv("SMB_USERNAME", "test")
+    monkeypatch.setenv("SMB_PASSWORD", "secret")
+    monkeypatch.setenv("IMPORT_API_URL", "http://api.example")
+    monkeypatch.setenv("IMPORT_TOKEN", "test-token")
+
+    def run_import() -> None:
+        if transport == "smb":
+            monkeypatch.setattr(sys, "argv", ["smb-import", "--kind", "ekonomi"])
+            main()
+        else:
+            monkeypatch.setattr(sys, "argv", ["import", "--url", "http://api.example"])
+            local_main("ekonomi", smb_directory)
+
+    if overflow:
+        with pytest.raises(SystemExit) as error:
+            run_import()
+        assert error.value.code == 1
+        assert not http_boundary.requests
+        message = capsys.readouterr().err
+        assert "fler än 50 000 katalogposter" in message
+        assert "Ingen import har skickats" in message
+    else:
+        run_import()
+        assert len(http_boundary.requests) == 1
+        assert json.loads(http_boundary.requests[0].data)["filer"] == [
+            {"namn": report_entry.name, "text": report_path.read_text(encoding="utf-8")},
+        ]
 
 
 def test_smb_read_failure_discards_batch_and_redacts_detail(smb_directory, monkeypatch):
